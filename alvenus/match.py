@@ -1,0 +1,197 @@
+"""Match recorded takes to script lines and choose the best take for each line.
+
+Every decision is written down with a reason, so a person (or their AI agent)
+can see why a take was picked and overrule it.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from difflib import SequenceMatcher
+
+CONTRACTIONS = {
+    "you're": "you are", "we're": "we are", "they're": "they are", "i'm": "i am",
+    "it's": "it is", "that's": "that is", "there's": "there is", "he's": "he is",
+    "she's": "she is", "don't": "do not", "doesn't": "does not", "didn't": "did not",
+    "can't": "cannot", "won't": "will not", "isn't": "is not", "aren't": "are not",
+    "wasn't": "was not", "i've": "i have", "we've": "we have", "you've": "you have",
+    "i'll": "i will", "you'll": "you will", "we'll": "we will", "let's": "let us",
+}
+FILLERS = {"um", "uh", "erm", "er", "hmm", "mm", "ah"}
+_ONES = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
+_TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
+
+
+def _number(n: int) -> list[str]:
+    if n < 20:
+        return [_ONES[n]]
+    if n < 100:
+        return [_TENS[n // 10]] + ([_ONES[n % 10]] if n % 10 else [])
+    if n < 1000:
+        return [_ONES[n // 100], "hundred"] + (_number(n % 100) if n % 100 else [])
+    return [str(n)]
+
+
+def words(text: str) -> list[str]:
+    text = text.lower().replace("’", "'")
+    out: list[str] = []
+    for w in re.findall(r"[a-z0-9']+", text):
+        w = w.strip("'")
+        if not w:
+            continue
+        if w.isdigit():
+            out.extend(_number(int(w)))
+        else:
+            out.extend(CONTRACTIONS.get(w, w).split())
+    return out
+
+
+def _snap(line_words: list[str], said: list[str], cutoff: float = 0.75) -> list[str]:
+    """Treat a heard word as the script word it nearly spells (speech-to-text
+    slips like "ever"/"every"). Real word swaps such as "Jupiter" for
+    "Juniper" stay below the cutoff and still count as wrong."""
+    vocab = set(line_words)
+    out = []
+    for w in said:
+        if w in vocab or len(w) < 3:
+            out.append(w)
+            continue
+        best, ratio = w, cutoff
+        for v in vocab:
+            r = SequenceMatcher(a=w, b=v).ratio()
+            if r > ratio:
+                best, ratio = v, r
+        out.append(best)
+    return out
+
+
+@dataclass
+class Take:
+    index: int
+    start: float
+    end: float
+    text: str
+    confidence: float  # Whisper's mean token log-probability
+    line: int | None = None  # 0-based script line, None if it matches nothing
+    score: float = 0.0  # 0..1, how well the words match the line
+    recall: float = 0.0  # share of the line's words that were said
+    precision: float = 0.0  # share of said words that belong to the line
+    fillers: int = 0
+    notes: list[str] = field(default_factory=list)
+
+    @property
+    def length(self) -> float:
+        return self.end - self.start
+
+
+def compare(line_words: list[str], said: list[str]) -> tuple[float, float, float]:
+    if not line_words or not said:
+        return 0.0, 0.0, 0.0
+    said = _snap(line_words, said)
+    sm = SequenceMatcher(a=line_words, b=said, autojunk=False)
+    matched = sum(b.size for b in sm.get_matching_blocks())
+    recall = matched / len(line_words)
+    precision = matched / len(said)
+    score = 0.0 if matched == 0 else 2 * recall * precision / (recall + precision)
+    return score, recall, precision
+
+
+def assign(takes: list[Take], script: list[str], min_score: float = 0.45) -> None:
+    """Label each take with the script line it is an attempt at (or none)."""
+    line_words = [words(s) for s in script]
+    for t in takes:
+        said_all = words(t.text)
+        t.fillers = sum(1 for w in said_all if w in FILLERS)
+        said = [w for w in said_all if w not in FILLERS]
+        best = (0.0, 0.0, 0.0, None)
+        for i, lw in enumerate(line_words):
+            s, r, p = compare(lw, said)
+            if s > best[0]:
+                best = (s, r, p, i)
+        t.score, t.recall, t.precision, line = best
+        # A false start says a few of the line's words and stops: high
+        # precision, low recall. Keep it attached to its line so it is
+        # reported, but it can never be chosen.
+        opener = next(
+            (i for i, lw in enumerate(line_words) if len(said) >= 2 and len(said) < len(lw) and said[:2] == lw[:2]),
+            None,
+        )
+        if line is not None and (t.score >= min_score or (t.precision >= 0.8 and len(said) >= 2)):
+            t.line = line
+        elif opener is not None:
+            # Starts like a line, then stops or goes wrong: a false start.
+            t.line = opener
+            t.score, t.recall, t.precision = compare(line_words[opener], said)
+        else:
+            t.line = None
+            t.notes.append("matches no script line (chatter or slate)")
+
+
+@dataclass
+class Choice:
+    line: int
+    take: Take | None
+    reason: str
+    candidates: list[Take]
+
+
+def choose(takes: list[Take], script: list[str]) -> list[Choice]:
+    """Pick the best take per line.
+
+    Ranking, in order: says the whole line with no wrong or extra words;
+    then word match score; then fewer filler sounds; then no hidden
+    hesitation; then the later take (people usually redo a line until it is
+    right); then Whisper's confidence.
+
+    "Hidden hesitation": Whisper often tidies up "um, the" out of its text,
+    so two takes can read the same while one is clearly slower. A take that
+    runs 12% longer than the fastest take with the same words is marked.
+    """
+    choices: list[Choice] = []
+    for i in range(len(script)):
+        cands = [t for t in takes if t.line == i]
+        usable = [t for t in cands if t.recall >= 0.6]
+        for t in cands:
+            if t.recall < 0.6:
+                t.notes.append("incomplete (false start or cut off)")
+            elif t.recall < 1.0:
+                t.notes.append(f"missing words ({t.recall:.0%} of the line said)")
+            if t.precision < 1.0 and t.recall >= 0.6:
+                t.notes.append("has wrong or extra words")
+            if t.fillers:
+                t.notes.append(f"{t.fillers} filler sound(s)")
+        if not usable:
+            choices.append(Choice(i, None, "no usable take found", cands))
+            continue
+
+        slow: set[int] = set()
+        for t in usable:
+            same = [u for u in usable if round(u.score, 2) == round(t.score, 2)]
+            if t.length > 1.12 * min(u.length for u in same):
+                slow.add(t.index)
+                t.notes.append("slower than an equal take (possible hidden pause or filler)")
+
+        def key(t: Take):
+            perfect = t.recall >= 0.999 and t.precision >= 0.999
+            return (perfect, round(t.score, 2), -t.fillers, t.index not in slow, t.start, t.confidence)
+
+        ranked = sorted(usable, key=key, reverse=True)
+        best = ranked[0]
+        if len(ranked) == 1:
+            why = "only usable take"
+        else:
+            runner = ranked[1]
+            kb, kr = key(best), key(runner)
+            if kb[0] != kr[0]:
+                why = "only take that says the line exactly"
+            elif kb[1] != kr[1]:
+                why = f"closest to the script ({best.score:.0%} vs {runner.score:.0%})"
+            elif kb[2] != kr[2]:
+                why = "fewer filler sounds"
+            elif kb[3] != kr[3]:
+                why = "same words, but tighter delivery (the other take hesitates)"
+            else:
+                why = "equally good; picked the later take"
+        choices.append(Choice(i, best, why, cands))
+    return choices

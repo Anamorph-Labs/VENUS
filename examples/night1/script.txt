@@ -1,0 +1,6 @@
+# "The Night Baker": an invented 5-line test script. One spoken line per row.
+Every night at three, Mara unlocks the bakery on Juniper Street.
+She starts the ovens before the city wakes up.
+The first loaf is always for the bus driver on the early route.
+Nobody asked her to do it, and she never says why.
+But if you are up before dawn, follow the smell of bread.

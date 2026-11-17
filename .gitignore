@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+examples/*/out/
+*.mp4
+*.srt
+*.decisions.json
