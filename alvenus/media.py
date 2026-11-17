@@ -45,11 +45,35 @@ def has_video(path: str | Path) -> bool:
     return bool(out.strip())
 
 
-def speech_regions(path: str | Path, noise_db: float = -35.0, min_silence: float = 0.35) -> list[tuple[float, float]]:
-    """Find stretches of sound between silences using FFmpeg's silencedetect."""
-    total = duration(path)
+def video_size(path: str | Path) -> tuple[int, int] | None:
+    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", str(path)]).stdout.strip()
+    if not out:
+        return None
+    w, h = out.split(",")[:2]
+    return int(w), int(h)
+
+
+def frame_rate(path: str | Path, default: float = 30.0) -> float:
+    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", str(path)]).stdout.strip()
+    if not out or "/" not in out:
+        return default
+    n, d = out.split("/")
+    return float(n) / float(d) if float(d) else default
+
+
+def speech_regions(
+    path: str | Path, noise_db: float = -35.0, min_silence: float = 0.35, start: float | None = None, end: float | None = None
+) -> list[tuple[float, float]]:
+    """Find stretches of sound between silences using FFmpeg's silencedetect.
+    With start/end, only that part of the file is read; times stay absolute."""
+    rng = []
+    if start is not None:
+        rng += ["-ss", f"{start:.3f}"]
+    if end is not None:
+        rng += ["-to", f"{end:.3f}"]
+    total = (end if end is not None else duration(path)) - (start or 0.0)
     err = run(
-        ["ffmpeg", "-nostdin", "-i", str(path), "-vn", "-af", f"silencedetect=noise={noise_db}dB:d={min_silence}", "-f", "null", "-"]
+        ["ffmpeg", "-nostdin", *rng, "-i", str(path), "-vn", "-af", f"silencedetect=noise={noise_db}dB:d={min_silence}", "-f", "null", "-"]
     ).stderr
     starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", err)]
     ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", err)]
@@ -61,4 +85,5 @@ def speech_regions(path: str | Path, noise_db: float = -35.0, min_silence: float
         cursor = ends[i] if i < len(ends) else total
     if total - cursor > 0.05:
         regions.append((cursor, total))
-    return regions
+    off = start or 0.0
+    return [(a + off, b + off) for a, b in regions]

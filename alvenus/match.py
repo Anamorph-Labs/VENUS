@@ -79,6 +79,8 @@ class Take:
     precision: float = 0.0  # share of said words that belong to the line
     fillers: int = 0
     notes: list[str] = field(default_factory=list)
+    source: int = 0  # which input file the take is in
+    clipped: bool = False  # sound runs into the very start or end of its file
 
     @property
     def length(self) -> float:
@@ -95,6 +97,34 @@ def compare(line_words: list[str], said: list[str]) -> tuple[float, float, float
     precision = matched / len(said)
     score = 0.0 if matched == 0 else 2 * recall * precision / (recall + precision)
     return score, recall, precision
+
+
+def _best(text: str, line_words: list[list[str]]) -> float:
+    said = [w for w in words(text) if w not in FILLERS]
+    return max((compare(lw, said)[0] for lw in line_words), default=0.0)
+
+
+def join_paused(takes: list[Take], script: list[str], max_gap: float = 2.0) -> list[Take]:
+    """People pause in the middle of a line. A pause splits the recording
+    into two pieces that each match the line badly; if the two together match
+    clearly better, they are one take."""
+    line_words = [words(s) for s in script]
+    out: list[Take] = []
+    for t in takes:
+        prev = out[-1] if out else None
+        if prev is not None and prev.source == t.source and t.start - prev.end <= max_gap:
+            joined = f"{prev.text} {t.text}"
+            if _best(joined, line_words) >= max(_best(prev.text, line_words), _best(t.text, line_words)) + 0.15:
+                prev.end = t.end
+                prev.text = joined
+                prev.confidence = (prev.confidence + t.confidence) / 2
+                if "joined across a pause" not in prev.notes:
+                    prev.notes.append("joined across a pause")
+                continue
+        out.append(t)
+    for i, t in enumerate(out, 1):
+        t.index = i
+    return out
 
 
 def assign(takes: list[Take], script: list[str], min_score: float = 0.45) -> None:
@@ -161,6 +191,8 @@ def choose(takes: list[Take], script: list[str]) -> list[Choice]:
                 t.notes.append("has wrong or extra words")
             if t.fillers:
                 t.notes.append(f"{t.fillers} filler sound(s)")
+            if t.clipped:
+                t.notes.append("cut off at the edge of the clip (recording started late or stopped early)")
         if not usable:
             choices.append(Choice(i, None, "no usable take found", cands))
             continue
@@ -174,22 +206,24 @@ def choose(takes: list[Take], script: list[str]) -> list[Choice]:
 
         def key(t: Take):
             perfect = t.recall >= 0.999 and t.precision >= 0.999
-            return (perfect, round(t.score, 2), -t.fillers, t.index not in slow, t.start, t.confidence)
+            return (not t.clipped, perfect, round(t.score, 2), -t.fillers, t.index not in slow, t.start, t.confidence)
 
         ranked = sorted(usable, key=key, reverse=True)
         best = ranked[0]
         if len(ranked) == 1:
-            why = "only usable take"
+            why = "only complete take (the others stop early)" if len(cands) > 1 else "only take of this line"
         else:
             runner = ranked[1]
             kb, kr = key(best), key(runner)
             if kb[0] != kr[0]:
-                why = "only take that says the line exactly"
+                why = "the other take is cut off at the edge of its clip"
             elif kb[1] != kr[1]:
-                why = f"closest to the script ({best.score:.0%} vs {runner.score:.0%})"
+                why = "only take that says the line exactly"
             elif kb[2] != kr[2]:
-                why = "fewer filler sounds"
+                why = f"closest to the script ({best.score:.0%} vs {runner.score:.0%})"
             elif kb[3] != kr[3]:
+                why = "fewer filler sounds"
+            elif kb[4] != kr[4]:
                 why = "same words, but tighter delivery (the other take hesitates)"
             else:
                 why = "equally good; picked the later take"

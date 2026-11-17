@@ -2,7 +2,8 @@
 
 import unittest
 
-from alvenus.match import Take, assign, choose, words
+from alvenus.match import Take, assign, choose, join_paused, words
+from alvenus.timeline import _tc
 
 SCRIPT = [
     "Every night at three, Mara unlocks the bakery on Juniper Street.",
@@ -57,6 +58,26 @@ class MatchTests(unittest.TestCase):
         takes = [take(1, SCRIPT[0], 0)]
         assign(takes, SCRIPT)
         self.assertIsNone(choose(takes, SCRIPT)[1].take)
+
+    def test_line_split_by_a_pause_is_joined(self):
+        takes = [
+            take(1, "She starts the ovens", 0, 1.2),
+            take(2, "before the city wakes up.", 2.0, 1.5),
+            take(3, "Sorry, going again.", 5.0, 1.0),
+        ]
+        joined = join_paused(takes, SCRIPT)
+        self.assertEqual(len(joined), 2)
+        self.assertEqual(joined[0].end, 3.5)
+        assign(joined, SCRIPT)
+        self.assertEqual(choose(joined, SCRIPT)[1].take.index, 1)
+
+    def test_takes_in_different_files_are_not_joined(self):
+        a, b = take(1, "She starts the ovens", 0, 1.2), take(2, "before the city wakes up.", 2.0, 1.5)
+        b.source = 1
+        self.assertEqual(len(join_paused([a, b], SCRIPT)), 2)
+
+    def test_edl_timecode(self):
+        self.assertEqual(_tc(3600 + 1.5, 30), "01:00:01:15")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+# "The Lost Umbrella": an invented 6-line test script. One spoken line per row.
+Lost umbrellas have a secret life.
+Most of them end up in a small office under the train station.
+A man named Theo sorts them by colour, then by size.
+Every Friday, he opens one at random and makes a wish.
+He says it has worked twice.
+So if you lose yours, it might be granting wishes now.

@@ -25,7 +25,11 @@ HOP = 160
 N_MELS = 80
 CHUNK_SAMPLES = 30 * SAMPLE_RATE  # Whisper always looks at a 30 s window
 
-MODEL_REPO = "onnx-community/whisper-base.en"
+MODELS = {  # name -> Hugging Face repo with an ONNX export (all MIT, from OpenAI)
+    "base.en": "onnx-community/whisper-base.en",
+    "small.en": "onnx-community/whisper-small.en",
+}
+DEFAULT_MODEL = "small.en"  # hears "um"s and odd words far better; base.en is ~2.5x faster
 MODEL_FILES = [
     "onnx/encoder_model.onnx",
     "onnx/decoder_model.onnx",
@@ -33,13 +37,15 @@ MODEL_FILES = [
     "added_tokens.json",
     "generation_config.json",
 ]
+# Optional: lets the decoder reuse its earlier work (a "KV cache"), about 3x faster.
+FAST_DECODER = "onnx/decoder_with_past_model.onnx"
 
 
-def default_model_dir() -> Path:
+def default_model_dir(name: str = DEFAULT_MODEL) -> Path:
     base = os.environ.get("ALVENUS_MODELS") or os.path.join(
         os.path.expanduser("~"), ".cache", "al-venus"
     )
-    return Path(base) / "whisper-base.en"
+    return Path(base) / f"whisper-{name}"
 
 
 # --------------------------------------------------------------------------
@@ -129,20 +135,24 @@ class Transcript:
 
 
 class Whisper:
-    def __init__(self, model_dir: str | Path | None = None, threads: int | None = None):
+    def __init__(self, model_dir: str | Path | None = None, threads: int | None = None, name: str = DEFAULT_MODEL):
         import onnxruntime as ort
 
-        d = Path(model_dir) if model_dir else default_model_dir()
+        d = Path(model_dir) if model_dir else default_model_dir(name)
         missing = [f for f in MODEL_FILES if not (d / Path(f).name).exists()]
         if missing:
             raise FileNotFoundError(
-                f"Whisper model files missing in {d}: {missing}. Run `python -m alvenus fetch-models`."
+                f"Whisper model files missing in {d}: {missing}. Run `python -m alvenus fetch-models --model {name}`."
             )
         opts = ort.SessionOptions()
         if threads:
             opts.intra_op_num_threads = threads
         self.enc = ort.InferenceSession(str(d / "encoder_model.onnx"), opts, providers=["CPUExecutionProvider"])
         self.dec = ort.InferenceSession(str(d / "decoder_model.onnx"), opts, providers=["CPUExecutionProvider"])
+        fast = d / Path(FAST_DECODER).name
+        self.dec_past = (
+            ort.InferenceSession(str(fast), opts, providers=["CPUExecutionProvider"]) if fast.exists() else None
+        )
         vocab = json.loads((d / "vocab.json").read_text())
         vocab.update(json.loads((d / "added_tokens.json").read_text()))
         self.id_to_tok = {v: k for k, v in vocab.items()}
@@ -165,11 +175,24 @@ class Whisper:
         tokens = [self.sot, self.no_ts]
         out: list[int] = []
         logps: list[float] = []
+        past: dict[str, np.ndarray] = {}
         for step in range(max_tokens):
-            logits = self.dec.run(
-                ["logits"],
-                {"input_ids": np.array([tokens], dtype=np.int64), "encoder_hidden_states": hidden},
-            )[0][0, -1].astype(np.float64)
+            if self.dec_past is None:
+                logits = self.dec.run(
+                    ["logits"],
+                    {"input_ids": np.array([tokens], dtype=np.int64), "encoder_hidden_states": hidden},
+                )[0][0, -1].astype(np.float64)
+            elif step == 0:
+                names = [o.name for o in self.dec.get_outputs()]
+                res = self.dec.run(None, {"input_ids": np.array([tokens], dtype=np.int64), "encoder_hidden_states": hidden})
+                logits = res[0][0, -1].astype(np.float64)
+                past = {n.replace("present", "past_key_values"): v for n, v in zip(names[1:], res[1:])}
+            else:
+                names = [o.name for o in self.dec_past.get_outputs()]
+                res = self.dec_past.run(None, {"input_ids": np.array([[tokens[-1]]], dtype=np.int64), **past})
+                logits = res[0][0, -1].astype(np.float64)
+                for n, v in zip(names[1:], res[1:]):  # only the decoder's own keys change
+                    past[n.replace("present", "past_key_values")] = v
             logits[self.suppress] = -np.inf
             if step == 0:
                 logits[self.begin_suppress] = -np.inf
@@ -190,17 +213,17 @@ class Whisper:
         return Transcript(self._detok(out), avg)
 
 
-def fetch_models(model_dir: str | Path | None = None) -> Path:
+def fetch_models(model_dir: str | Path | None = None, name: str = DEFAULT_MODEL) -> Path:
     """Download the Whisper ONNX files from Hugging Face (free, one time)."""
     import urllib.request
 
-    d = Path(model_dir) if model_dir else default_model_dir()
+    d = Path(model_dir) if model_dir else default_model_dir(name)
     d.mkdir(parents=True, exist_ok=True)
-    for f in MODEL_FILES:
+    for f in MODEL_FILES + [FAST_DECODER]:
         dest = d / Path(f).name
         if dest.exists() and dest.stat().st_size > 0:
             continue
-        url = f"https://huggingface.co/{MODEL_REPO}/resolve/main/{f}"
+        url = f"https://huggingface.co/{MODELS[name]}/resolve/main/{f}"
         print(f"downloading {url}")
         tmp = dest.with_suffix(dest.suffix + ".part")
         urllib.request.urlretrieve(url, tmp)

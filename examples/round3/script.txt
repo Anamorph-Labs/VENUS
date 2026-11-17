@@ -1,0 +1,6 @@
+# "The Quiet Lift": an invented 5-line test script. One spoken line per row.
+Our building has a lift that only works on Sundays.
+Nobody knows who fixed it, or why it chose that day.
+Mrs Okafor rides it every week with a flask of tea.
+She says the view from the fourth floor is worth the wait.
+We have never checked, because we always take the stairs.
