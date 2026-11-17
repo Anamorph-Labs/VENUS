@@ -19,6 +19,7 @@ three questions.
 | The feel: brisk and punchy, or calm and reflective | pause trimming: `--max-pause 0.4` for brisk, the default 0.6, or `--keep-pauses` for reflective |
 | Will people watch with the sound off (most social feeds) | `--captions` |
 | The rhythm between lines | `--beat` (default 0.25 s) and `--scene-beat` at blank lines (0.9 s); `--no-punch-in` if they dislike zoom cuts |
+| The look and brand (colour mood, brand colour) | `--look warm/cool/film/punchy/mono`, `--accent "#RRGGBB"` |
 | Music, cutaway shots (B-roll), a title or a call to action | `--music`, `--broll LINE=FILE@SEC`, `--title`, `--end-card` |
 | Any line they love, hate or want dropped | `--pick LINE=TAKE` or `--pick LINE=none` |
 
@@ -118,6 +119,15 @@ These are signals, not taste: a quiet, slow read can be exactly right for an
 intimate or sad beat, and a fast one for a joke. Judge each against what the
 story needs at that moment, and overrule with `--pick` when the moment calls
 for the other take.
+
+### The look
+
+Match the grade to the story and the reference: `warm` for food, family and
+nostalgia; `cool` for tech and night; `film` for cinematic or reflective pieces;
+`punchy` for energetic social content; `mono` for serious or archival moods;
+`natural` when in doubt. Use the creator's brand colour as `--accent` if they have
+one. Animated captions (the default) suit social feeds; `--caption-style classic`
+suits calm, long-form or documentary pieces.
 
 ### Finishing: B-roll, music, titles
 

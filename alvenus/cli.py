@@ -15,6 +15,8 @@ from .review import notes as review_notes
 from .delivery import judge, measure
 from .finish import finish, line_spans, parse_broll
 from . import plan as plan_file
+from .style import LOOKS
+from .wordtime import timed_words
 from .refine import has_restart, keep_last_attempt
 from .media import duration, frame_rate, has_video, load_audio, need_ffmpeg, speech_regions
 from .timeline import write_edl
@@ -188,12 +190,24 @@ def cmd_cut(a: argparse.Namespace) -> None:
     vids = [s for s in sources if has_video(s)]
     fps = frame_rate(vids[0]) if vids else 30.0
     finish_notes: list[str] = []
-    if cutaways or music or a.title or a.end_card:
-        # Cut first, then lay B-roll, music and titles on top; captions go on last.
+    pop = a.captions and a.caption_style == "pop"
+    if cutaways or music or a.title or a.end_card or pop or a.look != "natural":
+        # Cut first (at higher quality), then grade and lay B-roll, music and
+        # titles on top; captions go on last.
         base = out.with_name(out.stem + ".base.mp4")
-        render(sources, clips, base, None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone)
+        render(sources, clips, base, None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone, crf=14)
+        words = None
+        if pop:
+            loaded: dict[int, object] = {}
+            def audio_of(k: int):
+                if k not in loaded:
+                    loaded.clear()
+                    loaded[k] = load_audio(sources[k], SR)
+                return loaded[k]
+            words = timed_words(clips, script, audio_of, SR)
         finish_notes = finish(base, out, ASPECTS[a.aspect], fps, line_spans(clips), cutaways, music, a.music_lufs,
-                              a.title, a.end_card, srt=srt if a.captions else None)
+                              a.title, a.end_card, srt=srt if a.captions and not pop else None,
+                              words=words, look=a.look, accent=a.accent)
         base.unlink()
         for n in finish_notes:
             print("   " + n)
@@ -335,6 +349,9 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--music-lufs", type=float, default=-22.0, help="music loudness between lines (voice sits at -16)")
     c.add_argument("--title", help="opening title, shown over the first seconds")
     c.add_argument("--end-card", help="text on a closing card after the last line (e.g. a call to action)")
+    c.add_argument("--look", default="natural", choices=sorted(LOOKS), help="colour grade for the whole cut, B-roll included")
+    c.add_argument("--caption-style", default="pop", choices=["pop", "classic"], help="pop: short phrases, each word lights up as it is said; classic: one plain line")
+    c.add_argument("--accent", default="#FFD23F", help="accent colour for captions, title bar and end card, as #RRGGBB")
     c.add_argument("--no-punch-in", action="store_true", help="don't zoom in to hide jump cuts between shots from the same camera")
     c.add_argument("--fresh-listen", action="store_true", help="listen to every take again instead of reusing what was heard before")
     c.set_defaults(func=cmd_cut)

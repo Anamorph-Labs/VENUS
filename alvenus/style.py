@@ -1,0 +1,142 @@
+"""The look of a cut: colour grades, animated captions and motion titles.
+
+Everything on screen is drawn with libass (inside FFmpeg) from one .ass file,
+using the Inter fonts shipped in alvenus/fonts, so a cut looks the same on
+every computer."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+FONTS = Path(__file__).parent / "fonts"
+
+# Colour grades, as FFmpeg filters. Applied to the speaker and B-roll alike so
+# they match; kept gentle, the way a colourist would on a first pass.
+LOOKS = {
+    "natural": "",
+    "warm": "colorbalance=rs=0.05:gs=0.01:bs=-0.05:rm=0.04:bm=-0.04,eq=saturation=1.08:gamma=1.02",
+    "cool": "colorbalance=rs=-0.04:bs=0.06:rm=-0.03:bm=0.04,eq=saturation=1.02",
+    "film": "colorbalance=rs=-0.06:gs=-0.01:bs=0.06:rh=0.07:gh=0.02:bh=-0.06,"
+            "curves=all='0/0.04 0.25/0.22 0.75/0.79 1/0.96',eq=saturation=0.92,vignette=PI/5,noise=alls=5:allf=t",
+    "punchy": "eq=contrast=1.1:saturation=1.22,unsharp=5:5:0.4",
+    "mono": "hue=s=0,curves=all='0/0.02 0.5/0.47 1/0.98',vignette=PI/5,noise=alls=5:allf=t",
+}
+
+
+def ass_colour(hex_rgb: str, alpha: int = 0) -> str:
+    h = hex_rgb.lstrip("#")
+    if len(h) != 6:
+        raise SystemExit(f"colour {hex_rgb!r}: use #RRGGBB, e.g. #FFD23F")
+    return f"&H{alpha:02X}{h[4:6]}{h[2:4]}{h[0:2]}".upper()
+
+
+def _t(t: float) -> str:
+    cs = int(round(max(0.0, t) * 100))
+    h, cs = divmod(cs, 360000)
+    m, cs = divmod(cs, 6000)
+    s, cs = divmod(cs, 100)
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+def _esc(s: str) -> str:
+    return s.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
+
+
+def chunks(words, vertical: bool) -> list[list]:
+    """Short phrases that read at a glance: a few words, broken at punctuation."""
+    max_chars, max_words = (18, 4) if vertical else (32, 7)
+    out, cur = [], []
+    for w in words:
+        if cur and (len(" ".join(x.text for x in cur + [w])) > max_chars or len(cur) >= max_words):
+            out.append(cur)
+            cur = []
+        cur.append(w)
+        if w.text[-1:] in ",.?!;:":
+            out.append(cur)
+            cur = []
+    if cur:
+        out.append(cur)
+    return out
+
+
+def caption_events(words, w: int, h: int, accent: str) -> list[str]:
+    """One event per spoken word: the phrase stays put, the word being said
+    lights up in the accent colour with a small pop, words still to come wait
+    slightly dimmed."""
+    vertical = h > w
+    groups = chunks(words, vertical)
+    hi = ass_colour(accent)
+    rows = []
+    for g_i, g in enumerate(groups):
+        nxt = groups[g_i + 1][0].start if g_i + 1 < len(groups) else None
+        g_end = g[-1].end + 0.2
+        if nxt is not None:
+            g_end = min(g_end, nxt)
+        for i, word in enumerate(g):
+            s = word.start
+            e = g[i + 1].start if i + 1 < len(g) else g_end
+            if e - s < 0.02:
+                continue
+            parts = []
+            for j, x in enumerate(g):
+                t = _esc(x.text)
+                if j == i:
+                    parts.append(f"{{\\1c{hi}\\t(0,90,\\fscx112\\fscy112)\\t(90,190,\\fscx100\\fscy100)}}{t}{{\\r}}")
+                elif j > i:
+                    parts.append(f"{{\\1a&H50&}}{t}{{\\r}}")
+                else:
+                    parts.append(t)
+            enter = "{\\fad(80,0)}" if i == 0 else ""  # each phrase eases in
+            rows.append(f"Dialogue: 2,{_t(s)},{_t(e)},Cap,,0,0,0,,{enter}{' '.join(parts)}")
+    return rows
+
+
+def title_events(text: str, w: int, h: int, accent: str, start: float, end: float, centre: bool) -> list[str]:
+    """Motion title: letters track in from wide spacing while rising and
+    fading up, then an accent bar draws out from the middle underneath."""
+    size = round((0.085 if h > w else 0.075) * min(w, h))
+    cx = w // 2
+    y = h // 2 - size if centre else round((0.14 if h > w else 0.11) * h)
+    rise = round(0.025 * h)
+    ms = int((end - start) * 1000)
+    bar_w, bar_h = round(0.16 * w if w < h else 0.12 * w), max(6, round(size * 0.11))
+    bar_y = y + round(size * 1.3)
+    hi = ass_colour(accent)
+    txt = (f"Dialogue: 3,{_t(start)},{_t(end)},Title,,0,0,0,,"
+           f"{{\\an8\\q2\\move({cx},{y + rise},{cx},{y},0,650)\\fsp{round(size * 0.22)}\\alpha&HFF&"
+           f"\\t(0,650,0.45,\\fsp0\\alpha&H00&)\\fad(0,{min(400, ms // 4)})}}{_esc(text)}")
+    bar = (f"Dialogue: 3,{_t(start + 0.25)},{_t(end)},Title,,0,0,0,,"
+           f"{{\\an8\\pos({cx},{bar_y})\\p1\\bord0\\shad0\\1c{hi}\\fscx0\\t(0,450,0.5,\\fscx100)\\fad(0,{min(400, ms // 4)})}}"
+           f"m 0 0 l {bar_w} 0 {bar_w} {bar_h} 0 {bar_h}{{\\p0}}")
+    return [txt, bar]
+
+
+def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | None = None,
+              end_card: str | None = None, cut_len: float = 0.0, card_len: float = 0.0) -> None:
+    vertical = h > w
+    cap = round((0.062 if vertical else 0.055) * min(w, h))
+    big = round((0.085 if vertical else 0.075) * min(w, h))
+    rows = [
+        "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {w}", f"PlayResY: {h}", "WrapStyle: 0",
+        "ScaledBorderAndShadow: yes", "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
+        "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+        f"Style: Cap,Inter ExtraBold,{cap},&H00FFFFFF,&H00FFFFFF,&H00101010,&H90000000,0,0,0,0,100,100,0,0,1,"
+        f"{max(2, round(cap * 0.09))},{max(1, round(cap * 0.05))},2,{round(0.08 * w)},{round(0.08 * w)},{round((0.2 if vertical else 0.07) * h)},1",
+        f"Style: Title,Inter Display Black,{big},&H00FFFFFF,&H00FFFFFF,&H00101010,&H80000000,0,0,0,0,100,100,0,0,1,"
+        f"{max(2, round(big * 0.04))},{max(1, round(big * 0.04))},8,{round(0.06 * w)},{round(0.06 * w)},0,1",
+        "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    if words:
+        rows += caption_events(words, w, h, accent)
+    if title:
+        rows += title_events(title, w, h, accent, 0.1, min(3.0, max(1.5, cut_len - 0.5)), centre=False)
+    if end_card:
+        rows += title_events(end_card, w, h, accent, cut_len + 0.15, cut_len + card_len, centre=True)
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
+def ass_filter(path: Path) -> str:
+    esc = lambda p: str(p).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
+    return f"subtitles='{esc(path)}':fontsdir='{esc(FONTS)}'"

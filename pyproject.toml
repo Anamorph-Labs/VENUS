@@ -16,3 +16,6 @@ alvenus = "alvenus.cli:main"
 
 [tool.setuptools]
 packages = ["alvenus"]
+
+[tool.setuptools.package-data]
+alvenus = ["fonts/*.otf", "fonts/OFL.txt"]

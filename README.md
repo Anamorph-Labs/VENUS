@@ -46,6 +46,14 @@ loud it is between lines); `--title "..."` shows a title over the opening second
 `--end-card "..."` adds a closing card. Captions always stay on top. The `.edl`
 holds the main cut only, not the B-roll or music.
 
+The look: `--captions` are animated by default: short phrases, each word lights
+up in the accent colour as it is said (`--caption-style classic` for one plain
+line). `--look warm|cool|film|punchy|mono` grades speaker and B-roll alike;
+`--accent "#FFD23F"` sets the highlight colour. Titles and end cards are
+motion-designed (letters track in, an accent bar draws out underneath; the end
+card sits on the last frame, blurred). Text uses the bundled Inter fonts (SIL Open
+Font License, see `alvenus/fonts/OFL.txt`), so cuts look the same on every computer.
+
 `alvenus scan broll/` looks through a folder of cutaway clips and makes a contact
 sheet with times, so you (or your AI) can choose shots. Every cut also writes a
 `.plan.json` holding every choice; edit it and run `alvenus cut --plan cut.plan.json`.

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .cut import Clip, subtitle_filter
+from .style import LOOKS, ass_filter, write_ass
 from .media import duration, has_video, run
 
 
@@ -49,47 +50,13 @@ def line_spans(clips: list[Clip]) -> dict[int, tuple[float, float]]:
     return spans
 
 
-def _ass_text(s: str) -> str:
-    return s.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
-
-
-def _ass_time(t: float) -> str:
-    cs = int(round(t * 100))
-    h, cs = divmod(cs, 360000)
-    m, cs = divmod(cs, 6000)
-    s, cs = divmod(cs, 100)
-    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
-
-
-def write_titles(path: Path, w: int, h: int, title: str | None, end_card: str | None,
-                 cut_len: float, card_len: float) -> None:
-    """An ASS file: the title sits in the upper third over the opening (so
-    the hook still starts at once); the end card text sits centred on a
-    plain frame after the last line."""
-    big = round(0.075 * min(w, h))
-    rows = [
-        "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {w}", f"PlayResY: {h}", "",
-        "[V4+ Styles]",
-        "Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, "
-        "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV",
-        f"Style: Title,DejaVu Sans,{big},&H00FFFFFF,&H64000000,&H00000000,1,0,1,{max(2, big // 16)},0,8,40,40,{round(0.12 * h)}",
-        f"Style: Card,DejaVu Sans,{big},&H00FFFFFF,&H00000000,&H00000000,1,0,1,0,0,5,40,40,0",
-        "", "[Events]", "Format: Layer, Start, End, Style, Text",
-    ]
-    if title:
-        end = min(3.0, max(1.5, cut_len - 0.5))
-        rows.append(f"Dialogue: 0,{_ass_time(0.15)},{_ass_time(end)},Title,{{\\fad(300,400)}}{_ass_text(title)}")
-    if end_card:
-        rows.append(f"Dialogue: 0,{_ass_time(cut_len + 0.2)},{_ass_time(cut_len + card_len)},Card,{{\\fad(400,300)}}{_ass_text(end_card)}")
-    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
-
-
 def finish(
     base: Path, out: Path, size: str, fps: float, spans: dict[int, tuple[float, float]],
     cutaways: list[Cutaway] = (), music: Path | None = None, music_lufs: float = -22.0,
     title: str | None = None, end_card: str | None = None, card_len: float = 2.5,
-    srt: Path | None = None,
+    srt: Path | None = None, words=None, look: str = "natural", accent: str = "#FFD23F",
 ) -> list[str]:
+    """srt: classic one-line captions; words: timed words for animated captions."""
     """Returns plain notes on anything it had to adjust."""
     w, h = (int(x) for x in size.split("x"))
     cut_len = duration(base)
@@ -123,17 +90,24 @@ def finish(
         parts.append(f"[{v}][b{j}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[o{j}]")
         v = f"o{j}"
 
+    if LOOKS.get(look):
+        parts.append(f"[{v}]{LOOKS[look]}[graded]")
+        v = "graded"
     if card:
-        parts.append(f"[{v}]tpad=stop_mode=add:stop_duration={card:.3f}:color=0x15171c[pad]")
+        # The end card sits on the last frame, held, blurred and darkened.
+        parts.append(
+            f"[{v}]tpad=stop_mode=clone:stop_duration={card:.3f},"
+            f"boxblur=luma_radius=24:luma_power=2:chroma_radius=12:enable='gte(t,{cut_len:.3f})',"
+            f"eq=brightness=-0.18:saturation=0.7:enable='gte(t,{cut_len:.3f})'[pad]"
+        )
         v = "pad"
     if srt is not None:
         parts.append(f"[{v}]{subtitle_filter(srt, w, h)}[cap]")
         v = "cap"
-    if title or end_card:
-        ass = out.with_suffix(".titles.ass")
-        write_titles(ass, w, h, title, end_card, cut_len, card)
-        esc = str(ass).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
-        parts.append(f"[{v}]subtitles='{esc}'[tt]")
+    if words or title or end_card:
+        ass = out.with_suffix(".look.ass")
+        write_ass(ass, w, h, accent, words, title, end_card, cut_len, card)
+        parts.append(f"[{v}]{ass_filter(ass)}[tt]")
         v = "tt"
     parts.append(f"[{v}]format=yuv420p[vo]")
 

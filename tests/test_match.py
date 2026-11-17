@@ -5,7 +5,8 @@ import unittest
 from alvenus.match import Take, assign, choose, join_paused, words
 from alvenus.cli import apply_picks, find_room_tone, scene_breaks
 from alvenus.cut import Clip, hide_jump_cuts, take_clips
-from alvenus.finish import _ass_time, line_spans
+from alvenus.finish import line_spans
+from alvenus.style import _t as _ass_time, ass_colour, chunks
 from alvenus.delivery import Delivery, judge
 from alvenus.reference import _shape, suggest
 from alvenus.refine import has_restart
@@ -175,7 +176,8 @@ class MatchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             a = argparse.Namespace(script="s.txt", takes=["clips"], out="cut.mp4", aspect="9:16", captions=True,
                                    pick=["2=5", "3=none"], keep_pauses=False, max_pause=0.4, beat=0.25, scene_beat=0.9,
-                                   no_punch_in=True, music=None, music_lufs=-22.0, title="Hi", end_card=None, model="small.en")
+                                   no_punch_in=True, music=None, music_lufs=-22.0, title="Hi", end_card=None, model="small.en",
+                                   look="film", caption_style="pop", accent="#FFD23F")
             p = Path(d) / "cut.plan.json"
             plan.write(p, a, [Choice(0, None, "", [])], [Cutaway(1, Path("/x/b.mp4"), 4.5)])
             back = plan.load(p)
@@ -183,6 +185,20 @@ class MatchTests(unittest.TestCase):
         self.assertEqual(back["broll"], ["2=/x/b.mp4@4.5"])
         self.assertTrue(back["no_punch_in"])
         self.assertEqual((back["aspect"], back["max_pause"], back["title"]), ("9:16", 0.4, "Hi"))
+
+    def test_ass_colour_and_chunks(self):
+        from alvenus.wordtime import Word
+        self.assertEqual(ass_colour("#FFD23F"), "&H003FD2FF")
+        ws = [Word(t, i, i + 1) for i, t in enumerate("So we visit him, and we lose track of it.".split())]
+        self.assertEqual([[w.text for w in g] for g in chunks(ws, vertical=True)],
+                         [["So", "we", "visit", "him,"], ["and", "we", "lose", "track"], ["of", "it."]])
+
+    def test_word_placement_follows_syllables(self):
+        from alvenus.wordtime import place, syllables
+        self.assertEqual([syllables(w) for w in ["the", "market", "opens", "favourite", "3"]], [1, 2, 2, 3, 1])
+        ws = place(["one", "two", "three"], [0.2, 0.6, 1.0], 0.1, 1.2)
+        self.assertEqual(ws[0].start, 0.1)
+        self.assertTrue(ws[0].end <= ws[1].start + 1e-9 and ws[1].start < ws[2].start)
 
 
 if __name__ == "__main__":

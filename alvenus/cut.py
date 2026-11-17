@@ -100,7 +100,7 @@ def subtitle_filter(srt: Path, w: int, h: int) -> str:
 
 def render(
     sources: list[Path], clips: list[Clip], out: Path, srt: Path | None = None, size: str = "1280x720",
-    fps: float = 30.0, room_tone: tuple[int, float, float] | None = None,
+    fps: float = 30.0, room_tone: tuple[int, float, float] | None = None, crf: int = 20,
 ) -> None:
     """room_tone: (source, start, end) of a quiet stretch of the recording. It is
     looped quietly under the whole cut so the room never drops to dead silence
@@ -181,7 +181,7 @@ def render(
     args += [
         "-filter_complex", ";".join(parts),
         "-map", f"[{vlast}]", "-map", "[ao]",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", "-preset", "medium", "-crf", str(crf), "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out),
     ]
     run(args)

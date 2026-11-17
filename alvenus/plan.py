@@ -14,7 +14,7 @@ _SIMPLE = {
     "script": "script", "out": "out", "aspect": "aspect", "captions": "captions",
     "model": "model", "max_pause": "max_pause", "keep_pauses": "keep_pauses",
     "beat": "beat", "scene_beat": "scene_beat", "music": "music", "music_lufs": "music_lufs",
-    "title": "title", "end_card": "end_card", "noise_db": "noise_db", "min_silence": "min_silence",
+    "title": "title", "end_card": "end_card", "look": "look", "caption_style": "caption_style", "accent": "accent", "noise_db": "noise_db", "min_silence": "min_silence",
 }
 
 HELP = (
@@ -73,6 +73,7 @@ def write(path: Path, a, choices, cutaways) -> None:
         "broll": [{"line": c.line + 1, "file": str(c.path), "from_second": c.offset} for c in cutaways],
         "music": _abs(a.music) if a.music else None, "music_lufs": a.music_lufs,
         "title": a.title, "end_card": a.end_card,
+        "look": a.look, "caption_style": a.caption_style, "accent": a.accent,
         "model": a.model,
     }
     path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
