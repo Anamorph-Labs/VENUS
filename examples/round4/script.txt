@@ -1,0 +1,6 @@
+# "The Paper Boats": an invented 5-line test script (line 5 is never recorded, on purpose). One spoken line per row.
+Every spring, the river behind our school floods for one week.
+The younger kids fold paper boats and race them to the bridge.
+Nobody has ever seen a boat reach the bridge.
+But every year, somebody folds one more.
+If one ever makes it, we will finally know where the river goes.

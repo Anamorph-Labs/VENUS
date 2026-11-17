@@ -87,12 +87,22 @@ class Take:
         return self.end - self.start
 
 
+NEAR_CREDIT = 0.6
+
+
 def compare(line_words: list[str], said: list[str]) -> tuple[float, float, float]:
     if not line_words or not said:
         return 0.0, 0.0, 0.0
+    heard = said
     said = _snap(line_words, said)
     sm = SequenceMatcher(a=line_words, b=said, autojunk=False)
-    matched = sum(b.size for b in sm.get_matching_blocks())
+    # A word that only nearly matches ("bride" for "bridge", "ever" for
+    # "every") gets part credit: it may be a mishearing, or a real flub.
+    matched = sum(
+        1.0 if heard[b.b + k] == said[b.b + k] else NEAR_CREDIT
+        for b in sm.get_matching_blocks()
+        for k in range(b.size)
+    )
     recall = matched / len(line_words)
     precision = matched / len(said)
     score = 0.0 if matched == 0 else 2 * recall * precision / (recall + precision)

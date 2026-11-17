@@ -6,15 +6,19 @@ script line it is, picks the best take per line and cuts the video.
 
 Everything runs on your own computer. No accounts, no API keys, no uploads.
 
+It is meant to be driven by your own AI agent (Claude Code, Codex, ...), which
+brings the understanding and the storytelling: see [AGENTS.md](AGENTS.md).
+
 ## Try it
 
 You need Python 3.10+ and [FFmpeg](https://ffmpeg.org/download.html).
 
 ```sh
-pip install -r requirements.txt
-python -m alvenus fetch-models          # one-time ~1 GB download of Whisper small.en
+pip install .                           # gives you the `alvenus` command
+alvenus doctor                          # checks FFmpeg, packages and models
+alvenus fetch-models                    # one-time ~1.5 GB download of Whisper small.en
 python examples/fakeshoot.py night2 examples/out   # fake test shoot: 5 clip files (needs FFmpeg with Flite)
-python -m alvenus cut --script examples/night2/script.txt \
+alvenus cut --script examples/night2/script.txt \
   --takes examples/out/clips --out examples/out/cut.mp4 --captions
 ```
 
@@ -23,9 +27,15 @@ Next to the MP4 you get:
 - `cut.edl`: an editable timeline. Import it in DaVinci Resolve (File > Import >
   Timeline) or Premiere Pro (File > Import) and point it at your clips folder.
 - `cut.srt`: captions, one per script line.
+- `cut.notes.md`: the second reader's notes: what to reshoot, what to check, close calls.
 - `cut.decisions.json`: for every line, every take that was heard, what Whisper
   heard, and why one was chosen.
 
+Study a reference video to match its style: `alvenus study reference.mp4` measures
+its shape, cut rhythm, pace, pauses and loudness and suggests settings.
+
+Steer it with `--aspect 9:16` (or 16:9, 1:1, 4:5), `--pick 2=5` (use take 5 for
+line 2), `--pick 4=none` (drop line 4), `--max-pause` / `--keep-pauses`.
 Use `--model base.en` for a faster but less careful listen (~290 MB, about 2.5x faster).
 
 ## How it decides
@@ -33,7 +43,8 @@ Use `--model base.en` for a faster but less careful listen (~290 MB, about 2.5x 
 1. **Find takes**: split each file at pauses (FFmpeg `silencedetect`). Files are
    read in name order, which for phones and cameras is shooting order.
 2. **Hear them**: transcribe each take with Whisper, run locally with onnxruntime.
-3. **Match**: compare each take's words with every script line. Takes that match
+3. **Match**: if a take restarts mid-line without a pause ("She starts the... She
+   starts the ovens"), keep only the last full attempt. Compare each take's words with every script line. Takes that match
    nothing (chatter like "sorry, again") are left out. Takes that start a line and
    stop are marked as false starts. Two pieces split by a pause mid-line are
    joined back into one take when together they match the line clearly better.

@@ -3,6 +3,10 @@
 import unittest
 
 from alvenus.match import Take, assign, choose, join_paused, words
+from alvenus.cli import apply_picks
+from alvenus.reference import _shape, suggest
+from alvenus.refine import has_restart
+from alvenus.review import word_diff
 from alvenus.timeline import _tc
 
 SCRIPT = [
@@ -78,6 +82,33 @@ class MatchTests(unittest.TestCase):
 
     def test_edl_timecode(self):
         self.assertEqual(_tc(3600 + 1.5, 30), "01:00:01:15")
+
+    def test_near_miss_word_is_not_perfect(self):
+        takes = [take(1, "She starts the ovens before the city wakes up.", 0),
+                 take(2, "She starts the ovens before the city wakes pup.", 5)]
+        assign(takes, SCRIPT)
+        self.assertEqual(choose(takes, SCRIPT)[1].take.index, 1)
+
+    def test_restart_detected(self):
+        t = take(1, "She starts the, she starts the ovens before the city wakes up.", 0)
+        self.assertTrue(has_restart(t, SCRIPT[1]))
+        self.assertFalse(has_restart(take(2, SCRIPT[1], 0), SCRIPT[1]))
+
+    def test_word_diff(self):
+        self.assertEqual(word_diff(SCRIPT[1], "She starts the ovens before the town wakes up."), (["city"], ["town"]))
+
+    def test_picks_override(self):
+        takes = [take(1, SCRIPT[0], 0), take(2, SCRIPT[1], 5), take(3, SCRIPT[1], 10)]
+        assign(takes, SCRIPT)
+        choices = choose(takes, SCRIPT)
+        apply_picks(choices, takes, ["2=2", "1=none"], len(SCRIPT))
+        self.assertEqual(choices[1].take.index, 2)
+        self.assertIsNone(choices[0].take)
+
+    def test_reference_suggestions(self):
+        self.assertEqual(_shape(1080, 1920), "9:16")
+        style = {"frame": {"shape": "9:16"}, "audio": {"median_pause_seconds": 0.25}}
+        self.assertEqual(suggest(style), ["--aspect 9:16", "--max-pause 0.4"])
 
 
 if __name__ == "__main__":

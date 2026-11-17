@@ -10,6 +10,8 @@ from pathlib import Path
 from . import asr
 from .cut import Clip, render, take_clips, write_srt
 from .match import Take, assign, choose, join_paused
+from .review import notes as review_notes
+from .refine import has_restart, keep_last_attempt
 from .media import duration, frame_rate, has_video, load_audio, need_ffmpeg, speech_regions
 from .timeline import write_edl
 
@@ -35,6 +37,32 @@ def find_sources(items: list[str]) -> list[Path]:
     if not out:
         raise SystemExit("no media files found in --takes")
     return out
+
+
+ASPECTS = {"16:9": "1920x1080", "9:16": "1080x1920", "1:1": "1080x1080", "4:5": "1080x1350"}
+
+
+def apply_picks(choices, takes: list[Take], picks: list[str], n_lines: int) -> None:
+    """Overrules from the person or their AI: "2=5" uses take 5 for line 2,
+    "2=none" leaves line 2 out."""
+    by_index = {t.index: t for t in takes}
+    for p in picks:
+        try:
+            line_s, take_s = p.split("=")
+            line = int(line_s) - 1
+            assert 0 <= line < n_lines
+        except (ValueError, AssertionError):
+            raise SystemExit(f"--pick {p!r}: use LINE=TAKE, e.g. --pick 2=5 (or 2=none)")
+        c = choices[line]
+        if take_s.strip().lower() == "none":
+            c.take, c.reason = None, "left out on request"
+            continue
+        t = by_index.get(int(take_s))
+        if t is None:
+            raise SystemExit(f"--pick {p}: there is no take {take_s} (see the take numbers in the decisions file)")
+        c.take, c.reason = t, "chosen on request"
+        if t not in c.candidates:
+            c.candidates.append(t)
 
 
 def cmd_cut(a: argparse.Namespace) -> None:
@@ -72,7 +100,13 @@ def cmd_cut(a: argparse.Namespace) -> None:
     for t in takes:
         t.clipped = t.start < EDGE or t.end > lengths[t.source] - EDGE
     assign(takes, script)
+    restarts = [t for t in takes if t.line is not None and has_restart(t, script[t.line])]
+    if restarts:
+        print(f"   {len(restarts)} take(s) restart mid-line; finding the last clean attempt")
+        for t in restarts:
+            keep_last_attempt(t, script[t.line], sources[t.source], load_audio(sources[t.source], SR), model, SR, a.noise_db)
     choices = choose(takes, script)
+    apply_picks(choices, takes, a.pick or [], len(script))
     picked = [c for c in choices if c.take]
 
     print("4/5 trimming" + ("" if a.keep_pauses else " (long pauses inside takes shortened)"))
@@ -87,7 +121,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
     write_srt(srt, clips, script)
     vids = [s for s in sources if has_video(s)]
     fps = frame_rate(vids[0]) if vids else 30.0
-    render(sources, clips, out, srt if a.captions else None, fps=fps)
+    render(sources, clips, out, srt if a.captions else None, size=ASPECTS[a.aspect], fps=fps)
     write_edl(out.with_suffix(".edl"), out.stem, sources, clips, script, fps)
 
     report = {
@@ -117,11 +151,64 @@ def cmd_cut(a: argparse.Namespace) -> None:
         ],
     }
     out.with_suffix(".decisions.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    review = review_notes(script, choices, takes, sources, sum(c.length for c in clips))
+    out.with_suffix(".notes.md").write_text(review, encoding="utf-8")
     print()
     for c in choices:
         pick = f"take {c.take.index} ({sources[c.take.source].name})" if c.take else "MISSING"
         print(f"line {c.line + 1}: {pick:28}  {c.reason}")
-    print(f"\nwrote {out} ({sum(c.length for c in clips):.1f}s) + .edl timeline in {report['seconds_taken']}s")
+    print("\n" + review)
+    print(f"wrote {out} ({sum(c.length for c in clips):.1f}s) + .edl timeline in {report['seconds_taken']}s")
+
+
+def cmd_study(a: argparse.Namespace) -> None:
+    from .reference import describe, study
+
+    need_ffmpeg()
+    for ref in a.reference:
+        path = Path(ref)
+        style = study(path, Path(a.out_dir) if a.out_dir else path.parent, listen=not a.no_listen)
+        print(describe(style) + "\n")
+
+
+def cmd_doctor(a: argparse.Namespace) -> None:
+    """Check everything the cutter needs, in plain words."""
+    import shutil
+    import subprocess
+    import sys
+
+    ok = True
+
+    def say(good: bool, what: str, fix: str = "") -> None:
+        nonlocal ok
+        ok &= good
+        print(f"  {'OK ' if good else 'NO '} {what}" + ("" if good else f"\n       fix: {fix}"))
+
+    print("Checking your setup:")
+    say(sys.version_info >= (3, 10), f"Python {sys.version.split()[0]}", "install Python 3.10 or newer")
+    for mod in ("numpy", "onnxruntime"):
+        try:
+            __import__(mod)
+            say(True, f"{mod} installed")
+        except ImportError:
+            say(False, f"{mod} missing", f"pip install {mod}")
+    ff = shutil.which("ffmpeg")
+    say(bool(ff and shutil.which("ffprobe")), "FFmpeg installed", "install FFmpeg from https://ffmpeg.org/download.html")
+    if ff:
+        enc = subprocess.run([ff, "-hide_banner", "-encoders"], capture_output=True, text=True).stdout
+        fil = subprocess.run([ff, "-hide_banner", "-filters"], capture_output=True, text=True).stdout
+        say("libx264" in enc, "FFmpeg can write H.264 MP4", "install a full FFmpeg build (with libx264)")
+        say(" subtitles " in fil, "FFmpeg can burn captions (only needed for --captions)", "install a full FFmpeg build (with libass)")
+        say(" silencedetect " in fil and " loudnorm " in fil, "FFmpeg audio tools present", "install a full FFmpeg build")
+    for name in sorted(asr.MODELS):
+        d = asr.default_model_dir(name)
+        have = all((d / Path(f).name).exists() for f in asr.MODEL_FILES)
+        fast = (d / Path(asr.FAST_DECODER).name).exists()
+        if name == asr.DEFAULT_MODEL or have:
+            say(have, f"Whisper {name} downloaded" + (" (fast decoder too)" if have and fast else ""),
+                f"alvenus fetch-models --model {name}")
+    print("\nAll set." if ok else "\nFix the NO lines above, then run this again.")
+    raise SystemExit(0 if ok else 1)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -131,8 +218,10 @@ def main(argv: list[str] | None = None) -> None:
     c = sub.add_parser("cut", help="pick the best take per script line and build the cut")
     c.add_argument("--script", required=True, help="text file, one spoken line per row")
     c.add_argument("--takes", required=True, nargs="+", help="recording(s) or folder(s) of clips, video or audio")
-    c.add_argument("--out", required=True, help="output MP4 (an .edl timeline and .srt captions are written beside it)")
+    c.add_argument("--out", required=True, help="output MP4 (an .edl timeline, .srt captions and .notes.md review are written beside it)")
     c.add_argument("--captions", action="store_true", help="burn the script lines in as captions")
+    c.add_argument("--aspect", default="16:9", choices=sorted(ASPECTS), help="frame shape: 16:9 wide, 9:16 vertical, 1:1 square, 4:5 feed")
+    c.add_argument("--pick", action="append", metavar="LINE=TAKE", help="overrule a pick, e.g. --pick 2=5 or --pick 4=none (repeatable)")
     c.add_argument("--model", default=asr.DEFAULT_MODEL, choices=sorted(asr.MODELS), help="Whisper size (small.en hears better, is slower)")
     c.add_argument("--models", help="Whisper model folder (default ~/.cache/al-venus/whisper-<model>)")
     c.add_argument("--noise-db", type=float, default=-35.0, help="silence threshold in dB")
@@ -145,6 +234,15 @@ def main(argv: list[str] | None = None) -> None:
     f.add_argument("--model", default=asr.DEFAULT_MODEL, choices=sorted(asr.MODELS))
     f.add_argument("--models")
     f.set_defaults(func=lambda a: print(asr.fetch_models(a.models, a.model)))
+
+    r = sub.add_parser("study", help="measure the style of a reference video (shape, cut rhythm, pace, pauses)")
+    r.add_argument("reference", nargs="+", help="reference video file(s) on this computer")
+    r.add_argument("--out-dir", help="where to write .style.json and .sheet.png (default: beside the reference)")
+    r.add_argument("--no-listen", action="store_true", help="skip transcribing (faster; no words-per-minute)")
+    r.set_defaults(func=cmd_study)
+
+    d = sub.add_parser("doctor", help="check that FFmpeg, Python packages and models are ready")
+    d.set_defaults(func=cmd_doctor)
 
     a = p.parse_args(argv)
     a.func(a)

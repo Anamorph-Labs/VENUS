@@ -4,3 +4,5 @@ examples/*/out/
 *.mp4
 *.srt
 *.decisions.json
+*.egg-info/
+build/

@@ -109,7 +109,10 @@ def render(sources: list[Path], clips: list[Clip], out: Path, srt: Path | None =
         parts.append(f"color=c=0x15171c:s={size}:r={fps:g}:d={total:.3f}[vc]")
     vlast = "vc"
     if srt is not None:
-        style = "FontName=DejaVu Sans,FontSize=22,Outline=1,Shadow=0,MarginV=40"
+        # Subtitle sizes are in units of 1/288 of the frame height; keep the
+        # text about 6% of the frame's short side so vertical video isn't huge.
+        fs = round(0.06 * min(w, h) * 288 / h, 1)
+        style = f"FontName=DejaVu Sans,FontSize={fs},Outline=1,Shadow=0,MarginV=40,MarginL=20,MarginR=20"
         esc = str(srt).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
         parts.append(f"[{vlast}]subtitles='{esc}':force_style='{style}'[vs]")
         vlast = "vs"

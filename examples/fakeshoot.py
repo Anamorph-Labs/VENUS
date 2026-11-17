@@ -8,8 +8,10 @@ you can check by eye which take the cut used.
     python examples/fakeshoot.py night1 /tmp/night1     # one long recording
     python examples/fakeshoot.py night2 /tmp/night2     # several clip files, mixed sizes
     python examples/fakeshoot.py round3 /tmp/round3     # clipped takes, a vertical pickup shot
+    python examples/fakeshoot.py round4 /tmp/round4     # instant restarts inside one take
 
-In a take's text, " | " is a 0.9 s pause in the middle of the line.
+In a take's text, " | " is a 0.9 s pause in the middle of the line and " / "
+a 0.2 s breath before an instant restart.
 """
 
 from __future__ import annotations
@@ -74,10 +76,23 @@ SHOOTS = {
             (5, 3, "Mrs Okafor rides it every week with a flask of tea.", False),  # pickup, recording starts late
         ],
     },
+    "round4": {
+        "script": "round4/script.txt",
+        "files": {1: "1280x720", 2: "1280x720"},
+        "takes": [
+            (1, 1, "Every spring, the river / Every spring, the river behind our school floods for one week.", True),
+            (1, 2, "The younger kids fold paper boats and race them to the bridge.", False),
+            (1, 2, "The younger kids fold / The younger kids fold paper boats and race them to the bridge.", True),
+            (2, 3, "Nobody has ever seen a boat reach the bridge.", True),
+            (2, 3, "Nobody has / Nobody has ever seen a boat reach the bride.", False),
+            (2, 4, "But every year, somebody folds one more.", True),
+        ],
+    },
 }
 
 GAP = 1.2  # seconds of room tone between takes
 MID_PAUSE = 0.9
+RESTART_PAUSE = 0.2
 CLIP = 0.06  # how much of the first/last word a clipped recording loses
 SR = 22050
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
@@ -104,13 +119,18 @@ def tone(path: Path, seconds: float) -> Path:
 
 
 def speak(text: str, path: Path, tmp: Path) -> Path:
-    parts = [p.strip() for p in text.split("|")]
+    # " | " = a 0.9 s pause; " / " = a 0.2 s catch of breath (an instant restart)
+    parts = [(p.strip(), MID_PAUSE if j else 0) for j, p in enumerate(text.split("|"))]
+    parts = [(q.strip(), gap if k == 0 else RESTART_PAUSE) for p, gap in parts for k, q in enumerate(p.split("/"))]
     wavs = []
-    for j, part in enumerate(parts):
+    for j, (part, gap) in enumerate(parts):
         w = tmp / f"{path.stem}_{j}.wav"
-        sh(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"flite=text='{esc(part)}':voice=slt", "-ar", str(SR), "-ac", "1", str(w)])
-        if j:
-            wavs.append(tone(tmp / f"{path.stem}_p{j}.wav", MID_PAUSE))
+        # trim Flite's own silence at both ends so pauses are exactly as written
+        trim = "silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse"
+        sh(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"flite=text='{esc(part)}':voice=slt", "-af", trim,
+            "-ar", str(SR), "-ac", "1", str(w)])
+        if gap:
+            wavs.append(tone(tmp / f"{path.stem}_p{j}.wav", gap))
         wavs.append(w)
     concat(wavs, path, tmp)
     return path
