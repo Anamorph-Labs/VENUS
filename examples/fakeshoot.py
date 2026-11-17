@@ -9,6 +9,7 @@ you can check by eye which take the cut used.
     python examples/fakeshoot.py night2 /tmp/night2     # several clip files, mixed sizes
     python examples/fakeshoot.py round3 /tmp/round3     # clipped takes, a vertical pickup shot
     python examples/fakeshoot.py round4 /tmp/round4     # instant restarts inside one take
+    python examples/fakeshoot.py round5 /tmp/round5     # same words, weaker delivery
 
 In a take's text, " | " is a 0.9 s pause in the middle of the line and " / "
 a 0.2 s breath before an instant restart.
@@ -88,6 +89,22 @@ SHOOTS = {
             (2, 4, "But every year, somebody folds one more.", True),
         ],
     },
+    "round5": {
+        "script": "round5/script.txt",
+        "files": {1: "1280x720", 2: "1280x720"},
+        "takes": [
+            (1, 1, "The night market opens when the last train leaves.", True),
+            (1, 1, "{quiet} The night market opens when the last train leaves.", False),
+            (1, 2, "Every stall sells something you did not know you needed.", True),
+            (1, 2, "{rushed} Every stall sells something you did not know you needed.", False),
+            (2, 3, "My favourite is a man who repairs broken clocks for free.", True),
+            (2, 3, "{trail} My favourite is a man who repairs broken clocks for free.", False),
+            (2, 4, "He says time is the only thing he cannot fix.", True),
+            (2, 4, "{distorted} He says time is the only thing he cannot fix.", False),
+            (2, 5, "{quiet} So we visit him, and we lose track of it.", False),
+            (2, 5, "So we visit him, and we lose track of it.", True),
+        ],
+    },
 }
 
 GAP = 1.2  # seconds of room tone between takes
@@ -118,7 +135,28 @@ def tone(path: Path, seconds: float) -> Path:
     return path
 
 
+FX = {  # "{name}" at the start of a take's text changes how it is delivered
+    "quiet": "volume=-14dB",
+    "rushed": "atempo=1.4",
+    "trail": "volume='if(gt(t,{d}*0.6),pow(10,-(t-{d}*0.6)/({d}*0.4)*0.9),1)':eval=frame",
+    "distorted": "volume=26dB",
+}
+
+
 def speak(text: str, path: Path, tmp: Path) -> Path:
+    fx = None
+    if text.startswith("{"):
+        fx, text = text[1:].split("}", 1)
+        text = text.strip()
+    if fx:
+        raw = tmp / f"{path.stem}_raw.wav"
+        _speak(text, raw, tmp)
+        sh(["ffmpeg", "-v", "error", "-y", "-i", str(raw), "-af", FX[fx].format(d=dur(raw)), "-c:a", "pcm_s16le", str(path)])
+        return path
+    return _speak(text, path, tmp)
+
+
+def _speak(text: str, path: Path, tmp: Path) -> Path:
     # " | " = a 0.9 s pause; " / " = a 0.2 s catch of breath (an instant restart)
     parts = [(p.strip(), MID_PAUSE if j else 0) for j, p in enumerate(text.split("|"))]
     parts = [(q.strip(), gap if k == 0 else RESTART_PAUSE) for p, gap in parts for k, q in enumerate(p.split("/"))]

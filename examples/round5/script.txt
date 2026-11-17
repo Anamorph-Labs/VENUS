@@ -1,0 +1,7 @@
+# "The Night Market": an invented 5-line test script. Each line has two takes
+# with the same words; one is weaker in delivery (quiet, rushed, trailing off, distorted).
+The night market opens when the last train leaves.
+Every stall sells something you did not know you needed.
+My favourite is a man who repairs broken clocks for free.
+He says time is the only thing he cannot fix.
+So we visit him, and we lose track of it.

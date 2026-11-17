@@ -55,6 +55,13 @@ def notes(script: list[str], choices: list[Choice], takes: list[Take], sources: 
             )
         if t.clipped:
             check.append(f"**Line {n}**: the only good take is cut off at the edge of its clip ({_at(t, sources)}). A reshoot would be safer.")
+        if t.delivery is not None and t.delivery.issues:
+            check.append(
+                f"**Line {n}**: the take used sounds {', '.join(t.delivery.issues)} ({_at(t, sources)}), and no take "
+                f"with the right words sounds better. Reshoot it if this line is a key moment."
+            )
+        if "better delivery" in c.reason:
+            fyi.append(f"Line {n}: two takes said it right; I used the one that sounds better. {c.reason[0].upper()}{c.reason[1:]}.")
         if t.confidence < UNSURE:
             check.append(f"**Line {n}**: speech recognition was unsure about this take ({_at(t, sources)}). Give it a listen.")
         rivals = [

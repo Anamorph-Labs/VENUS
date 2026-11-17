@@ -8,9 +8,10 @@ import time
 from pathlib import Path
 
 from . import asr
-from .cut import Clip, render, take_clips, write_srt
+from .cut import Clip, hide_jump_cuts, render, take_clips, write_srt
 from .match import Take, assign, choose, join_paused
 from .review import notes as review_notes
+from .delivery import judge, measure
 from .refine import has_restart, keep_last_attempt
 from .media import duration, frame_rate, has_video, load_audio, need_ffmpeg, speech_regions
 from .timeline import write_edl
@@ -23,6 +24,44 @@ MEDIA = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi", ".mts", ".wav", ".mp3"
 def read_script(path: Path) -> list[str]:
     lines = [l.strip() for l in path.read_text(encoding="utf-8").splitlines()]
     return [l for l in lines if l and not l.startswith("#")]
+
+
+def scene_breaks(path: Path) -> set[int]:
+    """Lines (0-based) followed by a blank line: the end of a beat or scene,
+    where the cut should breathe a little longer."""
+    breaks, n, blank = set(), -1, False
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        l = raw.strip()
+        if l.startswith("#"):
+            continue
+        if not l:
+            blank = True
+            continue
+        if blank and n >= 0:
+            breaks.add(n)
+        n, blank = n + 1, False
+    return breaks
+
+
+def quiet_around(t: Take, pieces: list[tuple[int, float, float]]) -> tuple[float, float]:
+    """End of the sound before a take and start of the sound after it, in its file."""
+    before = [e for k, s, e in pieces if k == t.source and e <= t.start + 0.01]
+    after = [s for k, s, e in pieces if k == t.source and s >= t.end - 0.01]
+    lo = max(before, default=0.0)
+    if any("restarted inside the take" in n for n in t.notes):
+        lo = max(lo, t.start - 0.1)  # don't reach back into the false start
+    return lo, min(after, default=float("inf"))
+
+
+def find_room_tone(pieces: list[tuple[int, float, float]], source: int, length: float) -> tuple[int, float, float] | None:
+    """The longest quiet stretch in a file: a clean sample of the room."""
+    spans = [(0.0, None)] + [(e, None) for k, s, e in pieces if k == source]
+    starts = [s for k, s, e in pieces if k == source] + [length]
+    best = max(((s - e, e, s) for (e, _), s in zip(spans, starts)), default=None)
+    if not best or best[0] < 0.5:
+        return None
+    _, a, b = best
+    return source, a + 0.1, b - 0.1
 
 
 def find_sources(items: list[str]) -> list[Path]:
@@ -105,23 +144,38 @@ def cmd_cut(a: argparse.Namespace) -> None:
         print(f"   {len(restarts)} take(s) restart mid-line; finding the last clean attempt")
         for t in restarts:
             keep_last_attempt(t, script[t.line], sources[t.source], load_audio(sources[t.source], SR), model, SR, a.noise_db)
+    print("   measuring delivery (level, pace, pitch, ending)")
+    for k in sorted({t.source for t in takes if t.line is not None}):
+        wav = load_audio(sources[k], SR)
+        for t in takes:
+            if t.source == k and t.line is not None:
+                t.delivery = measure(wav, t.start, t.end)
+                t.delivery.words_per_sec = round(len(t.text.split()) / max(t.length, 0.1), 2)
+    judge(takes)
     choices = choose(takes, script)
     apply_picks(choices, takes, a.pick or [], len(script))
     picked = [c for c in choices if c.take]
 
     print("4/5 trimming" + ("" if a.keep_pauses else " (long pauses inside takes shortened)"))
+    breaks = scene_breaks(Path(a.script))
     clips: list[Clip] = []
     for c in picked:
         t = c.take
+        at_break = c.line in breaks
         clips += take_clips(sources[t.source], t.source, c.line, t.start, t.end, lengths[t.source],
-                            max_pause=None if a.keep_pauses else a.max_pause)
+                            tail=a.scene_beat if at_break else a.beat,
+                            max_pause=None if a.keep_pauses else a.max_pause,
+                            room=quiet_around(t, pieces), hold_short=at_break)
+    if not a.no_punch_in:
+        hide_jump_cuts(clips)
+    room_tone = find_room_tone(pieces, picked[0].take.source, lengths[picked[0].take.source]) if picked else None
 
     print("5/5 cutting")
     srt = out.with_suffix(".srt")
     write_srt(srt, clips, script)
     vids = [s for s in sources if has_video(s)]
     fps = frame_rate(vids[0]) if vids else 30.0
-    render(sources, clips, out, srt if a.captions else None, size=ASPECTS[a.aspect], fps=fps)
+    render(sources, clips, out, srt if a.captions else None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone)
     write_edl(out.with_suffix(".edl"), out.stem, sources, clips, script, fps)
 
     report = {
@@ -138,6 +192,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
                     {
                         "take": t.index, "file": sources[t.source].name, "start": round(t.start, 2), "end": round(t.end, 2),
                         "heard": t.text, "match": round(t.score, 3), "notes": t.notes,
+                        "delivery": vars(t.delivery) if t.delivery is not None else None,
                     }
                     for t in c.candidates
                 ],
@@ -228,6 +283,9 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--min-silence", type=float, default=0.35, help="shortest pause that splits pieces, seconds")
     c.add_argument("--max-pause", type=float, default=0.6, help="pauses inside a take longer than this are shortened")
     c.add_argument("--keep-pauses", action="store_true", help="never shorten pauses inside a take")
+    c.add_argument("--beat", type=float, default=0.25, help="breathing room after each line, seconds")
+    c.add_argument("--scene-beat", type=float, default=0.9, help="longer breath after a line followed by a blank line in the script")
+    c.add_argument("--no-punch-in", action="store_true", help="don't zoom in to hide jump cuts between shots from the same camera")
     c.set_defaults(func=cmd_cut)
 
     f = sub.add_parser("fetch-models", help="download the free Whisper model once")

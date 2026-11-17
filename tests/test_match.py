@@ -3,7 +3,9 @@
 import unittest
 
 from alvenus.match import Take, assign, choose, join_paused, words
-from alvenus.cli import apply_picks
+from alvenus.cli import apply_picks, find_room_tone, scene_breaks
+from alvenus.cut import Clip, hide_jump_cuts, take_clips
+from alvenus.delivery import Delivery, judge
 from alvenus.reference import _shape, suggest
 from alvenus.refine import has_restart
 from alvenus.review import word_diff
@@ -109,6 +111,52 @@ class MatchTests(unittest.TestCase):
         self.assertEqual(_shape(1080, 1920), "9:16")
         style = {"frame": {"shape": "9:16"}, "audio": {"median_pause_seconds": 0.25}}
         self.assertEqual(suggest(style), ["--aspect 9:16", "--max-pause 0.4"])
+
+    def test_delivery_breaks_a_tie(self):
+        line = SCRIPT[1]
+        takes = [take(1, line, 0, 3.0), take(2, line, 5, 3.0)]
+        assign(takes, SCRIPT)
+        takes[0].delivery = Delivery(-16.0, 1.0, 1.0, 0.0, 3.0)
+        takes[1].delivery = Delivery(-30.0, 1.0, 1.0, 0.0, 3.0)  # later but quiet
+        judge(takes)
+        self.assertEqual(takes[1].delivery.issues, ["quiet, low energy"])
+        c = choose(takes, SCRIPT)[1]
+        self.assertEqual(c.take.index, 1)
+        self.assertIn("better delivery", c.reason)
+
+    def test_rushed_take_flagged_and_other_not_called_slow(self):
+        line = SCRIPT[1]
+        takes = [take(1, line, 0, 3.0), take(2, line, 5, 2.1)]
+        assign(takes, SCRIPT)
+        takes[0].delivery = Delivery(-16.0, 1.0, 1.0, 0.0, 3.0)
+        takes[1].delivery = Delivery(-16.0, 1.0, 1.0, 0.0, 4.3)
+        judge(takes)
+        self.assertIn("rushed", takes[1].delivery.issues)
+        c = choose(takes, SCRIPT)[1]
+        self.assertEqual(c.take.index, 1)
+        self.assertFalse(any("slower" in n for n in takes[0].notes))
+
+    def test_punch_in_alternates_on_same_camera(self):
+        clips = [Clip(0, 0, 1, 0), Clip(0, 2, 3, 1), Clip(0, 4, 5, 2), Clip(1, 0, 1, 3), Clip(1, 2, 3, 4)]
+        hide_jump_cuts(clips)
+        self.assertEqual([c.zoom for c in clips], [1.0, 1.12, 1.0, 1.0, 1.12])
+
+    def test_scene_breaks_from_blank_lines(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "s.txt"
+            p.write_text("# note\n\nOne.\nTwo.\n\nThree.\n", encoding="utf-8")
+            self.assertEqual(scene_breaks(p), {1})
+
+    def test_room_tone_is_longest_quiet(self):
+        pieces = [(0, 0.5, 2.0), (0, 4.0, 5.0), (1, 0.0, 9.0)]
+        self.assertEqual(find_room_tone(pieces, 0, 6.0), (0, 2.1, 3.9))
+
+    def test_tail_held_when_footage_ends(self):
+        c = take_clips(None, 0, 0, 1.0, 4.9, 5.0, tail=0.4, max_pause=None, hold_short=True)[0]
+        self.assertAlmostEqual(c.end, 4.95)
+        self.assertAlmostEqual(c.hold, 0.35)
 
 
 if __name__ == "__main__":

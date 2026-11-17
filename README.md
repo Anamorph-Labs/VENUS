@@ -35,7 +35,9 @@ Study a reference video to match its style: `alvenus study reference.mp4` measur
 its shape, cut rhythm, pace, pauses and loudness and suggests settings.
 
 Steer it with `--aspect 9:16` (or 16:9, 1:1, 4:5), `--pick 2=5` (use take 5 for
-line 2), `--pick 4=none` (drop line 4), `--max-pause` / `--keep-pauses`.
+line 2), `--pick 4=none` (drop line 4), `--max-pause` / `--keep-pauses`,
+`--beat 0.25` (breath between lines), `--scene-beat 0.9` (longer breath where the
+script has a blank line), `--no-punch-in`.
 Use `--model base.en` for a faster but less careful listen (~290 MB, about 2.5x faster).
 
 ## How it decides
@@ -49,13 +51,19 @@ Use `--model base.en` for a faster but less careful listen (~290 MB, about 2.5x 
    stop are marked as false starts. Two pieces split by a pause mid-line are
    joined back into one take when together they match the line clearly better.
 4. **Choose** per line: not cut off at the edge of its clip > says the line
-   exactly > closest wording > fewer "um"s > no hidden hesitation (same words but
+   exactly > closest wording > fewer "um"s > better delivery (not quiet, rushed,
+   flat, trailing off or distorted, measured from the sound) > no hidden hesitation (same words but
    noticeably slower) > the later take. Pickup shots recorded out of order are fine.
 5. **Cut**: trim each chosen take with a little breathing room; pauses inside a
    take longer than 0.6 s are shortened (`--keep-pauses` turns this off); clips
    of different shapes (say a vertical phone clip) sit on a blurred copy of
-   themselves in one 16:9 frame; short audio fades; loudness
-   levelled to -16 LUFS; H.264/AAC MP4.
+   themselves in one 16:9 frame. Editing craft: two lines in a row from the same
+   shot alternate with a gentle 12% punch-in so the cut doesn't jump; breathing
+   room never reaches into a neighbouring take; a blank line in the script marks
+   a scene break and gets a longer breath (holding the last frame if the footage
+   runs out); a quiet stretch of the room is looped under the whole cut so the
+   sound never drops to dead silence; short audio fades; loudness levelled to
+   -16 LUFS; H.264/AAC MP4.
 
 ## Parts and licences
 

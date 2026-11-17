@@ -18,6 +18,7 @@ three questions.
 | Where it will be posted (YouTube, Reels/TikTok/Shorts, Instagram feed, a website) | `--aspect 16:9`, `9:16`, `4:5` or `1:1` |
 | The feel: brisk and punchy, or calm and reflective | pause trimming: `--max-pause 0.4` for brisk, the default 0.6, or `--keep-pauses` for reflective |
 | Will people watch with the sound off (most social feeds) | `--captions` |
+| The rhythm between lines | `--beat` (default 0.25 s) and `--scene-beat` at blank lines (0.9 s); `--no-punch-in` if they dislike zoom cuts |
 | Any line they love, hate or want dropped | `--pick LINE=TAKE` or `--pick LINE=none` |
 
 ### When they point at a reference
@@ -61,6 +62,11 @@ Read the whole script before looking at any take. Find:
 These beats matter most. A slightly flawed take is fine on a linking line; it is
 not fine on the hook or the payoff. There, a reshoot beats a compromise.
 
+Mark the story's shape in the script: a **blank line** between lines is a scene
+break, and the cut gives it a longer breath (`--scene-beat`, default 0.9 s; the
+normal gap between lines is `--beat`, default 0.25 s). Put blank lines before the
+turn and before the payoff so they land.
+
 ## 3. Check the setup (first time only)
 
 ```sh
@@ -97,6 +103,20 @@ Read `cut.notes.md` first, then `cut.decisions.json` where you need detail.
   choose; delivery there is worth thirty seconds of their time.
 - Watch the overall length and rhythm against what they asked for. If it runs long,
   suggest which linking lines could go (`--pick N=none`); never cut a beat silently.
+
+### Delivery
+
+Each take in `cut.decisions.json` has a `delivery` block, measured from the sound:
+`level_db` (loudness while speaking), `words_per_sec`, `pitch_range` (how much
+the voice moves, in semitones), `end_drop_db` (fading on the last words),
+`clipped` (distortion) and plain `issues` such as "quiet, low energy", "rushed",
+"flat read", "trails off at the end".
+
+When two takes say the line right, the tool prefers the one with fewer issues.
+These are signals, not taste: a quiet, slow read can be exactly right for an
+intimate or sad beat, and a fast one for a joke. Judge each against what the
+story needs at that moment, and overrule with `--pick` when the moment calls
+for the other take.
 
 ## 6. Steer and re-cut
 

@@ -18,6 +18,15 @@ CONTRACTIONS = {
     "wasn't": "was not", "i've": "i have", "we've": "we have", "you've": "you have",
     "i'll": "i will", "you'll": "you will", "we'll": "we will", "let's": "let us",
 }
+# Whisper writes American spelling; scripts may not. Fold common pairs together.
+SPELLING = {
+    "colour": "color", "colours": "colors", "favourite": "favorite", "favourites": "favorites",
+    "centre": "center", "theatre": "theater", "metre": "meter", "litre": "liter", "grey": "gray",
+    "neighbour": "neighbor", "neighbours": "neighbors", "honour": "honor", "humour": "humor",
+    "flavour": "flavor", "labour": "labor", "behaviour": "behavior", "realise": "realize",
+    "realised": "realized", "organise": "organize", "travelled": "traveled", "travelling": "traveling",
+    "mum": "mom", "okay": "ok",
+}
 FILLERS = {"um", "uh", "erm", "er", "hmm", "mm", "ah"}
 _ONES = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
 _TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
@@ -44,7 +53,17 @@ def words(text: str) -> list[str]:
             out.extend(_number(int(w)))
         else:
             out.extend(CONTRACTIONS.get(w, w).split())
-    return out
+    out = [SPELLING.get(w, w) for w in out]
+    # "can not" and "cannot" are the same words
+    i, merged = 0, []
+    while i < len(out):
+        if out[i] == "can" and i + 1 < len(out) and out[i + 1] == "not":
+            merged.append("cannot")
+            i += 2
+        else:
+            merged.append(out[i])
+            i += 1
+    return merged
 
 
 def _snap(line_words: list[str], said: list[str], cutoff: float = 0.75) -> list[str]:
@@ -81,6 +100,7 @@ class Take:
     notes: list[str] = field(default_factory=list)
     source: int = 0  # which input file the take is in
     clipped: bool = False  # sound runs into the very start or end of its file
+    delivery: object = None  # delivery.Delivery, filled in when the audio is measured
 
     @property
     def length(self) -> float:
@@ -209,14 +229,19 @@ def choose(takes: list[Take], script: list[str]) -> list[Choice]:
 
         slow: set[int] = set()
         for t in usable:
-            same = [u for u in usable if round(u.score, 2) == round(t.score, 2)]
+            same = [
+                u for u in usable
+                if round(u.score, 2) == round(t.score, 2)
+                and not (u.delivery is not None and "rushed" in u.delivery.issues)  # a rushed take is no yardstick
+            ] or [t]
             if t.length > 1.12 * min(u.length for u in same):
                 slow.add(t.index)
                 t.notes.append("slower than an equal take (possible hidden pause or filler)")
 
         def key(t: Take):
             perfect = t.recall >= 0.999 and t.precision >= 0.999
-            return (not t.clipped, perfect, round(t.score, 2), -t.fillers, t.index not in slow, t.start, t.confidence)
+            issues = len(t.delivery.issues) if t.delivery is not None else 0
+            return (not t.clipped, perfect, round(t.score, 2), -t.fillers, -issues, t.index not in slow, t.start, t.confidence)
 
         ranked = sorted(usable, key=key, reverse=True)
         best = ranked[0]
@@ -234,6 +259,8 @@ def choose(takes: list[Take], script: list[str]) -> list[Choice]:
             elif kb[3] != kr[3]:
                 why = "fewer filler sounds"
             elif kb[4] != kr[4]:
+                why = "same words, better delivery (the other take: " + ", ".join(runner.delivery.issues) + ")"
+            elif kb[5] != kr[5]:
                 why = "same words, but tighter delivery (the other take hesitates)"
             else:
                 why = "equally good; picked the later take"

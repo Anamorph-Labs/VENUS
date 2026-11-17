@@ -14,10 +14,24 @@ class Clip:
     start: float
     end: float
     line: int  # script line this clip belongs to
+    zoom: float = 1.0  # punch-in: >1 crops in to hide a jump cut
+    hold: float = 0.0  # seconds to hold the last frame (and room tone) after the clip
 
     @property
     def length(self) -> float:
-        return self.end - self.start
+        return self.end - self.start + self.hold
+
+
+PUNCH_IN = 1.12  # how far to push in on alternate shots from the same camera
+
+
+def hide_jump_cuts(clips: list[Clip]) -> None:
+    """When two clips in a row come from the same file (same camera, same
+    framing), the cut between them jumps. Editors hide that by alternating
+    between the normal framing and a slightly closer one."""
+    for prev, c in zip(clips, clips[1:]):
+        if c.source == prev.source:
+            c.zoom = 1.0 if prev.zoom > 1.0 else PUNCH_IN
 
 
 def _srt_time(t: float) -> str:
@@ -31,21 +45,31 @@ def _srt_time(t: float) -> str:
 def take_clips(
     path: Path, source: int, line: int, start: float, end: float, file_len: float,
     head: float = 0.12, tail: float = 0.25, max_pause: float | None = 0.6, keep_pause: float = 0.3,
+    room: tuple[float, float] | None = None, hold_short: bool = False,
 ) -> list[Clip]:
     """Clips for one chosen take. With max_pause set, any pause inside the take
-    longer than max_pause is shortened to keep_pause (a small jump cut)."""
-    s, e = max(0.0, start - head), min(file_len, end + tail)
+    longer than max_pause is shortened to keep_pause (a small jump cut).
+
+    `room` is the quiet before and after the take in its file (end of the
+    previous sound, start of the next), so the breathing room never catches
+    a word of a neighbouring take. With hold_short, a tail the footage can't
+    give is made up by holding the last frame over room tone."""
+    lo, hi = (room if room else (0.0, file_len))
+    s = min(start, max(0.0, lo + 0.05, start - head))
+    want = end + tail
+    e = max(end, min(file_len, hi - 0.05, want))
+    hold = round(want - e, 3) if hold_short and want - e > 0.04 else 0.0
     if max_pause is None:
-        return [Clip(source, s, e, line)]
+        return [Clip(source, s, e, line, hold=hold)]
     sounds = speech_regions(path, min_silence=max_pause, start=start, end=end)
     if len(sounds) <= 1:
-        return [Clip(source, s, e, line)]
+        return [Clip(source, s, e, line, hold=hold)]
     clips, cur = [], s
     half = keep_pause / 2
     for (a0, a1), (b0, _) in zip(sounds, sounds[1:]):
         clips.append(Clip(source, cur, a1 + half, line))
         cur = b0 - half
-    clips.append(Clip(source, cur, e, line))
+    clips.append(Clip(source, cur, e, line, hold=hold))
     return clips
 
 
@@ -65,20 +89,30 @@ def write_srt(path: Path, clips: list[Clip], script: list[str]) -> None:
     path.write_text("\n".join(rows), encoding="utf-8")
 
 
-def render(sources: list[Path], clips: list[Clip], out: Path, srt: Path | None = None, size: str = "1280x720", fps: float = 30.0) -> None:
+def render(
+    sources: list[Path], clips: list[Clip], out: Path, srt: Path | None = None, size: str = "1280x720",
+    fps: float = 30.0, room_tone: tuple[int, float, float] | None = None,
+) -> None:
+    """room_tone: (source, start, end) of a quiet stretch of the recording. It is
+    looped quietly under the whole cut so the room never drops to dead silence
+    at a cut, a fade or a held frame."""
     used = sorted({c.source for c in clips})
     inp = {src: k for k, src in enumerate(used)}  # source index -> ffmpeg input number
     video = all(has_video(sources[s]) for s in used)
     w, h = (int(x) for x in size.split("x"))
     sizes = {s: video_size(sources[s]) for s in used} if video else {}
-    fade = 0.02
+    if room_tone is not None and room_tone[0] not in inp:
+        inp[room_tone[0]] = len(used)
+        used.append(room_tone[0])
+    fade_in, fade_out = 0.03, 0.06  # long enough to never click, short enough to keep every word
     parts, labels = [], []
     for i, c in enumerate(clips):
         k = inp[c.source]
-        d = c.length
+        d = c.end - c.start
+        hold = f",apad=pad_dur={c.hold:.3f}" if c.hold else ""
         parts.append(
             f"[{k}:a]atrim={c.start:.3f}:{c.end:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=mono,"
-            f"afade=t=in:d={fade},afade=t=out:st={max(0.0, d - fade):.3f}:d={fade}[a{i}]"
+            f"afade=t=in:d={fade_in},afade=t=out:st={max(0.0, d - fade_out):.3f}:d={fade_out}{hold}[a{i}]"
         )
         if video:
             # Scale/pad every clip to one size and rate so files from different
@@ -97,6 +131,15 @@ def render(sources: list[Path], clips: list[Clip], out: Path, srt: Path | None =
                     f"[f{i}]scale={w}:{h}:force_original_aspect_ratio=decrease[ff{i}];"
                     f"[bb{i}][ff{i}]overlay=(W-w)/2:(H-h)/2,setsar=1,format=yuv420p[v{i}]"
                 )
+            post = []
+            if c.zoom > 1.0:
+                zw, zh = (2 * round(w * c.zoom / 2), 2 * round(h * c.zoom / 2))
+                post.append(f"scale={zw}:{zh},crop={w}:{h}")
+            if c.hold:
+                post.append(f"tpad=stop_mode=clone:stop_duration={c.hold:.3f}")
+            if post:
+                parts[-1] = parts[-1][: -len(f"[v{i}]")] + "[vp" + str(i) + "]"
+                parts.append(f"[vp{i}]{','.join(post)},setsar=1[v{i}]")
             labels.append(f"[v{i}][a{i}]")
         else:
             labels.append(f"[a{i}]")
@@ -107,6 +150,17 @@ def render(sources: list[Path], clips: list[Clip], out: Path, srt: Path | None =
         parts.append(f"{''.join(labels)}concat=n={n}:v=0:a=1[ac]")
         total = sum(c.length for c in clips)
         parts.append(f"color=c=0x15171c:s={size}:r={fps:g}:d={total:.3f}[vc]")
+    if room_tone is not None:
+        k, r0, r1 = room_tone
+        total = sum(c.length for c in clips)
+        n_samples = max(1, int((r1 - r0) * 48000))
+        j = next(i for i, x in enumerate(parts) if "concat=" in x)
+        parts[j] = parts[j].replace("[ac]", "[speech]")
+        parts.append(
+            f"[{k}:a]atrim={r0:.3f}:{r1:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=mono,"
+            f"aloop=loop=-1:size={n_samples},atrim=0:{total:.3f},asetpts=PTS-STARTPTS[room]"
+        )
+        parts.append("[speech][room]amix=inputs=2:normalize=0:duration=first[ac]")
     vlast = "vc"
     if srt is not None:
         # Subtitle sizes are in units of 1/288 of the frame height; keep the
