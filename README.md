@@ -45,6 +45,11 @@ music under the cut that dips whenever someone speaks (`--music-lufs` sets how
 loud it is between lines); `--title "..."` shows a title over the opening seconds;
 `--end-card "..."` adds a closing card. Captions always stay on top. The `.edl`
 holds the main cut only, not the B-roll or music.
+
+`alvenus scan broll/` looks through a folder of cutaway clips and makes a contact
+sheet with times, so you (or your AI) can choose shots. Every cut also writes a
+`.plan.json` holding every choice; edit it and run `alvenus cut --plan cut.plan.json`.
+What was heard is remembered, so re-cuts skip listening (`--fresh-listen` to redo it).
 Use `--model base.en` for a faster but less careful listen (~290 MB, about 2.5x faster).
 
 ## How it decides

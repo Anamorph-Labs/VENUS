@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from .match import Take, assign, choose, join_paused
 from .review import notes as review_notes
 from .delivery import judge, measure
 from .finish import finish, line_spans, parse_broll
+from . import plan as plan_file
 from .refine import has_restart, keep_last_attempt
 from .media import duration, frame_rate, has_video, load_audio, need_ffmpeg, speech_regions
 from .timeline import write_edl
@@ -107,6 +109,9 @@ def apply_picks(choices, takes: list[Take], picks: list[str], n_lines: int) -> N
 
 def cmd_cut(a: argparse.Namespace) -> None:
     need_ffmpeg()
+    missing = [f"--{k}" for k in ("script", "takes", "out") if not getattr(a, k)]
+    if missing:
+        raise SystemExit(f"cut needs {', '.join(missing)} (on the command line or in --plan)")
     t0 = time.time()
     script = read_script(Path(a.script))
     sources = find_sources(a.takes)
@@ -124,7 +129,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
         pieces += [(k, s, e) for s, e in speech_regions(src, a.noise_db, a.min_silence)]
 
     print(f"2/5 transcribing {len(pieces)} pieces on this computer (Whisper {a.model})")
-    model = asr.Whisper(a.models, name=a.model)
+    model = asr.Remembering(a.models, name=a.model, enabled=not a.fresh_listen)
     takes: list[Take] = []
     audio_cache: dict[int, object] = {}
     for i, (k, s, e) in enumerate(pieces):
@@ -139,6 +144,8 @@ def cmd_cut(a: argparse.Namespace) -> None:
         takes.append(Take(i + 1, s, e, tr.text, tr.avg_logprob, source=k))
         print(f"   {i + 1:>2} {sources[k].name[:18]:18} {s:7.2f}-{e:7.2f}  {tr.text}")
 
+    if model.hits:
+        print(f"   {model.hits} of {model.hits + model.misses} pieces already heard in an earlier run; reused")
     print("3/5 matching takes to script lines")
     takes = join_paused(takes, script)
     for t in takes:
@@ -226,6 +233,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
             for t in takes if t.line is None
         ],
     }
+    plan_file.write(out.with_suffix(".plan.json"), a, choices, cutaways)
     out.with_suffix(".decisions.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     review = review_notes(script, choices, takes, sources, sum(c.length for c in clips))
     if finish_notes:
@@ -237,6 +245,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
         print(f"line {c.line + 1}: {pick:28}  {c.reason}")
     print("\n" + review)
     print(f"wrote {out} ({duration(out):.1f}s) + .edl timeline in {report['seconds_taken']}s")
+    print(f"to change it, edit {out.with_suffix('.plan.json')} and run: alvenus cut --plan {out.with_suffix('.plan.json')}")
 
 
 def cmd_study(a: argparse.Namespace) -> None:
@@ -247,6 +256,18 @@ def cmd_study(a: argparse.Namespace) -> None:
         path = Path(ref)
         style = study(path, Path(a.out_dir) if a.out_dir else path.parent, listen=not a.no_listen)
         print(describe(style) + "\n")
+
+
+def cmd_scan(a: argparse.Namespace) -> None:
+    from .scan import scan
+
+    need_ffmpeg()
+    r = scan(a.clips, Path(a.out_dir) if a.out_dir else None)
+    for c in r["clips"]:
+        sound = "has sound" if c["own_sound"] else "silent"
+        print(f"{Path(c['file']).name}: {c['seconds']}s, {c['shape']} ({c['size']}), {sound}, "
+              f"{len(c['cuts_inside_at'])} cut(s) inside")
+    print("frames to look at: " + ", ".join(r["contact_sheets"]))
 
 
 def cmd_doctor(a: argparse.Namespace) -> None:
@@ -294,9 +315,10 @@ def main(argv: list[str] | None = None) -> None:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     c = sub.add_parser("cut", help="pick the best take per script line and build the cut")
-    c.add_argument("--script", required=True, help="text file, one spoken line per row")
-    c.add_argument("--takes", required=True, nargs="+", help="recording(s) or folder(s) of clips, video or audio")
-    c.add_argument("--out", required=True, help="output MP4 (an .edl timeline, .srt captions and .notes.md review are written beside it)")
+    c.add_argument("--plan", help="edit plan JSON (each cut writes one beside its output); flags typed here win over it")
+    c.add_argument("--script", help="text file, one spoken line per row")
+    c.add_argument("--takes", nargs="+", help="recording(s) or folder(s) of clips, video or audio")
+    c.add_argument("--out", help="output MP4 (an .edl timeline, .srt captions and .notes.md review are written beside it)")
     c.add_argument("--captions", action="store_true", help="burn the script lines in as captions")
     c.add_argument("--aspect", default="16:9", choices=sorted(ASPECTS), help="frame shape: 16:9 wide, 9:16 vertical, 1:1 square, 4:5 feed")
     c.add_argument("--pick", action="append", metavar="LINE=TAKE", help="overrule a pick, e.g. --pick 2=5 or --pick 4=none (repeatable)")
@@ -314,7 +336,11 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--title", help="opening title, shown over the first seconds")
     c.add_argument("--end-card", help="text on a closing card after the last line (e.g. a call to action)")
     c.add_argument("--no-punch-in", action="store_true", help="don't zoom in to hide jump cuts between shots from the same camera")
+    c.add_argument("--fresh-listen", action="store_true", help="listen to every take again instead of reusing what was heard before")
     c.set_defaults(func=cmd_cut)
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] == "cut" and "--plan" in args[:-1]:
+        c.set_defaults(**plan_file.load(Path(args[args.index("--plan") + 1])))
 
     f = sub.add_parser("fetch-models", help="download the free Whisper model once")
     f.add_argument("--model", default=asr.DEFAULT_MODEL, choices=sorted(asr.MODELS))
@@ -327,8 +353,13 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--no-listen", action="store_true", help="skip transcribing (faster; no words-per-minute)")
     r.set_defaults(func=cmd_study)
 
+    b = sub.add_parser("scan", help="look through cutaway clips (B-roll): length, shape, and a contact sheet of frames with times")
+    b.add_argument("clips", nargs="+", help="B-roll folder(s) or file(s)")
+    b.add_argument("--out-dir", help="where to write broll.json and the sheets (default: the folder scanned)")
+    b.set_defaults(func=cmd_scan)
+
     d = sub.add_parser("doctor", help="check that FFmpeg, Python packages and models are ready")
     d.set_defaults(func=cmd_doctor)
 
-    a = p.parse_args(argv)
+    a = p.parse_args(args)
     a.func(a)

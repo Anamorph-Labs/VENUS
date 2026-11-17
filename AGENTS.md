@@ -121,6 +121,10 @@ for the other take.
 
 ### Finishing: B-roll, music, titles
 
+- **Look before you choose.** Run `alvenus scan broll/` on the creator's cutaway
+  folder. It writes `broll.json` (length, shape, own sound, cuts inside each clip)
+  and `broll.sheet1.png`: five frames per clip, each labelled with its time. Look
+  at the sheet and pick the moment that shows what the line says.
 - **B-roll** shows what the words describe. Put it on linking lines that talk
   about a place, an object or an action, and to cover a jump cut. Keep the
   speaker's face on the hook, the turn and the payoff: the audience needs the
@@ -135,12 +139,17 @@ for the other take.
 
 ## 6. Steer and re-cut
 
-Re-run `alvenus cut` with your changes. Speech is heard again each run, so batch
-your changes into one re-cut where you can.
+Every cut writes `cut.plan.json` beside it: the script, the takes, every setting,
+`picks` (your overrules), `chosen_now` (the take each line used), `broll`, music,
+title and end card. Edit that file, then re-cut from it:
 
 ```sh
-alvenus cut ... --pick 2=5 --pick 6=none --max-pause 0.4
+alvenus cut --plan cut.plan.json
 ```
+
+Flags still work and win over the plan (`--plan cut.plan.json --pick 2=5`).
+What Whisper heard is remembered, so a re-cut skips listening and takes seconds;
+`--fresh-listen` forces a new listen.
 
 ## 7. Deliver
 

@@ -166,6 +166,24 @@ class MatchTests(unittest.TestCase):
     def test_ass_time(self):
         self.assertEqual(_ass_time(3661.25), "1:01:01.25")
 
+    def test_plan_round_trip(self):
+        import argparse, tempfile
+        from pathlib import Path
+        from alvenus import plan
+        from alvenus.finish import Cutaway
+        from alvenus.match import Choice
+        with tempfile.TemporaryDirectory() as d:
+            a = argparse.Namespace(script="s.txt", takes=["clips"], out="cut.mp4", aspect="9:16", captions=True,
+                                   pick=["2=5", "3=none"], keep_pauses=False, max_pause=0.4, beat=0.25, scene_beat=0.9,
+                                   no_punch_in=True, music=None, music_lufs=-22.0, title="Hi", end_card=None, model="small.en")
+            p = Path(d) / "cut.plan.json"
+            plan.write(p, a, [Choice(0, None, "", [])], [Cutaway(1, Path("/x/b.mp4"), 4.5)])
+            back = plan.load(p)
+        self.assertEqual(back["pick"], ["2=5", "3=none"])
+        self.assertEqual(back["broll"], ["2=/x/b.mp4@4.5"])
+        self.assertTrue(back["no_punch_in"])
+        self.assertEqual((back["aspect"], back["max_pause"], back["title"]), ("9:16", 0.4, "Hi"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -229,3 +229,47 @@ def fetch_models(model_dir: str | Path | None = None, name: str = DEFAULT_MODEL)
         urllib.request.urlretrieve(url, tmp)
         tmp.rename(dest)
     return d
+
+
+class Remembering:
+    """Whisper with a memory: the same sound is only ever listened to once.
+
+    Each clip of audio is fingerprinted; what Whisper heard is kept in a small
+    database in the model cache folder. A re-cut with new picks, B-roll or
+    pacing then skips listening entirely, and the model isn't even loaded
+    unless some clip is new."""
+
+    def __init__(self, model_dir: str | Path | None = None, name: str = DEFAULT_MODEL, enabled: bool = True):
+        import sqlite3
+
+        self.model_dir, self.name, self._model = model_dir, name, None
+        self.hits = self.misses = 0
+        self.db = None
+        if enabled:
+            base = Path(os.environ.get("ALVENUS_MODELS") or Path.home() / ".cache" / "al-venus")
+            base.mkdir(parents=True, exist_ok=True)
+            self.db = sqlite3.connect(str(base / "heard.sqlite"))
+            self.db.execute("CREATE TABLE IF NOT EXISTS heard (key TEXT PRIMARY KEY, text TEXT, logprob REAL)")
+
+    def _key(self, audio: np.ndarray, prompt: str | None) -> str:
+        import hashlib
+
+        h = hashlib.sha1(np.ascontiguousarray(audio, dtype=np.float32).tobytes())
+        h.update(f"|{self.name}|{prompt or ''}".encode())
+        return h.hexdigest()
+
+    def transcribe(self, audio: np.ndarray, max_tokens: int = 200, prompt: str | None = None) -> Transcript:
+        key = self._key(audio, prompt) if self.db else None
+        if key:
+            row = self.db.execute("SELECT text, logprob FROM heard WHERE key = ?", (key,)).fetchone()
+            if row:
+                self.hits += 1
+                return Transcript(row[0], row[1])
+        if self._model is None:
+            self._model = Whisper(self.model_dir, name=self.name)
+        self.misses += 1
+        tr = self._model.transcribe(audio, max_tokens=max_tokens, prompt=prompt)
+        if key:
+            self.db.execute("INSERT OR REPLACE INTO heard VALUES (?, ?, ?)", (key, tr.text, tr.avg_logprob))
+            self.db.commit()
+        return tr
