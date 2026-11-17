@@ -19,6 +19,7 @@ three questions.
 | The feel: brisk and punchy, or calm and reflective | pause trimming: `--max-pause 0.4` for brisk, the default 0.6, or `--keep-pauses` for reflective |
 | Will people watch with the sound off (most social feeds) | `--captions` |
 | The rhythm between lines | `--beat` (default 0.25 s) and `--scene-beat` at blank lines (0.9 s); `--no-punch-in` if they dislike zoom cuts |
+| Music, cutaway shots (B-roll), a title or a call to action | `--music`, `--broll LINE=FILE@SEC`, `--title`, `--end-card` |
 | Any line they love, hate or want dropped | `--pick LINE=TAKE` or `--pick LINE=none` |
 
 ### When they point at a reference
@@ -117,6 +118,20 @@ These are signals, not taste: a quiet, slow read can be exactly right for an
 intimate or sad beat, and a fast one for a joke. Judge each against what the
 story needs at that moment, and overrule with `--pick` when the moment calls
 for the other take.
+
+### Finishing: B-roll, music, titles
+
+- **B-roll** shows what the words describe. Put it on linking lines that talk
+  about a place, an object or an action, and to cover a jump cut. Keep the
+  speaker's face on the hook, the turn and the payoff: the audience needs the
+  person there. Choose the moment inside the B-roll file with `@SECONDS`. Only
+  use clips the creator gave you.
+- **Music** sets the mood: ask what they have, or use the reference's feel. It
+  dips under the voice by itself; raise `--music-lufs` (e.g. -18) for an energetic
+  piece, lower it (-26) for an intimate one. Only use music the creator has the
+  right to use.
+- **Title** sits over the opening seconds, so the hook still starts at once. Keep
+  it to a few words. **End card**: a short call to action ("Follow for part two").
 
 ## 6. Steer and re-cut
 

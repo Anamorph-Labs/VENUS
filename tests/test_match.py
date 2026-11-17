@@ -5,6 +5,7 @@ import unittest
 from alvenus.match import Take, assign, choose, join_paused, words
 from alvenus.cli import apply_picks, find_room_tone, scene_breaks
 from alvenus.cut import Clip, hide_jump_cuts, take_clips
+from alvenus.finish import _ass_time, line_spans
 from alvenus.delivery import Delivery, judge
 from alvenus.reference import _shape, suggest
 from alvenus.refine import has_restart
@@ -157,6 +158,13 @@ class MatchTests(unittest.TestCase):
         c = take_clips(None, 0, 0, 1.0, 4.9, 5.0, tail=0.4, max_pause=None, hold_short=True)[0]
         self.assertAlmostEqual(c.end, 4.95)
         self.assertAlmostEqual(c.hold, 0.35)
+
+    def test_line_spans_on_timeline(self):
+        clips = [Clip(0, 0, 2, 0), Clip(0, 3, 4, 0, hold=0.5), Clip(1, 0, 1, 2)]
+        self.assertEqual(line_spans(clips), {0: (0.0, 3.5), 2: (3.5, 4.5)})
+
+    def test_ass_time(self):
+        self.assertEqual(_ass_time(3661.25), "1:01:01.25")
 
 
 if __name__ == "__main__":

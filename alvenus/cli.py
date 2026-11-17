@@ -12,6 +12,7 @@ from .cut import Clip, hide_jump_cuts, render, take_clips, write_srt
 from .match import Take, assign, choose, join_paused
 from .review import notes as review_notes
 from .delivery import judge, measure
+from .finish import finish, line_spans, parse_broll
 from .refine import has_restart, keep_last_attempt
 from .media import duration, frame_rate, has_video, load_audio, need_ffmpeg, speech_regions
 from .timeline import write_edl
@@ -109,6 +110,10 @@ def cmd_cut(a: argparse.Namespace) -> None:
     t0 = time.time()
     script = read_script(Path(a.script))
     sources = find_sources(a.takes)
+    cutaways = parse_broll(a.broll or [], len(script))
+    music = Path(a.music) if a.music else None
+    if music is not None and not music.exists():
+        raise SystemExit(f"--music: {music} not found")
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -175,7 +180,18 @@ def cmd_cut(a: argparse.Namespace) -> None:
     write_srt(srt, clips, script)
     vids = [s for s in sources if has_video(s)]
     fps = frame_rate(vids[0]) if vids else 30.0
-    render(sources, clips, out, srt if a.captions else None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone)
+    finish_notes: list[str] = []
+    if cutaways or music or a.title or a.end_card:
+        # Cut first, then lay B-roll, music and titles on top; captions go on last.
+        base = out.with_name(out.stem + ".base.mp4")
+        render(sources, clips, base, None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone)
+        finish_notes = finish(base, out, ASPECTS[a.aspect], fps, line_spans(clips), cutaways, music, a.music_lufs,
+                              a.title, a.end_card, srt=srt if a.captions else None)
+        base.unlink()
+        for n in finish_notes:
+            print("   " + n)
+    else:
+        render(sources, clips, out, srt if a.captions else None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone)
     write_edl(out.with_suffix(".edl"), out.stem, sources, clips, script, fps)
 
     report = {
@@ -199,6 +215,11 @@ def cmd_cut(a: argparse.Namespace) -> None:
             }
             for c in choices
         ],
+        "finishing": {
+            "broll": [{"line": c.line + 1, "file": str(c.path), "from_second": c.offset} for c in cutaways],
+            "music": str(music) if music else None,
+            "title": a.title, "end_card": a.end_card, "notes": finish_notes,
+        },
         "unused": [
             {"take": t.index, "file": sources[t.source].name, "start": round(t.start, 2), "end": round(t.end, 2),
              "heard": t.text, "notes": t.notes}
@@ -207,13 +228,15 @@ def cmd_cut(a: argparse.Namespace) -> None:
     }
     out.with_suffix(".decisions.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     review = review_notes(script, choices, takes, sources, sum(c.length for c in clips))
+    if finish_notes:
+        review += "\n## Finishing\n\n" + "".join(f"- {n}\n" for n in finish_notes)
     out.with_suffix(".notes.md").write_text(review, encoding="utf-8")
     print()
     for c in choices:
         pick = f"take {c.take.index} ({sources[c.take.source].name})" if c.take else "MISSING"
         print(f"line {c.line + 1}: {pick:28}  {c.reason}")
     print("\n" + review)
-    print(f"wrote {out} ({sum(c.length for c in clips):.1f}s) + .edl timeline in {report['seconds_taken']}s")
+    print(f"wrote {out} ({duration(out):.1f}s) + .edl timeline in {report['seconds_taken']}s")
 
 
 def cmd_study(a: argparse.Namespace) -> None:
@@ -285,6 +308,11 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--keep-pauses", action="store_true", help="never shorten pauses inside a take")
     c.add_argument("--beat", type=float, default=0.25, help="breathing room after each line, seconds")
     c.add_argument("--scene-beat", type=float, default=0.9, help="longer breath after a line followed by a blank line in the script")
+    c.add_argument("--broll", action="append", metavar="LINE=FILE[@SEC]", help="lay a cutaway shot over a line, voice kept, e.g. --broll 3=market.mp4@4.5 (repeatable)")
+    c.add_argument("--music", help="music file to play under the cut; it dips whenever someone speaks")
+    c.add_argument("--music-lufs", type=float, default=-22.0, help="music loudness between lines (voice sits at -16)")
+    c.add_argument("--title", help="opening title, shown over the first seconds")
+    c.add_argument("--end-card", help="text on a closing card after the last line (e.g. a call to action)")
     c.add_argument("--no-punch-in", action="store_true", help="don't zoom in to hide jump cuts between shots from the same camera")
     c.set_defaults(func=cmd_cut)
 

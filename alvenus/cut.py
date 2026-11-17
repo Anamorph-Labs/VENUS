@@ -89,6 +89,15 @@ def write_srt(path: Path, clips: list[Clip], script: list[str]) -> None:
     path.write_text("\n".join(rows), encoding="utf-8")
 
 
+def subtitle_filter(srt: Path, w: int, h: int) -> str:
+    # Subtitle sizes are in units of 1/288 of the frame height; keep the
+    # text about 6% of the frame's short side so vertical video isn't huge.
+    fs = round(0.06 * min(w, h) * 288 / h, 1)
+    style = f"FontName=DejaVu Sans,FontSize={fs},Outline=2,Shadow=1,MarginV=40,MarginL=20,MarginR=20"
+    esc = str(srt).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
+    return f"subtitles='{esc}':force_style='{style}'"
+
+
 def render(
     sources: list[Path], clips: list[Clip], out: Path, srt: Path | None = None, size: str = "1280x720",
     fps: float = 30.0, room_tone: tuple[int, float, float] | None = None,
@@ -163,12 +172,7 @@ def render(
         parts.append("[speech][room]amix=inputs=2:normalize=0:duration=first[ac]")
     vlast = "vc"
     if srt is not None:
-        # Subtitle sizes are in units of 1/288 of the frame height; keep the
-        # text about 6% of the frame's short side so vertical video isn't huge.
-        fs = round(0.06 * min(w, h) * 288 / h, 1)
-        style = f"FontName=DejaVu Sans,FontSize={fs},Outline=1,Shadow=0,MarginV=40,MarginL=20,MarginR=20"
-        esc = str(srt).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
-        parts.append(f"[{vlast}]subtitles='{esc}':force_style='{style}'[vs]")
+        parts.append(f"[{vlast}]{subtitle_filter(srt, w, h)}[vs]")
         vlast = "vs"
     parts.append("[ac]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[ao]")
     args = ["ffmpeg", "-nostdin", "-y", "-v", "error"]

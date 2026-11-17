@@ -38,6 +38,13 @@ Steer it with `--aspect 9:16` (or 16:9, 1:1, 4:5), `--pick 2=5` (use take 5 for
 line 2), `--pick 4=none` (drop line 4), `--max-pause` / `--keep-pauses`,
 `--beat 0.25` (breath between lines), `--scene-beat 0.9` (longer breath where the
 script has a blank line), `--no-punch-in`.
+
+Finishing touches: `--broll 3=market.mp4@4.5` lays a cutaway shot over line 3
+(from 4.5 s into the file) while the voice keeps playing; `--music song.mp3` plays
+music under the cut that dips whenever someone speaks (`--music-lufs` sets how
+loud it is between lines); `--title "..."` shows a title over the opening seconds;
+`--end-card "..."` adds a closing card. Captions always stay on top. The `.edl`
+holds the main cut only, not the B-roll or music.
 Use `--model base.en` for a faster but less careful listen (~290 MB, about 2.5x faster).
 
 ## How it decides
