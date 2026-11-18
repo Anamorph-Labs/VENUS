@@ -336,6 +336,12 @@ def _dot(x: float, y: float, r: float) -> str:
             f"b {round(x - r)} {round(y - k)} {round(x - k)} {round(y - r)} {round(x)} {round(y - r)} ")
 
 
+def _disc(r: float) -> str:
+    """A dot drawn from its own corner, so \\an5 centres it on \\pos (libass
+    lines a drawing up by its box from 0,0, not by its true middle)."""
+    return _dot(r, r, r)
+
+
 def line_chart_events(ch: Chart, start: float, end: float, w: int, h: int, accent: str) -> list[str]:
     """Line chart card: the line draws itself from left to right over a soft
     accent wash, a dot marks each point, and the last value lands at the end."""
@@ -378,7 +384,7 @@ def line_chart_events(ch: Chart, start: float, end: float, w: int, h: int, accen
                         f"\\fs{lab}\\fnInter SemiBold\\1c&H00C8C8C8&\\fad(150,200)}}{_esc(name)}")
         if i == n - 1 or v == max(vals):
             rows.append(f"Dialogue: 8,{_t(at + 0.05)},{_t(end)},CardText,,0,0,0,,{{\\an2\\pos({round(xs[i])},{round(ys[i] - th * 3)})"
-                        f"\\fs{round(lab * 1.5)}\\1c{hi if i == n - 1 else '&H00FFFFFF&'}\\fscx80\\fscy80\\t(0,180,\\fscx100\\fscy100)"
+                        f"\\fs{round(lab * 1.5)}\\1c{hi if i == n - 1 else '&H00FFFFFF&'}\\bord{max(2, round(lab * 0.14))}\\3c&H00101010&\\fscx80\\fscy80\\t(0,180,\\fscx100\\fscy100)"
                         f"\\fad(100,200)}}{_esc(f'{v:g}')}")
     return rows
 
@@ -505,10 +511,10 @@ def pin_events(pins: list, start: float, end: float, w: int, h: int, accent: str
                             f"{_seg(*arc[k], *arc[k + 1], th)}{{\\p0}}")
         # Each dot is drawn round its own centre and placed there, so it grows from where it sits.
         ring = (f"Dialogue: 7,{_t(t)},{_t(min(end, t + 0.9))},Card,,0,0,0,,{{\\an5\\pos({round(x)},{round(y)})\\p1\\bord{max(2, th // 2)}\\shad0"
-                f"\\1a&HFF&\\3c{hi}\\t(0,800,\\fscx260\\fscy260\\3a&HFF&)}}{_dot(0, 0, r)}{{\\p0}}")
+                f"\\1a&HFF&\\3c{hi}\\t(0,800,\\fscx260\\fscy260\\3a&HFF&)}}{_disc(r)}{{\\p0}}")
         dot = (f"Dialogue: 8,{_t(t)},{_t(end)},Card,,0,0,0,,{{\\an5\\pos({round(x)},{round(y)})\\p1\\bord{max(2, th // 2)}\\3c&H00FFFFFF&\\shad0\\1c{hi}"
                f"\\fscx0\\fscy0\\t(0,160,\\fscx125\\fscy125)\\t(160,260,\\fscx100\\fscy100)\\fad(0,200)}}"
-               f"{_dot(0, 0, r)}{{\\p0}}")
+               f"{_disc(r)}{{\\p0}}")
         rows += [ring, dot]
         if p.label:
             right = x < w * 0.7
@@ -549,7 +555,7 @@ def timeline_events(tl: Timeline, start: float, end: float, w: int, h: int, acce
         col = hi if i == n - 1 else "&H00FFFFFF&"
         rows.append(f"Dialogue: 8,{_t(t)},{_t(end)},Card,,0,0,0,,{{\\an5\\pos({round(x)},{y})\\p1\\bord0\\shad0\\1c{col}"
                     f"\\fscx0\\fscy0\\t(0,180,\\fscx130\\fscy130)\\t(180,280,\\fscx100\\fscy100)\\fad(0,200)}}"
-                    f"{_dot(0, 0, th * 2.2)}{{\\p0}}")
+                    f"{_disc(th * 2.2)}{{\\p0}}")
         # Labels stay inside the frame: a label at either end is nudged in rather than cut off.
         from .style import text_width
 
@@ -623,3 +629,125 @@ def split_label_events(label: str, side: str, start: float, end: float, w: int, 
     t = start + (0.2 if side == "left" else 0.4)
     return [f"Dialogue: 8,{_t(t)},{_t(end)},CapBox,,0,0,0,,{{\\an2\\pos({x},{y})\\fs{size}\\3c{hi}\\3a&H00&\\bord{max(4, size // 3)}"
             f"\\1c&H00141414&\\1a&H00&\\move({x},{y + size},{x},{y},0,250)\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{_esc(label)}"]
+
+
+def list_events(title: str, items: list[str], start: float, end: float, w: int, h: int, accent: str) -> list[str]:
+    """A list that builds point by point: each item slides in with a numbered
+    accent badge, spread across the scene so the viewer reads one at a time."""
+    from .style import fit_lines, text_width
+
+    hi = ass_colour(accent)
+    vertical = h > w
+    m = round(0.09 * w)
+    n = max(1, len(items))
+    size0 = round((0.058 if vertical else 0.052) * min(w, h))
+    badge = round(size0 * 1.25)
+    gap = round(min((h * (0.62 if vertical else 0.6)) / n, size0 * (3.4 if vertical else 2.6)))
+    top = round(max(h * 0.24, (h - gap * (n - 1)) / 2 + (gap * 0.25 if title else -badge / 2)))
+    rows = []
+    if title:
+        tl, ts = fit_lines(title, round(size0 * 1.15), w - 2 * m)
+        rows.append(f"Dialogue: 7,{_t(start + 0.05)},{_t(end)},CardText,,0,0,0,,{{\\an1\\pos({m},{top - round(gap * 0.55)})"
+                    f"\\fs{round(ts)}\\1c{hi}\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{'\\N'.join(_esc(x) for x in tl)}")
+    span = max(0.6, (end - start) - 0.9)
+    for i, item in enumerate(items):
+        t = start + 0.35 + span * i / n
+        y = top + gap * i
+        tx = m + badge + round(size0 * 0.6)
+        lines, sz = fit_lines(item, size0, w - tx - m)
+        cy = y + round(badge / 2)
+        rows.append(f"Dialogue: 8,{_t(t)},{_t(end)},Card,,0,0,0,,{{\\an5\\pos({m + badge // 2},{cy})\\p1\\bord0\\shad0\\1c{hi}"
+                    f"\\fscx0\\fscy0\\t(0,160,\\fscx115\\fscy115)\\t(160,260,\\fscx100\\fscy100)\\fad(0,200)}}{_disc(badge / 2)}{{\\p0}}")
+        rows.append(f"Dialogue: 9,{_t(t + 0.05)},{_t(end)},CardText,,0,0,0,,{{\\an5\\pos({m + badge // 2},{cy})\\fs{round(badge * 0.6)}"
+                    f"\\1c&H00141414&\\alpha&HFF&\\t(80,200,\\alpha&H00&)\\fad(0,200)}}{i + 1}")
+        rows.append(f"Dialogue: 8,{_t(t + 0.08)},{_t(end)},CardText,,0,0,0,,{{\\an4\\move({tx + round(w * 0.04)},{cy},{tx},{cy},0,380)"
+                    f"\\fs{round(sz)}\\fnInter ExtraBold\\alpha&HFF&\\t(0,300,\\alpha&H00&)\\fad(0,200)}}{'\\N'.join(_esc(x) for x in lines)}")
+    return rows
+
+
+def compare_events(left: tuple[str, list[str]], right: tuple[str, list[str]], start: float, end: float,
+                   w: int, h: int, accent: str) -> list[str]:
+    """Two sides of a comparison: a divider draws in, the left side arrives,
+    then the right side in the accent colour, with a small "vs" badge where
+    they meet. Side by side on wide screens, stacked on tall ones."""
+    from .style import fit_lines
+
+    hi = ass_colour(accent)
+    vertical = h > w
+    size = round((0.05 if vertical else 0.046) * min(w, h))
+    rows = []
+    th = max(3, round(0.004 * min(w, h)))
+    if vertical:
+        boxes = [(round(0.1 * w), round(0.16 * h), round(0.8 * w)), (round(0.1 * w), round(0.58 * h), round(0.8 * w))]
+        rows.append(f"Dialogue: 6,{_t(start)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c&H00707070&"
+                    f"\\clip(0,0,0,{h})\\t(0,500,0.6,\\clip(0,0,{w},{h}))\\fad(0,200)}}{_seg(0.1 * w, h * 0.5, 0.9 * w, h * 0.5, th)}{{\\p0}}")
+        vs = (w // 2, h // 2)
+    else:
+        boxes = [(round(0.07 * w), round(0.24 * h), round(0.38 * w)), (round(0.55 * w), round(0.24 * h), round(0.38 * w))]
+        rows.append(f"Dialogue: 6,{_t(start)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c&H00707070&"
+                    f"\\clip(0,0,{w},0)\\t(0,500,0.6,\\clip(0,0,{w},{h}))\\fad(0,200)}}{_seg(w * 0.5, h * 0.18, w * 0.5, h * 0.86, th)}{{\\p0}}")
+        vs = (w // 2, round(h * 0.52))
+    side_t = [start + 0.3, start + 0.3 + min(1.2, (end - start) * 0.3)]
+    for k, ((head, points), (x, y, bw)) in enumerate(zip((left, right), boxes)):
+        t0 = side_t[k]
+        col = hi if k else "&H00FFFFFF&"
+        hl, hs = fit_lines(head, round(size * 1.5), bw)
+        rows.append(f"Dialogue: 8,{_t(t0)},{_t(end)},CardText,,0,0,0,,{{\\an7\\move({x},{y + round(size * 0.6)},{x},{y},0,350)"
+                    f"\\fs{round(hs)}\\1c{col}\\alpha&HFF&\\t(0,300,\\alpha&H00&)\\fad(0,200)}}{'\\N'.join(_esc(s) for s in hl)}")
+        yy = y + round(hs * 1.25 * len(hl) + size * 0.7)
+        for j, p in enumerate(points[:5]):
+            pl, ps = fit_lines(p, size, bw - round(size * 1.1))
+            tj = t0 + 0.25 + 0.18 * j
+            rows.append(f"Dialogue: 8,{_t(tj)},{_t(end)},Card,,0,0,0,,{{\\an5\\pos({x + round(size * 0.3)},{yy + round(ps * 0.62)})\\p1\\bord0\\shad0"
+                        f"\\1c{col}\\alpha&HFF&\\t(0,200,\\alpha&H00&)\\fad(0,200)}}{_disc(max(3, size * 0.14))}{{\\p0}}")
+            rows.append(f"Dialogue: 8,{_t(tj)},{_t(end)},CardText,,0,0,0,,{{\\an7\\pos({x + round(size * 1.0)},{yy})\\fs{round(ps)}"
+                        f"\\fnInter SemiBold\\1c&H00E6E6E6&\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{'\\N'.join(_esc(s) for s in pl)}")
+            yy += round(ps * 1.3 * len(pl) + size * 0.45)
+    r = round(size * 0.9)
+    rows.append(f"Dialogue: 9,{_t(side_t[1] - 0.1)},{_t(end)},Card,,0,0,0,,{{\\an5\\pos({vs[0]},{vs[1]})\\p1\\bord0\\shad0\\1c&H00141414&"
+                f"\\3c{hi}\\bord{max(2, th)}\\fscx0\\fscy0\\t(0,180,\\fscx115\\fscy115)\\t(180,280,\\fscx100\\fscy100)\\fad(0,200)}}{_disc(r)}{{\\p0}}")
+    rows.append(f"Dialogue: 10,{_t(side_t[1])},{_t(end)},CardText,,0,0,0,,{{\\an5\\pos({vs[0]},{vs[1]})\\fs{round(r * 0.9)}\\1c{hi}"
+                f"\\alpha&HFF&\\t(60,200,\\alpha&H00&)\\fad(0,200)}}vs")
+    return rows
+
+
+def callout_events(x: float, y: float, label: str, start: float, end: float, w: int, h: int, accent: str) -> list[str]:
+    """Point at something in the picture: a ring pulses on the spot, a line
+    draws out from it, and a label lands at the end of the line (on the side
+    with more room)."""
+    from .style import fit_lines, text_width
+
+    hi = ass_colour(accent)
+    size = round(0.042 * min(w, h))
+    th = max(3, round(0.004 * min(w, h)))
+    r = round(size * 0.55)
+    px, py = x * w, y * h
+    dx = -1 if x > 0.55 else 1
+    dy = -1 if y > 0.35 else 1
+    lx, ly = px + dx * 0.12 * w, py + dy * 0.12 * h
+    lines, sz = fit_lines(label, size, 0.4 * w)
+    tw = max(text_width(s, sz, "Inter-ExtraBold.otf") for s in lines)
+    pad = round(sz * 0.45)
+    bw, bh = round(tw + 2 * pad), round(sz * 1.25 * len(lines) + pad * 1.2)
+    bx = round(lx if dx > 0 else lx - bw)
+    bx = min(max(bx, round(0.03 * w)), round(0.97 * w) - bw)
+    by = round(ly - bh / 2)
+    by = min(max(by, round(0.04 * h)), round(0.9 * h) - bh)
+    t0 = start + 0.3
+    rows = [
+        f"Dialogue: 8,{_t(t0)},{_t(end)},Card,,0,0,0,,{{\\an5\\pos({round(px)},{round(py)})\\p1\\bord{max(2, th)}\\shad0\\1a&HFF&\\3c{hi}"
+        f"\\fscx0\\fscy0\\t(0,200,\\fscx120\\fscy120)\\t(200,320,\\fscx100\\fscy100)\\fad(0,200)}}{_disc(r)}{{\\p0}}",
+        f"Dialogue: 7,{_t(t0)},{_t(min(end, t0 + 1.0))},Card,,0,0,0,,{{\\an5\\pos({round(px)},{round(py)})\\p1\\bord{max(2, th // 2)}\\shad0"
+        f"\\1a&HFF&\\3c{hi}\\t(0,900,\\fscx300\\fscy300\\3a&HFF&)}}{_disc(r)}{{\\p0}}",
+    ]
+    ex, ey = (bx if dx > 0 else bx + bw), by + bh / 2
+    sx, sy = px + dx * r * 1.1, py + (ey - py) * (r * 1.1 / max(1.0, abs(ex - px)))
+    x_lo, x_hi = sorted((round(sx), round(ex)))
+    rows.append(f"Dialogue: 7,{_t(t0 + 0.2)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{hi}"
+                f"\\clip({x_lo if dx > 0 else x_hi},0,{x_lo if dx > 0 else x_hi},{h})"
+                f"\\t(0,350,0.6,\\clip({x_lo},0,{x_hi},{h}))\\fad(0,200)}}{_seg(sx, sy, ex, ey, th)}{{\\p0}}")
+    rows.append(f"Dialogue: 8,{_t(t0 + 0.5)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos({bx},{by})\\p1\\bord0\\shad0\\1c{hi}"
+                f"\\fscx0\\t(0,220,0.6,\\fscx100)\\fad(0,200)}}m 0 0 l {bw} 0 {bw} {bh} 0 {bh}{{\\p0}}")
+    rows.append(f"Dialogue: 9,{_t(t0 + 0.65)},{_t(end)},CardText,,0,0,0,,{{\\an7\\pos({bx + pad},{by + round(pad * 0.6)})\\fs{round(sz)}"
+                f"\\fnInter ExtraBold\\1c&H00141414&\\alpha&HFF&\\t(0,200,\\alpha&H00&)\\fad(0,200)}}{'\\N'.join(_esc(s) for s in lines)}")
+    return rows

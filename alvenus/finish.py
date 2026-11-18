@@ -56,6 +56,7 @@ def finish(
     lower_thirds=(), card_lines=(), all_words=None, stats=(), charts=(), sfx: list | None = None,
     line_charts=(), quotes=(), progress: bool = False, scene_marks=(),
     maps=(), timelines=(), kinetic_lines=(), titles=(), split_labels=(), title_style: str = "track",
+    more_events=(), camera=(),
 ) -> list[str]:
     """srt: classic one-line captions; words: timed words for animated captions;
     sfx: None for no sound effects, else [(time, kind)] for the cut's own
@@ -123,7 +124,7 @@ def finish(
     if srt is not None:
         parts.append(f"[{v}]{subtitle_filter(srt, w, h)}[cap]")
         v = "cap"
-    if words or title or end_card or lower_thirds or card_lines or stats or charts or line_charts or quotes or progress or maps or timelines or kinetic_lines or titles or split_labels:
+    if words or title or end_card or lower_thirds or card_lines or stats or charts or line_charts or quotes or progress or maps or timelines or kinetic_lines or titles or split_labels or more_events:
         from .graphics import (chart_events, kinetic_events, line_chart_events, map_events, progress_events, quote_events,
                                stat_events, timeline_events)
 
@@ -163,6 +164,7 @@ def finish(
 
         for (t0, t1), side, label in split_labels:
             extra += split_label_events(label, side, t0, t1, w, h, accent)
+        extra += list(more_events)  # ready-made graphics (lists, comparisons, callouts)
         for text, t0, t1 in titles:  # mid-video title cards
             extra += title_events(text, w, h, accent, t0 + 0.1, t1, centre=True, kind=title_style)
         lts = [(lt, spans[lt.line][0]) for lt in lower_thirds if lt.line in spans]
@@ -172,6 +174,29 @@ def finish(
         write_ass(ass, w, h, accent, words, title, end_card, cut_len, card, lts, cards, extra, skip, title_style=title_style)
         parts.append(f"[{v}]{ass_filter(ass)}[tt]")
         v = "tt"
+    if camera:  # a slow drifting camera over graphic scenes, words and all, as if filmed
+        # one continuous path (no jump between two graphic scenes in a row); it
+        # eases in and out where a stretch of graphic scenes meets real footage
+        runs: list[list[float]] = []
+        for t0, t1 in sorted(camera):
+            if runs and t0 - runs[-1][1] < 0.05:
+                runs[-1][1] = t1
+            else:
+                runs.append([t0, t1])
+        T = "(TIME)"  # filled in below; the self-review fills in its own moment to follow the same move
+        ramp = lambda x: f"(clip({x},0,1)*clip({x},0,1)*(3-2*clip({x},0,1)))"
+        A = "+".join(f"{ramp(f'({T}-{a:.3f})/0.8')}*{ramp(f'({b:.3f}-{T})/0.8')}" if a > 0.05 else ramp(f"({b:.3f}-{T})/0.8")
+                     for a, b in runs)
+        z = f"(1+({A})*(0.04+0.015*sin({T}*0.5)))"
+        sx, sy = f"(({A})*0.010*W*sin({T}*0.37+1))", f"(({A})*0.007*H*sin({T}*0.29))"
+        corners = [("W/2-W/2/", "H/2-H/2/"), ("W/2+W/2/", "H/2-H/2/"), ("W/2-W/2/", "H/2+H/2/"), ("W/2+W/2/", "H/2+H/2/")]
+        persp = ":".join(f"x{i}='{a}{z}+{sx}':y{i}='{b}{z}+{sy}'" for i, (a, b) in enumerate(corners))
+        look = out.with_suffix(".look.ass")
+        if look.exists():  # so the self-review can measure the words where the camera put them
+            look.write_text(look.read_text(encoding="utf-8").replace("[Script Info]\n", f"[Script Info]\n; venus-camera: {persp}\n", 1),
+                            encoding="utf-8")
+        parts.append(f"[{v}]perspective={persp.replace(T, f'(on/{fps:g})')}:interpolation=linear:eval=frame[cam]")
+        v = "cam"
     parts.append(f"[{v}]format=yuv420p[vo]")
 
     a = "0:a"

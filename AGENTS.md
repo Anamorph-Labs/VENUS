@@ -252,7 +252,9 @@ reel.montage.json`. Keep the sum of shot lengths the same to stay on the beat.
 
 When the creator describes a video rather than handing you takes, you write a
 storyboard and Venus builds it. `alvenus make --example sb.json` writes one with
-every scene type.
+every scene type. For the common shapes, start from a template instead:
+`alvenus make --template explainer|story|list|ad sb.json` writes a starter whose
+first scene is a hook under 2.5 seconds; keep the shape, replace the words.
 
 1. Agree the brief in two or three sentences: who it is for, the one thing they
    should remember, length, shape (9:16, 16:9...), mood.
@@ -270,6 +272,10 @@ every scene type.
    - `quote`: someone's words, with `who`.
    - `map`: an image with `pins` ({x, y, label}, 0 to 1) and a route.
    - `split`: two clips or images side by side with labels (before/after, A/B).
+   - `list`: up to 6 short points that arrive one by one with numbered badges.
+   - `compare`: `left` and `right`, each `{"title", "points"}`, with a "vs" badge.
+   - Any clip or image scene can add `"callout": {"x", "y", "label"}` (0 to 1 across
+     and down the picture) to point at something with a ring, a line and a label.
    Vary the forms; don't put two graphic scenes in a row more than once or twice.
    Scenes of 2.5 to 5 seconds; graphics need about a second more than pictures.
 4. Settings: `aspect`, `look`, `accent`, `music`, `voiceover` (a narration file
@@ -277,7 +283,9 @@ every scene type.
    `cut_on_beat` (scene changes snap to the music's beat), `captions`, `progress`,
    `end_card`, `background` (aurora, orbs, grid, ink, spotlight, dark; also per
    scene). With no footage at all, a storyboard of title, text, stat, chart,
-   timeline and quote scenes on a background is a complete video.
+   timeline and quote scenes on a background is a complete video. Footage-free
+   scenes drift with a slow camera move (type over a background that moves less,
+   for depth); `"camera": false` keeps them still.
 5. `alvenus make sb.json --draft --out draft.mp4` first: it takes seconds. Look at
    `draft.sheet.jpg` (one frame per scene), fix what is weak, repeat; then build
    without `--draft`. Venus reviews the result itself and fixes reading time,

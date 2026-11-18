@@ -119,6 +119,16 @@ def _contrast(video: Path, ass: Path, events, w: int, h: int, total: float) -> l
     from .style import FONTS
 
     esc = lambda p: str(p).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
+    # letters only: shapes (chart fills, lines, dots, plates drawn as their own
+    # events) are pictures, not text, and would be measured as if they were words
+    import tempfile
+
+    rows = ass.read_text(encoding="utf-8").splitlines()
+    cam = next((r.split(": ", 1)[1] for r in rows if r.startswith("; venus-camera: ")), "")
+    letters = Path(tempfile.mkdtemp()) / "letters.ass"
+    letters.write_text("\n".join("Comment:" + r[9:] if r.startswith("Dialogue:") and "\\p1" in r else r for r in rows),
+                       encoding="utf-8")
+    ass = letters
     times = []
     for t0, t1, _, _ in sorted(events):
         t = t0 + min(0.9, (min(t1, total) - t0) / 2)
@@ -131,7 +141,8 @@ def _contrast(video: Path, ass: Path, events, w: int, h: int, total: float) -> l
     bad, cut_off = [], []
     def layer(t: float, bg: str) -> np.ndarray:
         return _gray(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i", f"color={bg}:s={w}x{h}:r=25:d=0.04",
-                      "-vf", f"setpts=PTS+{t:.3f}/TB,subtitles='{esc(ass)}':fontsdir='{esc(FONTS)}',scale={sw}:{sh}",
+                      "-vf", f"setpts=PTS+{t:.3f}/TB,subtitles='{esc(ass)}':fontsdir='{esc(FONTS)}',scale={sw}:{sh}"
+                      + (f",perspective={cam.replace('(TIME)', f'({t:.3f})')}:interpolation=linear" if cam else ""),
                       "-frames:v", "1"], sw, sh)
 
     for t in times:
@@ -157,6 +168,8 @@ def _contrast(video: Path, ass: Path, events, w: int, h: int, total: float) -> l
         on, around = float(np.median(f[text])), float(np.median(f[ring]))
         if abs(on - around) < 55:
             bad.append((t, on, around))
+    letters.unlink()
+    letters.parent.rmdir()
     notes = []
     for t, on, around in bad[:6]:
         notes.append(Finding(f"text at {t:.1f}s is hard to read: it is {'about as bright as' if abs(on - around) < 25 else 'too close in brightness to'} "

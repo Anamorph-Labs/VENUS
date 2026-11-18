@@ -498,6 +498,19 @@ def cmd_make(a: argparse.Namespace) -> None:
         Path(a.example).write_text(json.dumps(story.EXAMPLE, indent=2), encoding="utf-8")
         print(f"wrote an example storyboard to {a.example}; every scene type is in it")
         return
+    if a.template:
+        from .templates import TEMPLATES
+
+        if not a.storyboard:
+            raise SystemExit("--template needs a file name to write the starter storyboard to")
+        p = Path(a.storyboard)
+        if p.exists():
+            raise SystemExit(f"{p} already exists; give a new file name for the starter storyboard")
+        p.write_text(json.dumps(TEMPLATES[a.template], indent=2), encoding="utf-8")
+        print(f"wrote the {a.template} starter to {p}: swap the words for your subject, keep the shape"
+              + ("" if a.out else ", then: alvenus make " + str(p) + " --out video.mp4"))
+        if not a.out:
+            return
     if not a.storyboard or not a.out:
         raise SystemExit("make needs a storyboard file and --out (or --example FILE to see one)")
     need_ffmpeg()
@@ -680,6 +693,10 @@ def main(argv: list[str] | None = None) -> None:
     mk.add_argument("--style", choices=list(PRESETS), help="a style pack: look, colour, transitions and titles (the storyboard's own settings still win)")
     mk.add_argument("--no-fix", action="store_true", help="only report what the self-review finds; don't change and rebuild")
     mk.add_argument("--example", metavar="FILE", help="write an example storyboard with every scene type, then stop")
+    from .templates import TEMPLATES
+
+    mk.add_argument("--template", choices=list(TEMPLATES), help="start from a proven shape with a hook in the first 2 seconds: "
+                    "explainer, story, list (top-5) or ad; writes it to the storyboard file (and builds it if --out is given)")
     mk.set_defaults(func=cmd_make)
 
     rv = sub.add_parser("review", help="check a finished video: reading time, contrast, black frames, flashing, sound and picture")

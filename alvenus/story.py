@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -27,7 +28,7 @@ IMAGES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
 def _still(f: str) -> bool:
     return Path(f).suffix.lower() in IMAGES or not has_video(f)
-KINDS = {"clip", "image", "title", "text", "stat", "chart", "line_chart", "quote", "timeline", "map", "split"}
+KINDS = {"clip", "image", "title", "text", "stat", "chart", "line_chart", "quote", "timeline", "map", "split", "list", "compare"}
 EXAMPLE = {
     "aspect": "16:9", "look": "natural", "accent": "#FFD23F", "music": "song.mp3", "voiceover": None,
     "transition": "crossfade", "transition_seconds": 0.4, "cut_on_beat": True, "captions": True, "progress": False,
@@ -82,6 +83,14 @@ def load(path: Path) -> dict:
             problems.append(f"scene {i + 1}: a map scene needs \"image\" and \"pins\"")
         if kind == "split" and not (sc.get("left", {}).get("file") and sc.get("right", {}).get("file")):
             problems.append(f"scene {i + 1}: a split scene needs left.file and right.file")
+    for i, sc in enumerate(sb.get("scenes") or []):
+        if sc.get("type") == "list" and not (isinstance(sc.get("items"), list) and 1 <= len(sc["items"]) <= 6):
+            problems.append(f"scene {i + 1}: a list scene needs \"items\": 1 to 6 short lines")
+        if sc.get("type") == "compare" and not all(isinstance(sc.get(k), dict) and sc[k].get("title") for k in ("left", "right")):
+            problems.append(f"scene {i + 1}: a compare scene needs left and right, each {{\"title\": ..., \"points\": [...]}}")
+        c = sc.get("callout")
+        if c is not None and not (isinstance(c, dict) and 0 <= float(c.get("x", -1)) <= 1 and 0 <= float(c.get("y", -1)) <= 1 and c.get("label")):
+            problems.append(f"scene {i + 1}: callout needs x and y (0 to 1, across and down the picture) and a label")
     if not sb.get("scenes"):
         problems.append("no scenes")
     from .cut import TRANSITIONS
@@ -166,6 +175,10 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
     from .backgrounds import source
 
     src, vf = source(sc.get("background") or sc.get("_bg") or "dark", w, h, fps, d + 0.2, sc.get("_accent", "#FFD23F"))
+    dx = sc.get("_dir", 0)
+    if dx:  # the background drifts against the camera's move: depth, like a filmed shot
+        vf += (f",scale={round(w * 1.06) // 2 * 2}:{round(h * 1.06) // 2 * 2},"
+               f"crop={w}:{h}:x='(iw-ow)/2*(1+{dx}*0.8*min(t/{d:.3f},1))':y='(ih-oh)/2'")
     run(base + ["-f", "lavfi", "-i", src, "-vf", vf] + enc)
 
 
@@ -177,8 +190,11 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
 
     w, h = (int(x) for x in size.split("x"))
     scenes = sb["scenes"]
-    for sc in scenes:  # what a footage-free scene is drawn on
+    moving = sb.get("camera", True)
+    for k, sc in enumerate(scenes):  # what a footage-free scene is drawn on, and which way its camera drifts
         sc["_bg"], sc["_accent"] = sb.get("background", "dark"), sb.get("accent", "#FFD23F")
+        footage = sc.get("file") or sc["type"] in ("clip", "image", "map", "split")
+        sc["_dir"] = 0 if footage or not moving else (1 if k % 2 == 0 else -1)
     lengths = [float(sc.get("seconds", 3.0)) for sc in scenes]
     if sb.get("cut_on_beat", True):
         lengths = _beat_snap(lengths, sb.get("music"))
@@ -213,8 +229,11 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             args += ["-i", vo]
             parts.append(f"[{len(files)}:a]aformat=sample_rates=48000:channel_layouts=stereo,apad,atrim=0:{total:.3f}[aj]")
         else:
-            args += ["-f", "lavfi", "-t", f"{total:.3f}", "-i", "anullsrc=r=48000:cl=stereo"]
-            parts.append(f"[{len(files)}:a]anull[aj]")
+            # no voice and no music: a faint room hiss, so players and platforms
+            # don't meet dead digital silence (the effects still sit on top)
+            src = "anullsrc=r=48000:cl=stereo" if sb.get("music") else "anoisesrc=c=pink:a=0.0012:r=48000"
+            args += ["-f", "lavfi", "-t", f"{total:.3f}", "-i", src]
+            parts.append(f"[{len(files)}:a]aformat=sample_rates=48000:channel_layouts=stereo[aj]")
         base = out.with_name(out.stem + ".base.mp4")
         run(args + ["-filter_complex", ";".join(parts), "-map", "[vj]", "-map", "[aj]", "-t", f"{total:.3f}",
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", str(base)])
@@ -244,7 +263,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         elif kind == "text":
             ws = spread(sc.get("text", ""), i, t0, t1, 0.6)
             all_words += ws
-            kinetic.append((i, {x.lower() for x in sc.get("big_words") or []}))
+            kinetic.append((i, {re.sub(r"[^\w']", "", x.lower()) for p in sc.get("big_words") or [] for x in str(p).split()} - {""}))
         elif kind == "stat":
             stats.append(Stat(i, str(sc.get("value", "")), sc.get("label", "")))
         elif kind == "chart":
@@ -258,6 +277,23 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         elif kind == "map":
             maps.append(MapCard(i, sc["image"], [Pin(float(p["x"]), float(p["y"]), p.get("label", "")) for p in sc["pins"]],
                                 bool(sc.get("route", True))))
+    from .graphics import callout_events, compare_events, list_events
+
+    more, pops = [], []
+    for i, sc in enumerate(scenes):
+        t0, t1 = spans[i]
+        if sc["type"] == "list":
+            more += list_events(sc.get("title", ""), [str(x) for x in sc["items"]], t0, t1, w, h, sb.get("accent", "#FFD23F"))
+            n = len(sc["items"])
+            pops += [t0 + 0.35 + max(0.6, (t1 - t0) - 0.9) * k / n for k in range(n)]
+        elif sc["type"] == "compare":
+            side = lambda d: (str(d["title"]), [str(x) for x in d.get("points") or []])
+            more += compare_events(side(sc["left"]), side(sc["right"]), t0, t1, w, h, sb.get("accent", "#FFD23F"))
+            pops += [t0 + 0.3, t0 + 0.3 + min(1.2, (t1 - t0) * 0.3)]
+        if sc.get("callout"):
+            c = sc["callout"]
+            more += callout_events(float(c["x"]), float(c["y"]), str(c["label"]), t0, t1, w, h, sb.get("accent", "#FFD23F"))
+            pops.append(t0 + 0.8)
     lower = []
     for i, sc in enumerate(scenes):
         if sc["type"] == "split":
@@ -265,6 +301,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                 if sc[side].get("label"):
                     lower.append((i, side, sc[side]["label"]))
     sfx = [(starts[i] + td / 2, "whoosh") for i in range(1, len(scenes))] if trans in ("whip", "slide", "zoom", "flash", "circle", "glitch") else []
+    sfx += [(t, "pop") for t in pops]
     from . import graphics
 
     graphics.PANELS = False  # the scene's own background shows behind charts, numbers and quotes
@@ -275,7 +312,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                         accent=sb.get("accent", "#FFD23F"), all_words=all_words, stats=stats, charts=charts,
                         sfx=None if sb.get("sound_effects") is False else sfx, line_charts=lcharts, quotes=quotes,
                         progress=bool(sb.get("progress")), scene_marks=starts[1:], maps=maps, timelines=tls,
-                        kinetic_lines=kinetic, titles=titles, title_style=sb.get("title_style", "track"), split_labels=[(spans[i], side, lab) for i, side, lab in lower])
+                        kinetic_lines=kinetic, titles=titles, title_style=sb.get("title_style", "track"), more_events=more, camera=[spans[i] for i, sc in enumerate(scenes) if sc["_dir"]],
+                        split_labels=[(spans[i], side, lab) for i, side, lab in lower])
     finally:
         graphics.PANELS = True
     base.unlink()

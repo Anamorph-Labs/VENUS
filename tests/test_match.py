@@ -355,6 +355,7 @@ class MatchTests(unittest.TestCase):
     def test_storyboard_checks_and_beat_snap(self):
         import json, tempfile
         from pathlib import Path
+        from pathlib import Path
         from alvenus.story import _beat_snap, load
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "sb.json"
@@ -395,6 +396,7 @@ class Run3(unittest.TestCase):
 
     def test_storyboard_rejects_unknown_style(self):
         import json, tempfile
+        from pathlib import Path
         from pathlib import Path
         from alvenus.story import load
         with tempfile.TemporaryDirectory() as d:
@@ -469,6 +471,40 @@ class Run4(unittest.TestCase):
             self.assertIn(p["background"], KINDS)
         with self.assertRaises(ValueError):
             source("lava", 640, 360, 30, 1.0)
+
+
+class Run5(unittest.TestCase):
+    def test_list_compare_callout_events(self):
+        from alvenus.graphics import callout_events, compare_events, list_events
+        rows = list_events("Why", ["One", "Two", "Three"], 1.0, 7.0, 1920, 1080, "#FF6B35")
+        self.assertEqual(sum(1 for r in rows if r.endswith("}2")), 1)  # the number sits in its badge
+        self.assertFalse(any("Comment:" in r or "m 0 0 l 1920" in r for r in rows))  # no panel over the background
+        rows = compare_events(("Day", ["a"]), ("Night", ["b", "c"]), 0, 6, 1080, 1920, "#FF6B35")
+        self.assertTrue(rows[-1].endswith("}vs"))
+        rows = callout_events(0.8, 0.2, "Here", 0, 4, 1920, 1080, "#FF6B35")
+        box = next(r for r in rows if "\\fscx0\\t(0,220" in r)
+        self.assertIn("\\an7\\pos(", box)
+        x = int(box.split("\\pos(")[1].split(",")[0])
+        self.assertLess(x, 0.8 * 1920)  # label goes to the side with room
+
+    def test_disc_is_centred_on_its_box(self):
+        from alvenus.graphics import _disc
+        pts = [int(v) for v in _disc(10).replace("m", "").replace("b", "").split()]
+        self.assertEqual((min(pts), max(pts)), (0, 20))
+
+    def test_templates_load_and_hook_fast(self):
+        import json, tempfile
+        from pathlib import Path
+        from alvenus import story
+        from alvenus.templates import TEMPLATES
+        for name, sb in TEMPLATES.items():
+            with self.subTest(name):
+                self.assertLessEqual(sb["scenes"][0]["seconds"], 2.6)
+                self.assertLessEqual(len(sb["scenes"][0]["text"].split()), 7)
+                with tempfile.TemporaryDirectory() as d:
+                    p = Path(d) / "sb.json"
+                    p.write_text(json.dumps(sb))
+                    self.assertEqual(len(story.load(p)["scenes"]), len(sb["scenes"]))
 
 
 if __name__ == "__main__":
