@@ -53,10 +53,13 @@ def finish(
     cutaways: list[Cutaway] = (), music: Path | None = None, music_lufs: float = -22.0,
     title: str | None = None, end_card: str | None = None, card_len: float = 2.5,
     srt: Path | None = None, words=None, look: str = "natural", accent: str = "#FFD23F",
-    lower_thirds=(), card_lines=(), all_words=None, stats=(), charts=(),
+    lower_thirds=(), card_lines=(), all_words=None, stats=(), charts=(), sfx: list | None = None,
+    line_charts=(), quotes=(), progress: bool = False, scene_marks=(),
 ) -> list[str]:
-    """srt: classic one-line captions; words: timed words for animated captions."""
-    """Returns plain notes on anything it had to adjust."""
+    """srt: classic one-line captions; words: timed words for animated captions;
+    sfx: None for no sound effects, else [(time, kind)] for the cut's own
+    transitions (graphics add theirs here). Returns plain notes on anything it
+    had to adjust."""
     w, h = (int(x) for x in size.split("x"))
     cut_len = duration(base)
     card = card_len if end_card else 0.0
@@ -103,8 +106,8 @@ def finish(
     if srt is not None:
         parts.append(f"[{v}]{subtitle_filter(srt, w, h)}[cap]")
         v = "cap"
-    if words or title or end_card or lower_thirds or card_lines or stats or charts:
-        from .graphics import chart_events, stat_events
+    if words or title or end_card or lower_thirds or card_lines or stats or charts or line_charts or quotes or progress:
+        from .graphics import chart_events, line_chart_events, progress_events, quote_events, stat_events
 
         extra, skip = [], set()
         for st in stats:
@@ -115,6 +118,16 @@ def finish(
             if ch.line in spans:
                 extra += chart_events(ch, *spans[ch.line], w, h, accent)
                 skip.add(ch.line)
+        for ch in line_charts:
+            if ch.line in spans:
+                extra += line_chart_events(ch, *spans[ch.line], w, h, accent)
+                skip.add(ch.line)
+        for q in quotes:
+            if q.line in spans:
+                extra += quote_events(q, *spans[q.line], w, h, accent)
+                skip.add(q.line)
+        if progress:
+            extra += progress_events(cut_len, w, h, accent, list(scene_marks))
         lts = [(lt, spans[lt.line][0]) for lt in lower_thirds if lt.line in spans]
         cards = [([x for x in all_words if x.line == n], *spans[n], n) for n in card_lines if n in spans]
         notes += [f"lower third for line {lt.line + 1} skipped: that line is not in the cut" for lt in lower_thirds if lt.line not in spans]
@@ -128,6 +141,25 @@ def finish(
     if card:
         parts.append(f"[{a}]apad=pad_dur={card:.3f}[ap]")
         a = "ap"
+    if sfx is not None:
+        from .sfx import write_track
+
+        ev = list(sfx)
+        ev += [(spans[lt.line][0] + 0.05, "pop") for lt in lower_thirds if lt.line in spans]
+        ev += [(spans[n][0], "pop") for n in card_lines if n in spans]
+        ev += [(spans[x.line][0], "pop") for x in list(stats) + list(charts) + list(line_charts) + list(quotes) if x.line in spans]
+        if title:
+            ev.append((0.15, "hit"))
+        if end_card:
+            ev += [(cut_len, "whoosh"), (cut_len + 0.2, "hit")]
+        if ev:
+            track = out.with_suffix(".sfx.wav")
+            write_track(track, ev, total)
+            k, n_in = n_in, n_in + 1
+            args += ["-i", str(track)]
+            parts += [f"[{a}]aformat=sample_rates=48000:channel_layouts=stereo[vfx]",
+                      f"[vfx][{k}:a]amix=inputs=2:normalize=0:duration=first[withfx]"]
+            a = "withfx"
     if music is not None:
         k, n_in = n_in, n_in + 1
         args += ["-stream_loop", "-1", "-i", str(music)]
@@ -139,9 +171,12 @@ def finish(
             # The voice drives a compressor on the music: whenever someone
             # speaks, the music dips about 10 dB; a slow release keeps it from
             # pumping up in the short gaps between lines.
-            "[key]aformat=channel_layouts=stereo[keyst]",
+            f"[key]aformat=channel_layouts=stereo,apad=whole_dur={total + 0.5:.3f}[keyst]",
             "[mus][keyst]sidechaincompress=threshold=0.03:ratio=4:attack=20:release=900:makeup=1[duck]",
-            "[voice]aformat=sample_rates=48000:channel_layouts=stereo[vst]",
+            f"[voice]aformat=sample_rates=48000:channel_layouts=stereo,apad=whole_dur={total + 0.5:.3f}[vst]",
+            # The limiter holds back a moment and ends early: give it a little
+            # more voice than needed, so sound and picture finish together
+            # (-t trims both to length).
             "[vst][duck]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.89:level=false[ao]",
         ]
     else:
@@ -153,6 +188,7 @@ def finish(
         "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out),
     ]
     run(args)
+    out.with_suffix(".sfx.wav").unlink(missing_ok=True)
     return notes
 
 

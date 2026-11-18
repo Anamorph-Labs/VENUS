@@ -273,3 +273,140 @@ def chart_events(ch: Chart, start: float, end: float, w: int, h: int, accent: st
         rows.append(f"Dialogue: 7,{_t(start + t0)},{_t(end)},CardText,,0,0,0,,{{\\an8\\pos({x + bw // 2},{base + 14})"
                     f"\\fs{lab}\\fnInter SemiBold\\1c&H00C8C8C8&\\fad(150,200)}}{_esc(name)}")
     return rows
+
+
+# --- Line chart, quote card, progress bar ---------------------------------
+
+@dataclass
+class Quote:
+    line: int
+    who: str = ""
+    text: str = ""
+
+
+def parse_line_charts(items: list[str], n_lines: int) -> list[Chart]:
+    """Same form as --chart, 2 to 24 points: "LINE=2019 4, 2020 6, 2021 9|Title"."""
+    out = []
+    for it in items:
+        try:
+            ch = parse_charts([it], n_lines)[0]
+        except SystemExit:
+            ch = None
+        if ch is None:  # parse_charts caps at 8; re-parse for longer runs
+            line, _, rest = it.partition("=")
+            data, _, title = rest.partition("|")
+            pts = [re.match(r"\s*(.+?)\s+(-?[\d.]+)\s*$", p) for p in data.split(",")]
+            if not line.strip().isdigit() or not 0 < int(line) <= n_lines or not all(pts) or not 1 < len(pts) <= 24:
+                raise SystemExit(f"--line-chart {it!r}: give LINE=label number, label number, ... (2 to 24 points)|title")
+            ch = Chart(int(line) - 1, [(m.group(1), float(m.group(2))) for m in pts], title.strip())
+        out.append(ch)
+    return out
+
+
+def parse_quotes(items: list[str], script: list[str]) -> list[Quote]:
+    n_lines = len(script)
+    out = []
+    for it in items:
+        line, _, who = it.partition("=")
+        if not line.strip().isdigit() or not 0 < int(line) <= n_lines:
+            raise SystemExit(f"--quote {it!r}: use LINE or LINE=Who said it, e.g. 4=Mara Ilić")
+        out.append(Quote(int(line) - 1, who.strip(), script[int(line) - 1].strip()))
+    return out
+
+
+def _seg(x0: float, y0: float, x1: float, y1: float, th: float) -> str:
+    """A straight stroke from (x0, y0) to (x1, y1), th thick, as a filled quad."""
+    dx, dy = x1 - x0, y1 - y0
+    ln = (dx * dx + dy * dy) ** 0.5 or 1
+    nx, ny = -dy / ln * th / 2, dx / ln * th / 2
+    p = [(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)]
+    return "m " + " l ".join(f"{round(a)} {round(b)}" for a, b in p) + " "
+
+
+def _dot(x: float, y: float, r: float) -> str:
+    k = 0.5523 * r
+    return (f"m {round(x)} {round(y - r)} b {round(x + k)} {round(y - r)} {round(x + r)} {round(y - k)} {round(x + r)} {round(y)} "
+            f"b {round(x + r)} {round(y + k)} {round(x + k)} {round(y + r)} {round(x)} {round(y + r)} "
+            f"b {round(x - k)} {round(y + r)} {round(x - r)} {round(y + k)} {round(x - r)} {round(y)} "
+            f"b {round(x - r)} {round(y - k)} {round(x - k)} {round(y - r)} {round(x)} {round(y - r)} ")
+
+
+def line_chart_events(ch: Chart, start: float, end: float, w: int, h: int, accent: str) -> list[str]:
+    """Line chart card: the line draws itself from left to right over a soft
+    accent wash, a dot marks each point, and the last value lands at the end."""
+    hi = ass_colour(accent)
+    vertical = h > w
+    left, right = round(0.12 * w), round(0.88 * w)
+    base = round(h * (0.7 if vertical else 0.8))
+    top = round(h * (0.34 if vertical else 0.3))
+    vals = [v for _, v in ch.bars]
+    lo_v, hi_v = min(0.0, min(vals)), max(vals)
+    span = (hi_v - lo_v) or 1.0
+    n = len(vals)
+    xs = [left + (right - left) * i / (n - 1) for i in range(n)]
+    ys = [base - (base - top) * (v - lo_v) / span for v in vals]
+    th = max(4, round(0.008 * min(w, h)))
+    lab = round((0.033 if vertical else 0.03) * min(w, h))
+    draw_ms = int(min(1600, max(700, 0.55 * (end - start) * 1000)))
+    t0 = 0.3
+    ms0 = int(t0 * 1000)
+    reveal = f"\\clip({left - th},0,{left - th},{h})\\t({ms0},{ms0 + draw_ms},0.7,\\clip({left - th},0,{right + 3 * th},{h}))"
+    rows = [_panel(start, end, w, h)]
+    if ch.title:
+        rows.append(f"Dialogue: 7,{_t(start + 0.1)},{_t(end)},CardText,,0,0,0,,{{\\an7\\pos({left},{round(h * 0.12)})"
+                    f"\\fs{round(lab * 1.6)}\\fad(200,200)}}{_esc(ch.title)}")
+    rows.append(_rect(6, start + 0.15, end, left, base + 3, right - left, 3, "&H00808080&", "\\fad(150,200)"))
+    area = f"m {round(xs[0])} {base} " + " ".join(f"l {round(x)} {round(y)}" for x, y in zip(xs, ys)) + f" l {round(xs[-1])} {base}"
+    rows.append(f"Dialogue: 6,{_t(start)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{hi}\\1a&HC8&{reveal}"
+                f"\\fad(0,200)}}{area}{{\\p0}}")
+    stroke = "".join(_seg(x0, y0, x1, y1, th) for x0, y0, x1, y1 in zip(xs, ys, xs[1:], ys[1:]))
+    stroke += "".join(_dot(x, y, th * 0.5) for x, y in zip(xs[1:-1], ys[1:-1]))  # round the joints
+    rows.append(f"Dialogue: 7,{_t(start)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{hi}{reveal}"
+                f"\\fad(0,200)}}{stroke}{{\\p0}}")
+    step = max(1, n // 8)  # at most ~8 labels under the axis
+    for i, (name, v) in enumerate(ch.bars):
+        at = start + t0 + draw_ms / 1000 * (xs[i] - left) / max(1, right - left)
+        rows.append(f"Dialogue: 8,{_t(at)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c&H00FFFFFF&"
+                    f"\\fad(120,200)}}{_dot(xs[i], ys[i], th * 1.3)}{{\\p0}}")
+        if i % step == 0 or i == n - 1:
+            rows.append(f"Dialogue: 7,{_t(start + 0.2)},{_t(end)},CardText,,0,0,0,,{{\\an8\\pos({round(xs[i])},{base + 14})"
+                        f"\\fs{lab}\\fnInter SemiBold\\1c&H00C8C8C8&\\fad(150,200)}}{_esc(name)}")
+        if i == n - 1 or v == max(vals):
+            rows.append(f"Dialogue: 8,{_t(at + 0.05)},{_t(end)},CardText,,0,0,0,,{{\\an2\\pos({round(xs[i])},{round(ys[i] - th * 3)})"
+                        f"\\fs{round(lab * 1.5)}\\1c{hi if i == n - 1 else '&H00FFFFFF&'}\\fscx80\\fscy80\\t(0,180,\\fscx100\\fscy100)"
+                        f"\\fad(100,200)}}{_esc(f'{v:g}')}")
+    return rows
+
+
+def quote_events(q: Quote, start: float, end: float, w: int, h: int, accent: str) -> list[str]:
+    """Pull-quote card: a large accent quotation mark drops in, the line's
+    words rise into place, and who said it follows underneath."""
+    hi = ass_colour(accent)
+    vertical = h > w
+    size = round((0.078 if vertical else 0.075) * min(w, h))
+    m = round(0.1 * w)
+    cy = round(h * (0.45 if vertical else 0.47))
+    rows = [_panel(start, end, w, h)]
+    mark_size = size * 4
+    rows.append(f"Dialogue: 7,{_t(start + 0.1)},{_t(end)},CardText,,0,0,0,,{{\\an1\\pos({m},{cy - round(size * 1.2)})"
+                f"\\fs{mark_size}\\1c{hi}\\fscx130\\fscy130\\alpha&HFF&\\t(0,260,0.6,\\fscx100\\fscy100\\alpha&H00&)\\fad(0,200)}}“")
+    rows.append(f"Dialogue: 7,{_t(start + 0.25)},{_t(end)},CardText,,{m},{m},0,,{{\\an7\\move({m},{cy - round(size * 0.6)},{m},{cy - round(size * 0.9)},0,450)"
+                f"\\fs{size}\\q0\\alpha&HFF&\\t(0,450,0.6,\\alpha&H00&)\\fad(0,200)}}{_esc(q.text)}")
+    if q.who:
+        rows.append(f"Dialogue: 7,{_t(start + 0.7)},{_t(end)},CardText,,0,0,0,,{{\\an7\\pos({m},{round(h * (0.78 if vertical else 0.82))})"
+                    f"\\fs{round(size * 0.55)}\\fnInter SemiBold\\1c{hi}\\alpha&HFF&\\t(0,300,\\alpha&H00&)\\fad(0,200)}}— {_esc(q.who)}")
+    return rows
+
+
+def progress_events(length: float, w: int, h: int, accent: str, marks: list[float] = ()) -> list[str]:
+    """A thin bar along the bottom edge that fills across the whole video,
+    with a small notch at each new scene: viewers see how much is left."""
+    hi = ass_colour(accent)
+    bh = max(4, round(0.006 * h))
+    ms = int(length * 1000)
+    rows = [_rect(9, 0, length, 0, h, w, bh, "&H00FFFFFF&", "\\1a&HB0&"),
+            _rect(9, 0, length, 0, h, w, bh, hi, f"\\fscx0\\t(0,{ms},\\fscx100)")]
+    for t in marks:
+        if 0 < t < length:
+            rows.append(_rect(10, 0, length, round(w * t / length), h, max(2, bh // 2), bh, "&H00101010&", "\\1a&H60&"))
+    return rows

@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from . import asr
-from .cut import TRANSITIONS, Clip, hide_jump_cuts, render, take_clips, total_length, write_srt
+from .cut import TRANSITIONS, Clip, hide_jump_cuts, positions, push_in, render, take_clips, total_length, write_srt
 from .match import Take, assign, choose, join_paused
 from .review import notes as review_notes
 from .delivery import judge, measure
@@ -18,7 +18,8 @@ from . import plan as plan_file
 from .style import LOOKS
 from .presets import PRESETS, defaults as preset_defaults, describe as describe_presets
 from .wordtime import timed_words
-from .graphics import mark as mark_words, parse_charts, parse_highlights, parse_lines, parse_lower_thirds, parse_stats
+from .graphics import (mark as mark_words, parse_charts, parse_highlights, parse_line_charts, parse_lines, parse_lower_thirds,
+                       parse_quotes, parse_stats)
 from .refine import find_fillers, has_restart, keep_last_attempt
 from .media import duration, frame_rate, has_video, load_audio, need_ffmpeg, speech_regions, video_size
 from .timeline import write_edl
@@ -125,8 +126,11 @@ def cmd_cut(a: argparse.Namespace) -> None:
     highlights = parse_highlights(a.highlight or [], script)
     stats = parse_stats(a.stat or [], len(script))
     charts = parse_charts(a.chart or [], len(script))
+    line_charts = parse_line_charts(getattr(a, "line_chart", None) or [], len(script))
+    quotes = parse_quotes(getattr(a, "quote", None) or [], script)
     if getattr(a, "broll_dir", None):
-        taken = {c.line for c in cutaways} | set(card_lines) | {x.line for x in stats} | {x.line for x in charts}
+        taken = ({c.line for c in cutaways} | set(card_lines) | {x.line for x in stats} | {x.line for x in charts}
+                 | {x.line for x in line_charts} | {x.line for x in quotes})
         auto, auto_notes = auto_broll(script, Path(a.broll_dir), taken, {c.path.resolve() for c in cutaways},
                                       {c.line for c in cutaways})
         cutaways = sorted(cutaways + auto, key=lambda c: c.line)
@@ -179,6 +183,26 @@ def cmd_cut(a: argparse.Namespace) -> None:
             if t.source == k and t.line is not None:
                 t.delivery = measure(wav, t.start, t.end)
                 t.delivery.words_per_sec = round(len(t.text.split()) / max(t.length, 0.1), 2)
+    if not a.keep_fillers:
+        # Whisper tidies "um" out of what it hears, so two takes can read the
+        # same when one hesitates. Where a line has rival takes, listen for
+        # fillers in each: the clean take should win, and pace is measured
+        # without the hesitation.
+        by_line: dict[int, list] = {}
+        for t in takes:
+            if t.line is not None:
+                by_line.setdefault(t.line, []).append(t)
+        rivals = [t for group in by_line.values() if len(group) > 1
+                  for t in group if t.score >= max(o.score for o in group) - 0.05]
+        for k in sorted({t.source for t in rivals}):
+            wav = load_audio(sources[k], SR)
+            for t in rivals:
+                if t.source == k:
+                    t.filler_spans = find_fillers(t, sources[k], wav, model, SR, a.noise_db, script[t.line])
+                    if t.filler_spans and t.delivery is not None:
+                        t.fillers = max(t.fillers, len(t.filler_spans))
+                        spoken = t.length - sum(e - s for s, e in t.filler_spans)
+                        t.delivery.words_per_sec = round(len(t.text.split()) / max(spoken, 0.1), 2)
     judge(takes)
     choices = choose(takes, script)
     apply_picks(choices, takes, a.pick or [], len(script))
@@ -187,18 +211,26 @@ def cmd_cut(a: argparse.Namespace) -> None:
     print("4/5 trimming" + ("" if a.keep_pauses else " (long pauses inside takes shortened)"))
     breaks = scene_breaks(Path(a.script))
     clips: list[Clip] = []
+    room_end: dict[int, float] = {}  # clip index -> where the next sound starts in its file
     fillers_cut = 0
     for c in picked:
         t = c.take
         at_break = c.line in breaks
-        remove = [] if a.keep_fillers else find_fillers(t, sources[t.source], load_audio(sources[t.source], SR), model, SR, a.noise_db, script[c.line])
+        if a.keep_fillers:
+            remove = []
+        elif getattr(t, "filler_spans", None) is not None:  # already listened for while comparing takes
+            remove = t.filler_spans
+        else:
+            remove = find_fillers(t, sources[t.source], load_audio(sources[t.source], SR), model, SR, a.noise_db, script[c.line])
         if remove:
             fillers_cut += len(remove)
             t.notes.append(f"{len(remove)} filler sound(s) cut out")
+        room = quiet_around(t, pieces)
         clips += take_clips(sources[t.source], t.source, c.line, t.start, t.end, lengths[t.source],
                             tail=a.scene_beat if at_break else a.beat,
                             max_pause=None if a.keep_pauses else a.max_pause,
-                            room=quiet_around(t, pieces), hold_short=at_break, remove=remove)
+                            room=room, hold_short=at_break, remove=remove)
+        room_end[len(clips) - 1] = room[1] if room else lengths[t.source]
     if fillers_cut:
         print(f"   cut out {fillers_cut} filler sound(s) (um, uh) inside the chosen takes")
     if a.reframe == "auto":
@@ -214,11 +246,20 @@ def cmd_cut(a: argparse.Namespace) -> None:
             print(f"   reframed {sum(1 for c in clips if c.reframe)} wide clip(s) to follow the subject")
     if not a.no_punch_in:
         hide_jump_cuts(clips)
+    pushed = {int(x) - 1 for x in getattr(a, "push_in", None) or [] if str(x).isdigit()} | {line for line, _ in highlights}
+    if pushed and not getattr(a, "no_push_in", False):
+        print(f"   slow push-in on {push_in(clips, pushed)} line(s)")
     if TRANSITIONS.get(a.transition):
         # The first clip of each line that follows a blank line comes in with the transition.
         for prev, c in zip(clips, clips[1:]):
             if prev.line != c.line and prev.line in breaks:
                 c.transition, c.tdur = a.transition, a.transition_seconds
+    if music is not None and not getattr(a, "no_beat_sync", False) and clips:
+        from .beats import beats_of, sync
+
+        starts = {i for i in range(1, len(clips)) if clips[i - 1].line != clips[i].line and clips[i - 1].line in breaks}
+        for n in sync(clips, beats_of(music, total_length(clips) + 2), starts, room_end):
+            print("   " + n)
     room_tone = find_room_tone(pieces, picked[0].take.source, lengths[picked[0].take.source]) if picked else None
 
     print("5/5 cutting")
@@ -228,12 +269,16 @@ def cmd_cut(a: argparse.Namespace) -> None:
     fps = frame_rate(vids[0]) if vids else 30.0
     finish_notes: list[str] = []
     pop = a.captions and a.caption_style == "pop"
-    graphics_wanted = bool(lower_thirds or card_lines or highlights or stats or charts)
-    if cutaways or music or a.title or a.end_card or pop or a.look != "natural" or graphics_wanted:
+    graphics_wanted = bool(lower_thirds or card_lines or highlights or stats or charts or line_charts or quotes or getattr(a, "progress", False))
+    sfx = None
+    if not getattr(a, "no_sfx", False):
+        sfx = [(t + c.tdur / 2, "whoosh") for c, t in zip(clips, positions(clips)) 
+               if c.transition in ("whip", "slide", "zoom", "flash") and c.tdur > 0]  # dissolves and dips stay silent
+    if sfx or cutaways or music or a.title or a.end_card or pop or a.look != "natural" or graphics_wanted:
         # Cut first (at higher quality), then grade and lay B-roll, music and
         # titles on top; captions go on last.
         base = out.with_name(out.stem + ".base.mp4")
-        render(sources, clips, base, None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone, crf=14)
+        render(sources, clips, base, None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone, crf=14, voice=a.voice)
         words = None
         if pop or card_lines or highlights:
             loaded: dict[int, object] = {}
@@ -248,12 +293,28 @@ def cmd_cut(a: argparse.Namespace) -> None:
                               a.title, a.end_card, srt=srt if a.captions and not pop else None,
                               words=words if pop else None, look=a.look, accent=a.accent,
                               lower_thirds=lower_thirds, card_lines=card_lines, all_words=words,
-                              stats=stats, charts=charts)
+                              stats=stats, charts=charts, sfx=sfx, line_charts=line_charts, quotes=quotes,
+                              progress=getattr(a, "progress", False),
+                              scene_marks=[t for i, t in enumerate(positions(clips))
+                                           if i and clips[i - 1].line != clips[i].line and clips[i - 1].line in breaks])
+        thumb_from = base
+    else:
+        thumb_from = None
+        render(sources, clips, out, srt if a.captions else None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone, voice=a.voice)
+    try:
+        from .thumb import make as make_thumb, pick_moment
+
+        covered = (set(card_lines) | {x.line for x in list(stats) + list(charts) + list(line_charts) + list(quotes)}
+                   | {c.line for c in cutaways})
+        tw, th = (int(x) for x in ASPECTS[a.aspect].split("x"))
+        make_thumb(thumb_from or out, pick_moment(line_spans(clips), covered, pushed), out.with_suffix(".thumb.jpg"),
+                   a.title or script[0], tw, th, a.accent, a.look if thumb_from else "natural")
+    except Exception as e:  # a thumbnail must never cost the cut
+        print(f"   (no thumbnail: {e})")
+    if thumb_from is not None:
         base.unlink()
         for n in finish_notes:
             print("   " + n)
-    else:
-        render(sources, clips, out, srt if a.captions else None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone)
     write_edl(out.with_suffix(".edl"), out.stem, sources, clips, script, fps)
 
     report = {
@@ -386,6 +447,15 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--keep-pauses", action="store_true", help="never shorten pauses inside a take")
     c.add_argument("--beat", type=float, default=0.25, help="breathing room after each line, seconds")
     c.add_argument("--scene-beat", type=float, default=0.9, help="longer breath after a line followed by a blank line in the script")
+    c.add_argument("--voice", choices=["studio", "clean", "off"], default="studio", help="voice treatment: studio (cleaned, warm, even; default), clean (noise and harsh s removed only), off")
+    c.add_argument("--no-beat-sync", action="store_true", help="with --music, don't move scene changes onto the music's beat")
+    c.add_argument("--line-chart", action="append", metavar="LINE=LABEL N, ...|TITLE", help="turn a line into a line chart that draws itself, e.g. --line-chart \"3=2019 4, 2021 6, 2023 11|Stalls per night\" (repeatable)")
+    c.add_argument("--quote", action="append", metavar="LINE[=WHO]", help="show a line as a pull-quote card, e.g. --quote \"4=Mara Ilić\" (repeatable)")
+    c.add_argument("--progress", action="store_true", help="a thin bar along the bottom that fills as the video plays, notched at each new scene")
+    c.add_argument("--push-in", action="append", metavar="LINE", help="a slow camera push-in across this line (repeatable); highlighted lines get one automatically")
+    c.add_argument("--no-push-in", action="store_true", help="no slow push-ins at all")
+    c.add_argument("--formats", metavar="A,B,...", help="make several shapes in one go, e.g. --formats 9:16,16:9,1:1 (files are named out-9x16.mp4 and so on)")
+    c.add_argument("--no-sfx", action="store_true", help="no sound effects (by default soft whooshes and pops sit under transitions and graphics)")
     c.add_argument("--broll-dir", metavar="FOLDER", help="pick cutaway shots from this folder by matching their names (and tags in its broll.json) to the script's words")
     c.add_argument("--broll", action="append", metavar="LINE=FILE[@SEC]", help="lay a cutaway shot over a line, voice kept, e.g. --broll 3=market.mp4@4.5 (repeatable)")
     c.add_argument("--music", help="music file to play under the cut; it dips whenever someone speaks")
@@ -440,4 +510,19 @@ def main(argv: list[str] | None = None) -> None:
     d.set_defaults(func=cmd_doctor)
 
     a = p.parse_args(args)
+    if a.cmd == "cut" and getattr(a, "formats", None):
+        # One cut in several shapes. What was heard is remembered, so each
+        # extra shape costs only the trimming and rendering.
+        shapes = [x.strip() for x in a.formats.split(",") if x.strip()]
+        bad = [x for x in shapes if x not in ASPECTS]
+        if bad or not a.out:
+            raise SystemExit(f"--formats: choose from {', '.join(sorted(ASPECTS))}" if bad else "--formats needs --out")
+        base_out = Path(a.out)
+        for shape in shapes:
+            one = argparse.Namespace(**vars(a))
+            one.aspect, one.formats = shape, None
+            one.out = str(base_out.with_name(f"{base_out.stem}-{shape.replace(':', 'x')}{base_out.suffix}"))
+            print(f"=== {shape} ===")
+            cmd_cut(one)
+        return
     a.func(a)

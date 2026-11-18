@@ -15,7 +15,7 @@ _SIMPLE = {
     "model": "model", "max_pause": "max_pause", "keep_pauses": "keep_pauses",
     "beat": "beat", "scene_beat": "scene_beat", "music": "music", "music_lufs": "music_lufs",
     "title": "title", "end_card": "end_card", "look": "look", "caption_style": "caption_style", "accent": "accent",
-    "transition": "transition", "transition_seconds": "transition_seconds", "preset": "preset", "reframe": "reframe", "broll_dir": "broll_dir", "noise_db": "noise_db", "min_silence": "min_silence",
+    "transition": "transition", "transition_seconds": "transition_seconds", "preset": "preset", "reframe": "reframe", "broll_dir": "broll_dir", "voice": "voice", "progress": "progress", "noise_db": "noise_db", "min_silence": "min_silence",
 }
 
 HELP = (
@@ -43,13 +43,23 @@ def load(path: Path) -> dict:
     if plan.get("takes"):
         takes = plan["takes"] if isinstance(plan["takes"], list) else [plan["takes"]]
         d["takes"] = [t if Path(t).is_absolute() else str((base / t).resolve()) for t in takes]
+    if "beat_sync" in plan:
+        d["no_beat_sync"] = not plan["beat_sync"]
+    if "sound_effects" in plan:
+        d["no_sfx"] = not plan["sound_effects"]
     if "punch_in" in plan:
         d["no_punch_in"] = not plan["punch_in"]
     d["pick"] = [f"{k}={v}" for k, v in (plan.get("picks") or {}).items()]
     d["lower_third"] = [f"{x['line']}={x['name']}" + (f"|{x['role']}" if x.get("role") else "") for x in plan.get("lower_thirds") or []]
     d["card"] = [str(n) for n in plan.get("cards") or []]
+    d["push_in"] = [str(n) for n in plan.get("push_ins") or []]
+    if "slow_push_ins" in plan:
+        d["no_push_in"] = not plan["slow_push_ins"]
     d["highlight"] = [f"{x['line']}={x['words']}" for x in plan.get("highlights") or []]
     d["stat"] = [f"{x['line']}={x['value']}" + (f"|{x['label']}" if x.get("label") else "") for x in plan.get("stats") or []]
+    d["line_chart"] = [f"{x['line']}=" + ", ".join(f"{b} {v:g}" for b, v in x["points"]) + (f"|{x['title']}" if x.get("title") else "")
+                       for x in plan.get("line_charts") or []]
+    d["quote"] = [f"{x['line']}={x.get('who', '')}" for x in plan.get("quotes") or []]
     d["chart"] = [f"{x['line']}=" + ", ".join(f"{b} {v:g}" for b, v in x["bars"]) + (f"|{x['title']}" if x.get("title") else "")
                   for x in plan.get("charts") or []]
     d["broll"] = []
@@ -88,15 +98,20 @@ def write(path: Path, a, choices, cutaways) -> None:
         "lower_thirds": [{"line": int(x.split("=")[0]), "name": x.split("=", 1)[1].split("|")[0],
                           "role": (x.split("|", 1)[1] if "|" in x else "")} for x in getattr(a, "lower_third", None) or []],
         "cards": [int(x) for x in getattr(a, "card", None) or []],
+        "push_ins": [int(x) for x in getattr(a, "push_in", None) or []], "slow_push_ins": not getattr(a, "no_push_in", False),
         "highlights": [{"line": int(x.split("=")[0]), "words": x.split("=", 1)[1]} for x in getattr(a, "highlight", None) or []],
         "stats": [{"line": int(x.split("=")[0]), "value": x.split("=", 1)[1].split("|")[0],
                    "label": (x.split("|", 1)[1] if "|" in x else "")} for x in getattr(a, "stat", None) or []],
         "charts": [_chart_entry(x) for x in getattr(a, "chart", None) or []],
+        "line_charts": [{"line": e["line"], "points": e["bars"], "title": e["title"]}
+                        for e in (_chart_entry(x) for x in getattr(a, "line_chart", None) or [])],
+        "quotes": [{"line": int(x.split("=")[0]), "who": x.partition("=")[2]} for x in getattr(a, "quote", None) or []],
+        "progress": bool(getattr(a, "progress", False)),
         "music": _abs(a.music) if a.music else None, "music_lufs": a.music_lufs,
         "title": a.title, "end_card": a.end_card,
         "look": a.look, "caption_style": a.caption_style, "accent": a.accent,
         "transition": getattr(a, "transition", "cut"), "transition_seconds": getattr(a, "transition_seconds", 0.5),
-        "preset": getattr(a, "preset", None), "reframe": getattr(a, "reframe", "auto"),
+        "preset": getattr(a, "preset", None), "sound_effects": not getattr(a, "no_sfx", False), "beat_sync": not getattr(a, "no_beat_sync", False), "voice": getattr(a, "voice", "studio"), "reframe": getattr(a, "reframe", "auto"),
         "model": a.model,
     }
     path.write_text(json.dumps(plan, indent=2), encoding="utf-8")

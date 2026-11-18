@@ -13,7 +13,7 @@ PRESETS: dict[str, dict] = {
     "cinematic-doc": {
         "about": "Short documentary / brand film: wide, room to breathe, filmic grade, dips to black between scenes.",
         "aspect": "16:9", "captions": True, "caption_style": "classic", "max_pause": 1.0, "beat": 0.45,
-        "scene_beat": 1.4, "look": "film", "transition": "dip", "transition_seconds": 0.8, "music_lufs": -24.0,
+        "scene_beat": 1.4, "look": "film", "voice": "clean", "transition": "dip", "transition_seconds": 0.8, "music_lufs": -24.0,
     },
     "explainer": {
         "about": "Explainer (Vox-like): wide, brisk but clear, word-pop captions, clean grade, crossfades between ideas.",
@@ -28,7 +28,7 @@ PRESETS: dict[str, dict] = {
     "calm-story": {
         "about": "Calm personal story for the Instagram feed: 4:5, reflective pauses kept, cool grade, slow crossfades.",
         "aspect": "4:5", "captions": True, "caption_style": "classic", "keep_pauses": True, "beat": 0.5,
-        "scene_beat": 1.6, "look": "cool", "transition": "crossfade", "transition_seconds": 1.0, "music_lufs": -24.0,
+        "scene_beat": 1.6, "look": "cool", "voice": "clean", "transition": "crossfade", "transition_seconds": 1.0, "music_lufs": -24.0,
     },
 }
 

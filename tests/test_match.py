@@ -260,6 +260,68 @@ class MatchTests(unittest.TestCase):
                 cw, _ = auto_broll(script, Path(d), {1}, set())  # line 2 is a card
                 self.assertEqual([c.line for c in cw], [2])
 
+    def test_beat_grid_finds_tempo_and_kick(self):
+        import numpy as np
+        from alvenus.beats import SR, beat_grid
+        n = int(10 * SR)
+        y = np.zeros(n)
+        t = np.arange(int(0.3 * SR)) / SR
+        kick = np.sin(2 * np.pi * (50 + 100 * np.exp(-t / 0.03)) * t) * np.exp(-t / 0.06)
+        hat = np.random.default_rng(0).standard_normal(len(t)) * np.exp(-t / 0.01) * 0.3
+        for k, b in enumerate(np.arange(0.4, 10, 0.3125)):  # 96 BPM kicks, hats between
+            i = int(b * SR)
+            s = kick if k % 2 == 0 else hat
+            e = min(n, i + len(s))
+            y[i:e] += s[: e - i]
+        period, first, conf = beat_grid(y)
+        self.assertAlmostEqual(60 / period, 96, delta=1.5)
+        self.assertAlmostEqual(first, 0.4, delta=0.06)
+
+    def test_scene_start_slides_onto_beat(self):
+        from alvenus.beats import sync
+        from alvenus.cut import positions
+        clips = [Clip(0, 0.0, 2.0, 0), Clip(0, 5.0, 7.0, 1)]
+        notes = sync(clips, [1.0, 2.3, 3.6], {1}, {0: 2.1})
+        self.assertTrue(notes)
+        self.assertAlmostEqual(positions(clips)[1], 2.3, places=3)
+        self.assertAlmostEqual(clips[0].end, 2.05, places=3)  # real quiet footage first...
+        self.assertAlmostEqual(clips[0].hold, 0.25, places=3)  # ...then a held frame
+
+    def test_push_in_spans_the_whole_line(self):
+        from alvenus.cut import push_in
+        clips = [Clip(0, 0, 1, 0), Clip(0, 2, 5, 1), Clip(0, 6, 7, 1)]
+        push_in(clips, {1}, 0.08)
+        self.assertIsNone(clips[0].push)
+        self.assertEqual(clips[1].push[0], 1.0)
+        self.assertAlmostEqual(clips[1].push[1], clips[2].push[0])
+        self.assertAlmostEqual(clips[2].push[1], 1.08)
+
+    def test_sound_effects_track(self):
+        import tempfile, wave
+        from pathlib import Path
+        from alvenus.sfx import write_track
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "fx.wav"
+            write_track(p, [(0.5, "whoosh"), (1.0, "pop"), (1.5, "hit")], 3.0)
+            with wave.open(str(p)) as w:
+                self.assertEqual((w.getnchannels(), w.getframerate()), (2, 48000))
+                self.assertAlmostEqual(w.getnframes() / 48000, 3.0, places=2)
+
+    def test_line_chart_and_quote_parse(self):
+        from alvenus.graphics import line_chart_events, parse_line_charts, parse_quotes, progress_events
+        pts = ", ".join(f"{2000 + i} {i * i}" for i in range(12))
+        ch = parse_line_charts([f"2={pts}|Growth"], 3)[0]
+        self.assertEqual((ch.line, len(ch.bars), ch.title), (1, 12, "Growth"))
+        self.assertTrue(line_chart_events(ch, 1.0, 4.0, 1920, 1080, "#FFD23F"))
+        q = parse_quotes(["3=Mara"], ["a", "b", "Time is the thing."])[0]
+        self.assertEqual((q.line, q.who, q.text), (2, "Mara", "Time is the thing."))
+        self.assertEqual(len(progress_events(10.0, 1080, 1920, "#FFD23F", [4.0])), 3)
+
+    def test_drawn_out_fillers(self):
+        from alvenus.match import is_filler
+        self.assertTrue(all(is_filler(w) for w in ("um", "umm", "uhhh", "hmm", "mm")))
+        self.assertFalse(any(is_filler(w) for w in ("the", "a", "am", "summer")))
+
 
 if __name__ == "__main__":
     unittest.main()

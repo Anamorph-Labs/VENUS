@@ -27,7 +27,12 @@ SPELLING = {
     "realised": "realized", "organise": "organize", "travelled": "traveled", "travelling": "traveling",
     "mum": "mom", "okay": "ok",
 }
-FILLERS = {"um", "uh", "erm", "er", "hmm", "mm", "ah"}
+FILLERS = {"um", "uh", "erm", "er", "hm", "m", "ah", "uhm"}
+
+
+def is_filler(w: str) -> bool:
+    """"umm", "uhhh" and "hmm" are the same sounds drawn out."""
+    return re.sub(r"(.)\1+", r"\1", w) in FILLERS
 _ONES = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
 _TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
 
@@ -97,6 +102,7 @@ class Take:
     recall: float = 0.0  # share of the line's words that were said
     precision: float = 0.0  # share of said words that belong to the line
     fillers: int = 0
+    filler_spans: list | None = None  # where "um"/"uh" sit inside the take, once listened for
     notes: list[str] = field(default_factory=list)
     source: int = 0  # which input file the take is in
     clipped: bool = False  # sound runs into the very start or end of its file
@@ -130,7 +136,7 @@ def compare(line_words: list[str], said: list[str]) -> tuple[float, float, float
 
 
 def _best(text: str, line_words: list[list[str]]) -> float:
-    said = [w for w in words(text) if w not in FILLERS]
+    said = [w for w in words(text) if not is_filler(w)]
     return max((compare(lw, said)[0] for lw in line_words), default=0.0)
 
 
@@ -162,8 +168,8 @@ def assign(takes: list[Take], script: list[str], min_score: float = 0.45) -> Non
     line_words = [words(s) for s in script]
     for t in takes:
         said_all = words(t.text)
-        t.fillers = sum(1 for w in said_all if w in FILLERS)
-        said = [w for w in said_all if w not in FILLERS]
+        t.fillers = sum(1 for w in said_all if is_filler(w))
+        said = [w for w in said_all if not is_filler(w)]
         best = (0.0, 0.0, 0.0, None)
         for i, lw in enumerate(line_words):
             s, r, p = compare(lw, said)

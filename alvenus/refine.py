@@ -12,12 +12,12 @@ from pathlib import Path
 
 import numpy as np
 
-from .match import FILLERS, Take, _snap, compare, words
+from .match import Take, _snap, compare, is_filler, words
 from .media import speech_regions
 
 
 def _said(text: str) -> list[str]:
-    return [w for w in words(text) if w not in FILLERS]
+    return [w for w in words(text) if not is_filler(w)]
 
 
 def has_restart(take: Take, line: str) -> bool:
@@ -51,7 +51,7 @@ def keep_last_attempt(take: Take, line: str, path: Path, audio: np.ndarray, mode
         return False
     (take.score, take.recall, take.precision), take.start, tr = best
     take.text, take.confidence = tr.text, tr.avg_logprob
-    take.fillers = sum(1 for w in words(tr.text) if w in FILLERS)
+    take.fillers = sum(1 for w in words(tr.text) if is_filler(w))
     take.notes.append("restarted inside the take; kept the last full attempt")
     return True
 
@@ -65,7 +65,7 @@ def find_fillers(take, path, audio, model, sr: int, noise_db: float = -35.0, lin
     heard with more fillers than that finds, a very short piece heard as one
     word that isn't in the script line is taken as the missing filler (a lone
     "uh" is often misheard as "a" or "at")."""
-    from .match import FILLERS, words
+    from .match import is_filler, words
 
     found, odd = [], []
     line_words = set(words(line))
@@ -79,7 +79,7 @@ def find_fillers(take, path, audio, model, sr: int, noise_db: float = -35.0, lin
         span = (max(before + 0.02, s - 0.15), min(after - 0.02, e + 0.15))
         clip = audio[int(max(take.start, s - 0.05) * sr) : int(min(take.end, e + 0.05) * sr)]
         heard = words(model.transcribe(clip).text)
-        if heard and all(w in FILLERS for w in heard):
+        if heard and all(is_filler(w) for w in heard):
             found.append(span)
         elif len(heard) == 1 and e - s < 0.3 and heard[0] not in line_words and k and k + 1 < len(pieces):
             alone = min(s - before, after - e)  # a filler is set apart by pauses: ", uh,"

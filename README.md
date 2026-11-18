@@ -55,6 +55,24 @@ big number that counts up; `--chart "2=Fruit 4, Lamps 7, Books 5|What the stalls
 turns line 2 into a bar chart whose bars grow one by one, the tallest in the accent
 colour.
 
+Sound: the voice gets a studio treatment by default (`--voice studio`: room hiss
+lifted out, harsh "s" sounds softened, a little warmth, even loudness; `clean` does
+the cleanup only, `off` leaves it as recorded). Soft whooshes and pops, made by
+Venus itself, sit under whip/slide/zoom transitions and under graphics as they land
+(`--no-sfx` for none). With `--music`, scene changes slide onto the music's beat by
+lengthening the quiet breath before them, never by moving speech
+(`--no-beat-sync` to keep them where they are).
+
+More explainer graphics: `--line-chart "3=2019 4, 2021 6, 2023 11|Stalls per night"`
+draws a line across the screen point by point; `--quote "4=Mara Ilić"` shows a line as
+a pull-quote card; `--progress` adds a thin bar along the bottom that fills as the
+video plays. `--push-in 5` leans the camera slowly in across line 5 (highlighted lines
+get one by themselves; `--no-push-in` for none).
+
+Every format at once: `--formats 9:16,16:9,1:1` makes `out-9x16.mp4`, `out-16x9.mp4`
+and `out-1x1.mp4` in one go (listening happens once). Each cut also gets a thumbnail,
+`.thumb.jpg`: a strong frame of the speaker with the title set big.
+
 The look: `--captions` are animated by default: short phrases, each word lights
 up in the accent colour as it is said (`--caption-style classic` for one plain
 line). `--look warm|cool|film|punchy|mono` grades speaker and B-roll alike;

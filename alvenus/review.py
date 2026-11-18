@@ -10,7 +10,7 @@ from __future__ import annotations
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from .match import FILLERS, Choice, Take, _snap, words
+from .match import Choice, Take, _snap, is_filler, words
 
 UNSURE = -0.6  # Whisper's mean log-probability below this: it was guessing
 
@@ -23,7 +23,7 @@ def _at(t: Take, sources: list[Path]) -> str:
 def word_diff(line: str, heard: str) -> tuple[list[str], list[str]]:
     """Words of the line that were not said, and said words not in the line."""
     lw = words(line)
-    said = _snap(lw, [w for w in words(heard) if w not in FILLERS])
+    said = _snap(lw, [w for w in words(heard) if not is_filler(w)])
     missing, extra = [], []
     for op, a0, a1, b0, b1 in SequenceMatcher(a=lw, b=said, autojunk=False).get_opcodes():
         if op in ("delete", "replace"):

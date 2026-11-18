@@ -30,7 +30,7 @@ def main(shoot: Path, cut: Path) -> int:
         for c in l["candidates"]:
             if c["take"] == l["chosen_take"]:
                 for s in log["slates"]:
-                    if f"clip{s['file']:02d}" in c["file"] and s["start"] - 0.6 <= c["start"] <= s["end"]:  # a restart trim starts later
+                    if ("file" not in s or f"clip{s['file']:02d}" in c["file"]) and s["start"] - 0.6 <= c["start"] <= s["end"]:  # a restart trim starts later
                         got = s["label"]
         if got == want or (want is None and l["chosen_take"] is None):
             right += 1

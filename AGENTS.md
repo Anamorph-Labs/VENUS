@@ -90,6 +90,17 @@ or `zoom` for energy, `cut` (default) when the story should not pause.
   number the viewer should remember.
 - `--chart "LINE=Label n, Label n|Title"` shows 2 to 8 bars growing one by one, the
   tallest in the accent colour. Use it when the line compares amounts.
+- `--line-chart "LINE=label n, label n, ...|Title"` (2 to 24 points) when the line
+  is about change over time; `--chart` when it compares separate things.
+- `--quote "LINE=Who"` for a line worth reading as well as hearing: a striking
+  sentence, a claim, someone else's words.
+- `--progress` on longer social videos (over ~40 s) so viewers see the end coming.
+- `--push-in LINE` for the emotional peak; highlighted lines get one already. Two
+  or three a minute at most.
+- `--formats 9:16,16:9,1:1` when they post in several places.
+- Sound is on by default: studio voice, sound effects, beat-synced scene changes
+  with music. Turn down with `--voice clean` for documentary, `--no-sfx` for calm
+  or serious pieces.
 - `--broll-dir FOLDER` picks cutaways by matching file names to the line's words.
   You can do better: run `alvenus scan FOLDER`, look at the contact sheet, and
   either add `"tags"` to clips in `broll.json` or place shots yourself with

@@ -19,6 +19,7 @@ class Clip:
     transition: str = ""  # how this clip comes in, if not a straight cut (see TRANSITIONS)
     tdur: float = 0.0  # length of that transition; it overlaps the end of the previous clip
     reframe: list | None = None  # [(t, centre)] subject track, to crop wide footage into a taller frame
+    push: tuple[float, float] | None = None  # slow push-in: zoom at the clip's first and last frame
 
     @property
     def length(self) -> float:
@@ -147,7 +148,9 @@ def _clip_filters(c: Clip, sw_sh, w: int, h: int, fps: float, video: bool) -> tu
     fade_in, fade_out = 0.03, 0.06  # long enough to never click, short enough to keep every word
     d = c.end - c.start
     hold = f",apad=pad_dur={c.hold:.3f}" if c.hold else ""
-    af = (f"aformat=sample_rates=48000:channel_layouts=mono,atrim=0:{d:.3f},asetpts=PTS-STARTPTS,"
+    # apad first: a clip that runs to the very end of its file may have a
+    # little less sound than picture, and the two must stay the same length.
+    af = (f"aformat=sample_rates=48000:channel_layouts=mono,apad=whole_dur={d:.3f},atrim=0:{d:.3f},asetpts=PTS-STARTPTS,"
           f"afade=t=in:d={fade_in},afade=t=out:st={max(0.0, d - fade_out):.3f}:d={fade_out}{hold}")
     if not video:
         return "", af
@@ -174,9 +177,37 @@ def _clip_filters(c: Clip, sw_sh, w: int, h: int, fps: float, video: bool) -> tu
     if c.zoom > 1.0:
         zw, zh = (2 * round(w * c.zoom / 2), 2 * round(h * c.zoom / 2))
         vf += f",scale={zw}:{zh},crop={w}:{h},setsar=1"
+    if c.push:
+        # Sub-pixel smooth zoom (a resize would step a whole pixel at a time
+        # and shimmer): move the four corners in, frame by frame.
+        z0, z1 = c.push
+        n = max(1, round(d * fps))
+        z = f"({z0:.4f}+{z1 - z0:.4f}*min(on/{n},1))"
+        corners = [("W/2-W/2/", "H/2-H/2/"), ("W/2+W/2/", "H/2-H/2/"), ("W/2-W/2/", "H/2+H/2/"), ("W/2+W/2/", "H/2+H/2/")]
+        pts = ":".join(f"x{i}='{a}{z}':y{i}='{b}{z}'" for i, (a, b) in enumerate(corners))
+        vf += f",perspective={pts}:interpolation=cubic:eval=frame"
     if c.hold:
         vf += f",tpad=stop_mode=clone:stop_duration={c.hold:.3f}"
     return vf, af
+
+
+def push_in(clips: list[Clip], lines: set[int], amount: float = 0.07) -> int:
+    """A slow push-in across each line in `lines`, the way a camera operator
+    leans in on the line that matters. Spread over all of the line's clips so
+    it reads as one move. Returns how many lines got one."""
+    done = 0
+    for line in lines:
+        idx = [i for i, c in enumerate(clips) if c.line == line]
+        if not idx:
+            continue
+        total = sum(clips[i].end - clips[i].start for i in idx) or 1.0
+        t = 0.0
+        for i in idx:
+            d = clips[i].end - clips[i].start
+            clips[i].push = (1 + amount * t / total, 1 + amount * (t + d) / total)
+            t += d
+        done += 1
+    return done
 
 
 def _render_clip(src: Path, c: Clip, path: Path, sw_sh, w: int, h: int, fps: float, video: bool) -> None:
@@ -190,9 +221,48 @@ def _render_clip(src: Path, c: Clip, path: Path, sw_sh, w: int, h: int, fps: flo
     run(args)
 
 
+# Voice treatment, the way a dialogue mixer would: roll off rumble, lift the
+# room noise out (its level measured from the quiet stretch of the shoot),
+# tame harsh "s" sounds; "studio" adds a little warmth and presence and a
+# gentle compressor so quiet and loud words sit closer together.
+VOICE = {
+    "off": "",
+    "clean": "highpass=f=80,afftdn=nr={nr}:nf={nf},deesser=i=0.35",
+    "studio": "highpass=f=80,afftdn=nr={nr}:nf={nf},deesser=i=0.35,"
+              "equalizer=f=180:t=q:w=1:g=1.5,equalizer=f=3500:t=q:w=1.2:g=2,"
+              "acompressor=threshold=-22dB:ratio=2.5:attack=8:release=180:makeup=1.5",
+}
+
+
+def noise_floor(path: Path, start: float, end: float) -> float:
+    """RMS level (dBFS) of a quiet stretch: what the denoiser should remove."""
+    r = run(["ffmpeg", "-nostdin", "-v", "info", "-ss", f"{start:.3f}", "-t", f"{max(0.2, end - start):.3f}", "-i", str(path),
+             "-af", "astats=measure_overall=RMS_level:measure_perchannel=0", "-f", "null", "-"])
+    import re
+    m = re.findall(r"RMS level dB: (-?[\d.]+|-inf)", r.stderr)
+    try:
+        return max(-80.0, min(-20.0, float(m[-1])))
+    except (IndexError, ValueError):
+        return -50.0
+
+
+def voice_chain(voice: str, sources: list[Path], room_tone) -> str:
+    chain = VOICE.get(voice or "off", "")
+    if not chain:
+        return ""
+    nf = noise_floor(sources[room_tone[0]], room_tone[1], room_tone[2]) if room_tone else -50.0
+    # The denoiser's floor sits a little above the measured hiss (set at the
+    # hiss itself it leaves most of it behind), and it only takes the room
+    # down to a natural quiet, about -72 dBFS, never to dead silence.
+    nr = max(0.0, min(20.0, nf + 72))
+    if nr < 3:
+        chain = chain.replace("afftdn=nr={nr}:nf={nf},", "")
+    return chain.format(nr=f"{nr:.0f}", nf=f"{min(-20.0, nf + 8):.0f}") + ","
+
+
 def render(
     sources: list[Path], clips: list[Clip], out: Path, srt: Path | None = None, size: str = "1280x720",
-    fps: float = 30.0, room_tone: tuple[int, float, float] | None = None, crf: int = 20,
+    fps: float = 30.0, room_tone: tuple[int, float, float] | None = None, crf: int = 20, voice: str = "off",
 ) -> None:
     """Each clip is cut and conformed to one size and rate on its own (a few
     at a time), then the pieces are joined. Working clip by clip keeps memory
@@ -216,14 +286,14 @@ def render(
         with ThreadPoolExecutor(workers) as pool:
             list(pool.map(lambda i: _render_clip(sources[clips[i].source], clips[i], files[i], sizes.get(clips[i].source),
                                                  w, h, fps, video), range(len(clips))))
-        _join(files, clips, sources, out, srt, size, w, h, fps, video, room_tone, crf, tmp)
+        _join(files, clips, sources, out, srt, size, w, h, fps, video, room_tone, crf, tmp, voice_chain(voice, sources, room_tone))
     finally:
         for f in tmp.glob("*"):
             f.unlink()
         tmp.rmdir()
 
 
-def _join(files, clips, sources, out, srt, size, w, h, fps, video, room_tone, crf, tmp) -> None:
+def _join(files, clips, sources, out, srt, size, w, h, fps, video, room_tone, crf, tmp, voice: str = "") -> None:
     parts: list[str] = []
     args = ["ffmpeg", "-nostdin", "-y", "-v", "error"]
     # Straight cuts are joined with concat; at a transition the next scene
@@ -271,7 +341,7 @@ def _join(files, clips, sources, out, srt, size, w, h, fps, video, room_tone, cr
     if srt is not None:
         parts.append(f"[{vlast}]{subtitle_filter(srt, w, h)}[vs]")
         vlast = "vs"
-    parts.append("[ac]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[ao]")
+    parts.append(f"[ac]{voice}loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[ao]")
     args += [
         "-filter_complex", ";".join(parts),
         "-map", f"[{vlast}]", "-map", "[ao]",
