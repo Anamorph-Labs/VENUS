@@ -85,11 +85,20 @@ Font License, see `alvenus/fonts/OFL.txt`), so cuts look the same on every compu
 sheet with times, so you (or your AI) can choose shots. Every cut also writes a
 `.plan.json` holding every choice; edit it and run `alvenus cut --plan cut.plan.json`.
 What was heard is remembered, so re-cuts skip listening (`--fresh-listen` to redo it).
-Starting styles: `alvenus presets` lists them; `--preset reels-punchy`,
-`cinematic-doc`, `explainer`, `podcast-clip` or `calm-story` sets shape, pacing,
-captions, look and transitions in one go (anything you type still wins).
-`--transition dip|crossfade|zoom|whip|flash|slide|blur` sets how a new scene comes
-in after a blank line in the script.
+Style packs: `alvenus presets` lists them; `--preset reels-punchy`,
+`cinematic-doc`, `explainer`, `podcast-clip`, `calm-story`, `editorial`, `dreamy` or
+`hype` sets shape, pacing, captions, look, colour, title animation and transitions in
+one go (anything you type still wins). The same word works for `montage --style` and
+`make --style`.
+`--transition dip|crossfade|zoom|whip|flash|slide|blur|circle|ink|leak|glitch` sets how
+a new scene comes in after a blank line in the script. `--title-style
+track|reveal|type|block|stamp` sets how the title and end card animate in.
+
+Self-review: every cut, montage and storyboard video is watched once more before
+it is handed over: text on screen long enough to read and readable against what
+is behind it, no stray black, no rapid flashing (a seizure risk), sound and picture
+in step, no dead silence. Findings go in `.notes.md`; `alvenus review VIDEO` runs
+it on any video.
 
 Explainer graphics: `--lower-third "1=Mara Ilić|Night baker"` (animated name tag),
 `--card 4` (line 4 as a full-screen kinetic text card, words appearing as they are

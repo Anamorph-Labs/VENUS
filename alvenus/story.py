@@ -31,7 +31,7 @@ KINDS = {"clip", "image", "title", "text", "stat", "chart", "line_chart", "quote
 EXAMPLE = {
     "aspect": "16:9", "look": "natural", "accent": "#FFD23F", "music": "song.mp3", "voiceover": None,
     "transition": "crossfade", "transition_seconds": 0.4, "cut_on_beat": True, "captions": True, "progress": False,
-    "end_card": "Follow for more",
+    "end_card": "Follow for more", "title_style": "track",
     "scenes": [
         {"type": "title", "text": "The Night Market", "file": "street.mp4", "seconds": 3},
         {"type": "clip", "file": "street.mp4", "from": 4.0, "seconds": 4, "caption": "It opens when the last train leaves."},
@@ -84,6 +84,13 @@ def load(path: Path) -> dict:
             problems.append(f"scene {i + 1}: a split scene needs left.file and right.file")
     if not sb.get("scenes"):
         problems.append("no scenes")
+    from .cut import TRANSITIONS
+    from .presets import PRESETS
+    from .style import TITLE_STYLES
+
+    for key, allowed in (("transition", TRANSITIONS), ("title_style", TITLE_STYLES), ("style", PRESETS)):
+        if sb.get(key) and sb[key] not in allowed:
+            problems.append(f"{key} {sb[key]!r}: choose one of {', '.join(allowed)}")
     if problems:
         raise SystemExit("storyboard problems:\n  " + "\n  ".join(problems))
     return sb
@@ -130,14 +137,14 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
     if kind == "split":
         L, R = sc["left"]["file"], sc["right"]["file"]
         vertical = h > w
-        hw, hh = (w, h // 2) if vertical else (w // 2, h)
+        hw, hh = (w, h // 4 * 2) if vertical else (w // 4 * 2, h)  # even halves for 4:2:0 colour
         stack = "vstack" if vertical else "hstack"
         args = base
         for f in (L, R):
             args += (["-loop", "1"] if _still(f) else ["-ss", f"{float(sc.get('from', 0)):.3f}"]) + ["-t", f"{d + 0.2:.3f}", "-i", f]
         line = f"drawbox=x={'0' if vertical else 'iw-3'}:y={'ih-3' if vertical else '0'}:w={'iw' if vertical else 3}:h={3 if vertical else 'ih'}:color=white@0.9:t=fill"
         run(args + ["-filter_complex", f"[0:v]fps={fps:g},{_cover(hw, hh)}{_push(d, fps, 0.05)}[a];[1:v]fps={fps:g},{_cover(hw, hh)}{_push(d, fps, 0.05)},"
-                    f"{line}[b];[a][b]{stack}=inputs=2,format=yuv420p[v]", "-map", "[v]"] + enc)
+                    f"{line}[b];[a][b]{stack}=inputs=2,scale={w}:{h},setsar=1,format=yuv420p[v]", "-map", "[v]"] + enc)
         return
     if media:
         dim = kind in ("title", "text", "quote", "stat")  # text over a picture: darken it so the words read
@@ -152,7 +159,7 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
 
 
 def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
-    from .cut import TRANSITIONS
+    from .cut import TRANSITIONS, join_pair
     from .finish import finish
     from .graphics import Chart, MapCard, Pin, Quote, Stat, Timeline
     from .wordtime import Word
@@ -182,7 +189,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         for i in range(1, len(files)):
             o = "vj" if i == len(files) - 1 else f"x{i}"
             if td:
-                parts.append(f"[{prev}][{i}:v]xfade=transition={TRANSITIONS[trans]}:duration={td:.3f}:offset={starts[i]:.3f}[{o}]")
+                parts.append(join_pair(prev, f"{i}:v", o, trans, td, starts[i], f"{w}x{h}", fps, i))
             else:
                 parts.append(f"[{prev}][{i}:v]concat=n=2:v=1[{o}]")
             prev = o
@@ -243,13 +250,13 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             for side in ("left", "right"):
                 if sc[side].get("label"):
                     lower.append((i, side, sc[side]["label"]))
-    sfx = [(starts[i] + td / 2, "whoosh") for i in range(1, len(scenes))] if trans in ("whip", "slide", "zoom", "flash") else []
+    sfx = [(starts[i] + td / 2, "whoosh") for i in range(1, len(scenes))] if trans in ("whip", "slide", "zoom", "flash", "circle", "glitch") else []
     notes += finish(base, out, size, fps, spans, music=Path(sb["music"]) if sb.get("music") else None,
                     music_lufs=float(sb.get("music_lufs", -16.0 if not sb.get("voiceover") else -22.0)),
                     end_card=sb.get("end_card"), words=words or None, look=sb.get("look", "natural"),
                     accent=sb.get("accent", "#FFD23F"), all_words=all_words, stats=stats, charts=charts,
                     sfx=None if sb.get("sound_effects") is False else sfx, line_charts=lcharts, quotes=quotes,
                     progress=bool(sb.get("progress")), scene_marks=starts[1:], maps=maps, timelines=tls,
-                    kinetic_lines=kinetic, titles=titles, split_labels=[(spans[i], side, lab) for i, side, lab in lower])
+                    kinetic_lines=kinetic, titles=titles, title_style=sb.get("title_style", "track"), split_labels=[(spans[i], side, lab) for i, side, lab in lower])
     base.unlink()
     return notes

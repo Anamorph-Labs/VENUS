@@ -33,7 +33,9 @@ three questions.
 
 Start from a preset that matches where it will be posted and the feel
 (`alvenus presets`): `reels-punchy`, `cinematic-doc`, `explainer`, `podcast-clip`,
-`calm-story`. Then adjust single settings on top; what you type wins.
+`calm-story`, `editorial` (ink-wash changes, block titles), `dreamy` (light leaks,
+rising titles), `hype` (glitch cuts, slam titles). Then adjust single settings on
+top; what you type wins. `montage --style` and `make --style` take the same names.
 
 ### When they point at a reference
 
@@ -83,7 +85,11 @@ turn and before the payoff so they land.
 
 How a new scene comes in is `--transition`: `dip` (through black) for time
 passing or a serious turn, `crossfade` for a gentle move between ideas, `whip`
-or `zoom` for energy, `cut` (default) when the story should not pause.
+or `zoom` for energy, `cut` (default) when the story should not pause. `ink` for a
+reflective, crafted feel, `leak` for warmth and memory, `circle` to open onto a
+reveal, `glitch` for tech or a jolt (sparingly). Titles: `--title-style` `track`
+(calm), `reveal` (cinematic), `type` (personal, a note), `block` (editorial,
+bold), `stamp` (punchy).
 
 ### Explainer graphics
 
@@ -215,8 +221,10 @@ What Whisper heard is remembered, so a re-cut skips listening and takes seconds;
 
 ## 7. Deliver
 
-Tell the creator, in plain words: what is in the cut and how long it is, what
-needs a reshoot and why, and where the files are. Mention the `.edl` if they
+Read the "Self-review" section of `.notes.md` first and fix what it finds
+(longer scene, darker grade or different accent behind text, fewer flash cuts)
+before showing anything. Then tell the creator, in plain words: what is in the cut
+and how long it is, what needs a reshoot and why, and where the files are. Mention the `.edl` if they
 want to finish the edit by hand.
 
 ## 8. Music edits (`alvenus montage`)
@@ -265,8 +273,9 @@ every scene type.
    Vary the forms; don't put two graphic scenes in a row more than once or twice.
    Scenes of 2.5 to 5 seconds; graphics need about a second more than pictures.
 4. Settings: `aspect`, `look`, `accent`, `music`, `voiceover` (a narration file
-   if they recorded one), `transition`, `cut_on_beat` (scene changes snap to the
-   music's beat), `captions`, `progress`, `end_card`.
+   if they recorded one), `style` (a style pack), `transition`, `title_style`,
+   `cut_on_beat` (scene changes snap to the music's beat), `captions`, `progress`,
+   `end_card`.
 5. `alvenus make sb.json --out video.mp4`, look at frames from every scene, fix
    what is weak, build again.
 

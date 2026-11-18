@@ -15,8 +15,8 @@ from .review import notes as review_notes
 from .delivery import judge, measure
 from .finish import auto_broll, finish, line_spans, parse_broll
 from . import plan as plan_file
-from .style import LOOKS
-from .presets import PRESETS, defaults as preset_defaults, describe as describe_presets
+from .style import LOOKS, TITLE_STYLES
+from .presets import PRESETS, defaults as preset_defaults, describe as describe_presets, pack
 from .wordtime import timed_words
 from .graphics import (mark as mark_words, parse_charts, parse_highlights, parse_line_charts, parse_lines, parse_lower_thirds,
                        parse_maps, parse_quotes, parse_stats, parse_timelines)
@@ -285,7 +285,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
     sfx = None
     if not getattr(a, "no_sfx", False):
         sfx = [(t + c.tdur / 2, "whoosh") for c, t in zip(clips, positions(clips)) 
-               if c.transition in ("whip", "slide", "zoom", "flash") and c.tdur > 0]  # dissolves and dips stay silent
+               if c.transition in ("whip", "slide", "zoom", "flash", "circle", "glitch") and c.tdur > 0]  # dissolves and dips stay silent
     if sfx or cutaways or music or a.title or a.end_card or pop or a.look != "natural" or graphics_wanted:
         # Cut first (at higher quality), then grade and lay B-roll, music and
         # titles on top; captions go on last.
@@ -307,6 +307,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
                               lower_thirds=lower_thirds, card_lines=card_lines, all_words=words,
                               stats=stats, charts=charts, sfx=sfx, line_charts=line_charts, quotes=quotes,
                               progress=getattr(a, "progress", False), maps=maps, timelines=timelines, kinetic_lines=kinetic,
+                              title_style=getattr(a, "title_style", "track"),
                               scene_marks=[t for i, t in enumerate(positions(clips))
                                            if i and clips[i - 1].line != clips[i].line and clips[i - 1].line in breaks])
         thumb_from = base
@@ -367,6 +368,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
     review = review_notes(script, choices, takes, sources, total_length(clips))
     if finish_notes:
         review += "\n## Finishing\n\n" + "".join(f"- {n}\n" for n in finish_notes)
+    review += self_review(out, script)
     out.with_suffix(".notes.md").write_text(review, encoding="utf-8")
     print()
     for c in choices:
@@ -395,10 +397,11 @@ def cmd_montage(a: argparse.Namespace) -> None:
     settings: dict = {}
     if a.plan:
         shots, settings = mt.load_plan(Path(a.plan))
-        for k in ("music", "aspect", "look", "title", "accent", "out"):
+        for k in ("music", "aspect", "look", "title", "accent", "out", "title_style"):
             if getattr(a, k) is None:  # flags typed now win over the plan
                 setattr(a, k, settings.get(k))
-    a.aspect, a.look, a.accent = a.aspect or "9:16", a.look or "punchy", a.accent or "#FFD23F"
+    sty = pack(a.style, "aspect", "look", "accent", "title_style")
+    a.aspect, a.look, a.accent = a.aspect or sty.get("aspect", "9:16"), a.look or sty.get("look", "punchy"), a.accent or sty.get("accent", "#FFD23F")
     if not a.music or not a.out or not (a.plan or a.clips):
         raise SystemExit("montage needs --clips, --music and --out (or --plan)")
     music, out = Path(a.music), Path(a.out)
@@ -416,14 +419,35 @@ def cmd_montage(a: argparse.Namespace) -> None:
         print(f"   {tempo:.0f} beats a minute, {len(beats)} beats; quiet parts {sum(e < 0.4 for e in energy)}, loud {sum(e >= 0.75 for e in energy)}")
         shots = mt.plan(infos, beats, energy, down, total, seed=a.seed)
     print(f"3/3 cutting {len(shots)} shots")
-    mt.render(shots, music, out, ASPECTS[a.aspect], look=a.look, title=a.title, accent=a.accent)
+    mt.render(shots, music, out, ASPECTS[a.aspect], look=a.look, title=a.title, accent=a.accent,
+              title_style=a.title_style or sty.get("title_style", "stamp"))
     plan_path = out.with_suffix(".montage.json")
     mt.save_plan(plan_path, shots, {"music": str(music.resolve()), "out": str(out.resolve()), "aspect": a.aspect,
-                                    "look": a.look, "title": a.title, "accent": a.accent})
+                                    "look": a.look, "title": a.title, "accent": a.accent,
+                                    "title_style": a.title_style or sty.get("title_style", "stamp")})
     for k, s in enumerate(shots):
         print(f"   {k + 1:>2} {Path(s.clip).name[:22]:22} {s.start:6.2f}s  {s.length:4.2f}s on screen  {s.why}")
+    print(self_review(out).strip())
     print(f"wrote {out} ({sum(s.length for s in shots):.1f}s) in {time.time() - t0:.0f}s")
     print(f"to change it, edit {plan_path} and run: alvenus montage --plan {plan_path}")
+
+
+def self_review(out: Path, spoken=()) -> str:
+    """Venus watches the finished video once more; never fails the run."""
+    try:
+        from .selfcheck import review
+
+        notes = review(out, spoken=spoken)
+    except Exception as e:
+        return f"\n## Self-review\n\n- could not run: {e}\n"
+    if not notes:
+        return "\n## Self-review\n\nAll clear: text readable and on long enough, no stray black, no flashing, sound and picture in step.\n"
+    return "\n## Self-review\n\n" + "".join(f"- {n}\n" for n in notes)
+
+
+def cmd_review(a: argparse.Namespace) -> None:
+    need_ffmpeg()
+    print(self_review(Path(a.video)).strip())
 
 
 def cmd_make(a: argparse.Namespace) -> None:
@@ -438,6 +462,8 @@ def cmd_make(a: argparse.Namespace) -> None:
     need_ffmpeg()
     t0 = time.time()
     sb = story.load(Path(a.storyboard))
+    style = a.style or sb.get("style")
+    sb = {**pack(style, "aspect", "look", "accent", "transition", "transition_seconds", "title_style"), **sb}
     aspect = a.aspect or sb.get("aspect", "16:9")
     if aspect not in ASPECTS:
         raise SystemExit(f"aspect {aspect!r}: choose from {', '.join(sorted(ASPECTS))}")
@@ -446,6 +472,7 @@ def cmd_make(a: argparse.Namespace) -> None:
     print(f"building {len(sb['scenes'])} scenes at {aspect}")
     for n in story.build(sb, out, ASPECTS[aspect]):
         print("   " + n)
+    print(self_review(out).strip())
     print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s")
 
 
@@ -544,6 +571,7 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--caption-style", default="pop", choices=["pop", "classic"], help="pop: short phrases, each word lights up as it is said; classic: one plain line")
     c.add_argument("--accent", default="#FFD23F", help="accent colour for captions, title bar and end card, as #RRGGBB")
     c.add_argument("--transition", default="cut", choices=list(TRANSITIONS), help="how a new scene (after a blank line in the script) comes in")
+    c.add_argument("--title-style", default="track", choices=list(TITLE_STYLES), help="how the opening title and end card animate in")
     c.add_argument("--transition-seconds", type=float, default=0.5, help="length of that transition")
     c.add_argument("--lower-third", action="append", metavar="LINE=NAME|ROLE", help="animated name tag when a line starts, e.g. --lower-third \"1=Mara Ilić|Night baker\"")
     c.add_argument("--card", action="append", metavar="LINE", help="show this line as a full-screen kinetic text card, words appearing as they are said (voice kept)")
@@ -575,6 +603,8 @@ def main(argv: list[str] | None = None) -> None:
     mo.add_argument("--look", choices=sorted(LOOKS), help="default punchy")
     mo.add_argument("--title", help="opening title")
     mo.add_argument("--accent", help="#RRGGBB for the title bar")
+    mo.add_argument("--title-style", choices=list(TITLE_STYLES), help="how the title animates in (default stamp)")
+    mo.add_argument("--style", choices=list(PRESETS), help="a style pack: sets aspect, look, title animation and colour (flags still win)")
     mo.add_argument("--seed", type=int, default=0, help="a different number gives a different edit of the same material")
     mo.set_defaults(func=cmd_montage)
 
@@ -582,11 +612,16 @@ def main(argv: list[str] | None = None) -> None:
     mk.add_argument("storyboard", nargs="?", help="storyboard JSON (see: alvenus make --example sb.json)")
     mk.add_argument("--out", help="output MP4")
     mk.add_argument("--aspect", choices=sorted(ASPECTS), help="overrides the storyboard's aspect")
+    mk.add_argument("--style", choices=list(PRESETS), help="a style pack: look, colour, transitions and titles (the storyboard's own settings still win)")
     mk.add_argument("--example", metavar="FILE", help="write an example storyboard with every scene type, then stop")
     mk.set_defaults(func=cmd_make)
 
-    ps = sub.add_parser("presets", help="list the starting styles")
-    ps.set_defaults(func=lambda a: print("Starting styles (use with: alvenus cut --preset NAME ...):\n" + describe_presets()))
+    rv = sub.add_parser("review", help="check a finished video: reading time, contrast, black frames, flashing, sound and picture")
+    rv.add_argument("video")
+    rv.set_defaults(func=cmd_review)
+
+    ps = sub.add_parser("presets", help="list the style packs")
+    ps.set_defaults(func=lambda a: print("Style packs (use with: alvenus cut --preset NAME, montage --style NAME, make --style NAME):\n" + describe_presets()))
 
     f = sub.add_parser("fetch-models", help="download the free Whisper model once")
     f.add_argument("--model", default=asr.DEFAULT_MODEL, choices=sorted(asr.MODELS))

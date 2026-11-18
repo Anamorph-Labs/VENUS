@@ -30,7 +30,64 @@ class Clip:
 TRANSITIONS = {
     "cut": "", "crossfade": "fade", "dip": "fadeblack", "flash": "fadewhite",
     "zoom": "zoomin", "whip": "smoothleft", "slide": "slideleft", "blur": "hblur",
+    "circle": "circleopen", "ink": "custom", "leak": "custom", "glitch": "custom",
 }
+
+# Hand-made transitions. FFmpeg's per-pixel expressions are far too slow at
+# full size (about 50 s of work per second of 1080p), so each one draws only a
+# small black-and-white mask (where the new shot shows through) and the two
+# full-size shots are blended through it: about as quick as a dissolve.
+# In each mask q = T/D runs 0 -> 1 across the transition.
+_MASK = {
+    # A ragged, ink-like edge bleeds across the frame from left to right.
+    "ink": ("192x108", "255*clip((T/{D}*0.75-0.06-0.5*X/W-0.07*(sin(X/W*9+Y/H*4.3)+sin(Y/H*11-X/W*3.1)+0.6*sin(X/W*17+Y/H*13)+0.4*sin(Y/H*27+X/W*21)))*7,0,1)"),
+    # A soft wipe under a warm wash of light that blooms at the midpoint (glow mask below).
+    "leak": ("160x90", "255*clip((T/{D})*1.6-0.3-0.3*X/W,0,1)"),
+    # Bands of the frame flick between the two shots for a few frames, then settle.
+    "glitch": ("8x36", "255*abs(gte(T/{D},0.5)-gt(sin(PI*T/{D}),0.25)*gt(mod(abs(sin(floor(Y)*12.99+floor(T/{D}*9)*78.23))*43758.5,1),0.55))"),
+}
+_GLOW = "230*pow(sin(PI*T/{D}),2)*exp(-pow(X/W-(0.15+0.7*T/{D}),2)/0.09)"
+_WARM = "0xFFC98A"
+
+
+def join_pair(a: str, b: str, out: str, name: str, d: float, offset: float, size: str, fps: float, k) -> str:
+    """Filter-graph text that lays stream b over the end of stream a with the
+    named transition (b starts at `offset`), like xfade."""
+    t = TRANSITIONS[name]
+    if t != "custom":
+        return f"[{a}][{b}]xfade={xfade(name)}:duration={d:.3f}:offset={offset:.3f}[{out}]"
+    w, h = size.split("x")
+    res, expr = _MASK[name]
+    e = expr.format(D=f"{d:.4f}")
+    mask = (f"nullsrc=s={res}:r={fps:g}:d={d:.4f},geq=lum='{e}':cb='{e}':cr='{e}',"
+            f"scale={w}:{h}:flags={'neighbor' if name == 'glitch' else 'bicubic'},format=yuv420p[m{k}]")
+    p = [mask,
+         f"[{a}]split[a{k}1][a{k}2]", f"[{b}]split[b{k}1][b{k}2]",
+         f"[a{k}1]trim=end={offset:.4f},setpts=PTS-STARTPTS[h{k}]",
+         f"[a{k}2]trim=start={offset:.4f}:end={offset + d:.4f},setpts=PTS-STARTPTS,format=yuv420p[x{k}]",
+         f"[b{k}1]trim=end={d:.4f},setpts=PTS-STARTPTS,format=yuv420p[y{k}]",
+         f"[b{k}2]trim=start={d:.4f},setpts=PTS-STARTPTS[t{k}]",
+         f"[x{k}][y{k}][m{k}]maskedmerge[mid{k}]"]
+    mid = f"mid{k}"
+    if name == "leak":
+        g = _GLOW.format(D=f"{d:.4f}")
+        p += [f"nullsrc=s=160x90:r={fps:g}:d={d:.4f},geq=lum='{g}':cb='{g}':cr='{g}',scale={w}:{h},format=yuv420p[gm{k}]",
+              f"color=c={_WARM}:s={size}:r={fps:g}:d={d:.4f},format=yuv420p[warm{k}]",
+              f"[{mid}][warm{k}][gm{k}]maskedmerge[lit{k}]"]
+        mid = f"lit{k}"
+    elif name == "glitch":
+        p += [f"[{mid}]chromashift=cbh={max(4, int(w) // 120)}:crh=-{max(4, int(w) // 120)}[gl{k}]"]
+        mid = f"gl{k}"
+    p.append(f"[h{k}]setsar=1[hh{k}];[{mid}]setsar=1[mm{k}];[t{k}]setsar=1[tt{k}];[hh{k}][mm{k}][tt{k}]concat=n=3:v=1:a=0[{out}]")
+    return ";".join(p)
+
+
+def xfade(name: str) -> str:
+    """The xfade options for a transition by name."""
+    t = TRANSITIONS[name]
+    if t == "custom":
+        raise ValueError(f"{name} is drawn by join_pair, not xfade")
+    return f"transition={t}"
 
 
 def positions(clips: list[Clip]) -> list[float]:
@@ -321,7 +378,7 @@ def _join(files, clips, sources, out, srt, size, w, h, fps, video, room_tone, cr
             last = g == len(segs) - 1
             vo, ao = ("vc", "ac") if last else (f"vx{g}", f"ax{g}")
             if video:
-                parts.append(f"[{v_prev}][{g}:v]xfade=transition={TRANSITIONS[c.transition]}:duration={d:.3f}:offset={t - d:.3f}[{vo}]")
+                parts.append(join_pair(v_prev, f"{g}:v", vo, c.transition, d, t - d, size, fps, g))
             parts.append(f"[{a_prev}][{g}:a]acrossfade=d={d:.3f}:c1=tri:c2=tri[{ao}]")
             v_prev, a_prev, t = vo, ao, t - d + seg_len[g]
     if not video:

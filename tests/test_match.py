@@ -366,5 +366,60 @@ class MatchTests(unittest.TestCase):
         self.assertEqual(_beat_snap([3.0, 4.0], None), [3.0, 4.0])
 
 
+class Run3(unittest.TestCase):
+    def test_custom_transitions_join_through_a_small_mask(self):
+        from alvenus.cut import TRANSITIONS, join_pair
+        for name, kind in TRANSITIONS.items():
+            g = join_pair("a", "b", "o", name, 0.5, 2.0, "1080x1920", 30, 1)
+            self.assertTrue(g.endswith("[o]"))
+            if kind == "custom":  # never a full-size per-pixel expression (far too slow)
+                self.assertIn("maskedmerge", g)
+                self.assertNotIn("xfade", g)
+
+    def test_every_title_style_draws(self):
+        from alvenus.style import TITLE_STYLES, title_events
+        for k in TITLE_STYLES:
+            ev = title_events("Tea at midnight", 1080, 1920, "#FFD23F", 0.0, 3.0, True, k)
+            self.assertTrue(ev and all(e.startswith("Dialogue:") for e in ev))
+
+    def test_packs_use_known_parts(self):
+        from alvenus.cut import TRANSITIONS
+        from alvenus.presets import PRESETS, pack
+        from alvenus.style import LOOKS, TITLE_STYLES
+        for p in PRESETS.values():
+            self.assertIn(p["transition"], TRANSITIONS)
+            self.assertIn(p["title_style"], TITLE_STYLES)
+            self.assertIn(p["look"], LOOKS)
+        self.assertEqual(pack("hype", "transition", "nope"), {"transition": "glitch"})
+        self.assertEqual(pack(None, "look"), {})
+
+    def test_storyboard_rejects_unknown_style(self):
+        import json, tempfile
+        from pathlib import Path
+        from alvenus.story import load
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "sb.json"
+            p.write_text(json.dumps({"title_style": "wobble", "scenes": [{"type": "title", "text": "Hi"}]}))
+            with self.assertRaises(SystemExit) as e:
+                load(p)
+            self.assertIn("title_style", str(e.exception))
+
+    def test_selfcheck_reading_time(self):
+        import tempfile
+        from pathlib import Path
+        from alvenus.selfcheck import _reading, text_events
+        from alvenus.style import title_events, write_ass
+        with tempfile.TemporaryDirectory() as d:
+            a = Path(d) / "x.ass"
+            write_ass(a, 1280, 720, "#FFD23F", extra_rows=title_events("one two three four five six", 1280, 720, "#FFD23F", 1, 1.5, True)
+                      + title_events("Hello", 1280, 720, "#FFD23F", 3, 6, True, "type"))
+            ev = text_events(a)
+            self.assertEqual(sorted(t for *_, t in ev), ["Hello", "one two three four five six"])  # bars left out
+            notes = _reading(ev, 10.0)
+            self.assertEqual(len(notes), 1)
+            self.assertIn("one two three", notes[0])
+            self.assertEqual(_reading(ev, 10.0, ["One, two, three, four, five and six."]), [])  # heard as it is read
+
+
 if __name__ == "__main__":
     unittest.main()

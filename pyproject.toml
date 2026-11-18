@@ -9,7 +9,7 @@ description = "Free, local script-to-cut video editing: best take per script lin
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
-dependencies = ["numpy", "onnxruntime"]
+dependencies = ["numpy", "onnxruntime", "pillow"]
 
 [project.scripts]
 alvenus = "alvenus.cli:main"

@@ -55,7 +55,7 @@ def finish(
     srt: Path | None = None, words=None, look: str = "natural", accent: str = "#FFD23F",
     lower_thirds=(), card_lines=(), all_words=None, stats=(), charts=(), sfx: list | None = None,
     line_charts=(), quotes=(), progress: bool = False, scene_marks=(),
-    maps=(), timelines=(), kinetic_lines=(), titles=(), split_labels=(),
+    maps=(), timelines=(), kinetic_lines=(), titles=(), split_labels=(), title_style: str = "track",
 ) -> list[str]:
     """srt: classic one-line captions; words: timed words for animated captions;
     sfx: None for no sound effects, else [(time, kind)] for the cut's own
@@ -164,19 +164,24 @@ def finish(
         for (t0, t1), side, label in split_labels:
             extra += split_label_events(label, side, t0, t1, w, h, accent)
         for text, t0, t1 in titles:  # mid-video title cards
-            extra += title_events(text, w, h, accent, t0 + 0.1, t1, centre=True)
+            extra += title_events(text, w, h, accent, t0 + 0.1, t1, centre=True, kind=title_style)
         lts = [(lt, spans[lt.line][0]) for lt in lower_thirds if lt.line in spans]
         cards = [([x for x in all_words if x.line == n], *spans[n], n) for n in card_lines if n in spans]
         notes += [f"lower third for line {lt.line + 1} skipped: that line is not in the cut" for lt in lower_thirds if lt.line not in spans]
         ass = out.with_suffix(".look.ass")
-        write_ass(ass, w, h, accent, words, title, end_card, cut_len, card, lts, cards, extra, skip)
+        write_ass(ass, w, h, accent, words, title, end_card, cut_len, card, lts, cards, extra, skip, title_style=title_style)
         parts.append(f"[{v}]{ass_filter(ass)}[tt]")
         v = "tt"
     parts.append(f"[{v}]format=yuv420p[vo]")
 
     a = "0:a"
     if card:
-        parts.append(f"[{a}]apad=pad_dur={card:.3f}[ap]")
+        # Under the end card: a faint room hiss instead of digital silence,
+        # which sounds like the sound cut out.
+        parts += [f"[{a}]aformat=sample_rates=48000:channel_layouts=stereo,apad=pad_dur={card:.3f}[ap0]",
+                  f"anoisesrc=c=pink:a=0.0012:r=48000:d={card + 0.2:.3f},aformat=sample_rates=48000:channel_layouts=stereo,"
+                  f"afade=t=in:d=0.3,adelay={round(cut_len * 1000)}:all=1[hiss]",
+                  "[ap0][hiss]amix=inputs=2:normalize=0:duration=first[ap]"]
         a = "ap"
     if sfx is not None:
         from .sfx import write_track

@@ -258,7 +258,8 @@ def _shot_filter(sh: Shot, src_size, w: int, h: int, fps: float, look: str, refr
 
 
 def render(shots: list[Shot], music: Path, out: Path, size: str, fps: float = 30.0, look: str = "natural",
-           title: str | None = None, accent: str = "#FFD23F", reframe_wide: bool = True) -> None:
+           title: str | None = None, accent: str = "#FFD23F", reframe_wide: bool = True,
+           title_style: str = "stamp") -> None:
     w, h = (int(x) for x in size.split("x"))
     total = sum(s.length for s in shots)
     tmp = Path(tempfile.mkdtemp(prefix="alvenus-m-", dir=out.parent))
@@ -286,7 +287,7 @@ def render(shots: list[Shot], music: Path, out: Path, size: str, fps: float = 30
             from .style import ass_filter, write_ass
 
             ass = out.with_suffix(".montage.ass")
-            write_ass(ass, w, h, accent, title=title, cut_len=total)
+            write_ass(ass, w, h, accent, title=title, cut_len=total, title_style=title_style)
             vf = ass_filter(ass)
         fade = min(2.0, total / 4)
         run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(lst), "-i", str(music),

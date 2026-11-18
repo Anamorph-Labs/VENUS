@@ -15,7 +15,7 @@ _SIMPLE = {
     "model": "model", "max_pause": "max_pause", "keep_pauses": "keep_pauses",
     "beat": "beat", "scene_beat": "scene_beat", "music": "music", "music_lufs": "music_lufs",
     "title": "title", "end_card": "end_card", "look": "look", "caption_style": "caption_style", "accent": "accent",
-    "transition": "transition", "transition_seconds": "transition_seconds", "preset": "preset", "reframe": "reframe", "broll_dir": "broll_dir", "voice": "voice", "progress": "progress", "noise_db": "noise_db", "min_silence": "min_silence",
+    "transition": "transition", "title_style": "title_style", "transition_seconds": "transition_seconds", "preset": "preset", "reframe": "reframe", "broll_dir": "broll_dir", "voice": "voice", "progress": "progress", "noise_db": "noise_db", "min_silence": "min_silence",
 }
 
 HELP = (
@@ -131,7 +131,7 @@ def write(path: Path, a, choices, cutaways) -> None:
         "music": _abs(a.music) if a.music else None, "music_lufs": a.music_lufs,
         "title": a.title, "end_card": a.end_card,
         "look": a.look, "caption_style": a.caption_style, "accent": a.accent,
-        "transition": getattr(a, "transition", "cut"), "transition_seconds": getattr(a, "transition_seconds", 0.5),
+        "transition": getattr(a, "transition", "cut"), "title_style": getattr(a, "title_style", "track"), "transition_seconds": getattr(a, "transition_seconds", 0.5),
         "preset": getattr(a, "preset", None), "sound_effects": not getattr(a, "no_sfx", False), "beat_sync": not getattr(a, "no_beat_sync", False), "voice": getattr(a, "voice", "studio"), "reframe": getattr(a, "reframe", "auto"),
         "model": a.model,
     }

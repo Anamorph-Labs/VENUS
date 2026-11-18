@@ -106,29 +106,81 @@ def caption_events(words, w: int, h: int, accent: str, skip: set[int] = frozense
     return rows
 
 
-def title_events(text: str, w: int, h: int, accent: str, start: float, end: float, centre: bool) -> list[str]:
-    """Motion title: letters track in from wide spacing while rising and
-    fading up, then an accent bar draws out from the middle underneath."""
+def text_width(text: str, size: float, font: str = "InterDisplay-Black.otf") -> float:
+    """How wide libass will set `text` at `size` (it scales a font so its
+    ascent plus descent equals the size)."""
+    try:
+        from PIL import ImageFont
+
+        f = ImageFont.truetype(str(FONTS / font), 200)
+        asc, desc = f.getmetrics()
+        return f.getlength(text) * size / (asc + desc)
+    except Exception:  # no Pillow: a safe guess
+        return len(text) * size * 0.55
+
+
+TITLE_STYLES = {
+    "track": "letters close in from wide spacing as they rise, accent bar draws out",
+    "reveal": "the line rises out from behind an invisible edge, like a slot",
+    "type": "typed out letter by letter behind an accent cursor",
+    "block": "an accent block wipes across and leaves the title behind it",
+    "stamp": "lands hard from big to size with a quick settle",
+}
+
+
+def title_events(text: str, w: int, h: int, accent: str, start: float, end: float, centre: bool,
+                 kind: str = "track") -> list[str]:
+    """A motion title in one of TITLE_STYLES."""
     size = round((0.085 if h > w else 0.075) * min(w, h))
     cx = w // 2
     y = h // 2 - size if centre else round((0.14 if h > w else 0.11) * h)
     rise = round(0.025 * h)
     ms = int((end - start) * 1000)
+    out_fade = min(400, ms // 4)
     bar_w, bar_h = round(0.16 * w if w < h else 0.12 * w), max(6, round(size * 0.11))
     bar_y = y + round(size * 1.3)
     hi = ass_colour(accent)
-    txt = (f"Dialogue: 3,{_t(start)},{_t(end)},Title,,0,0,0,,"
-           f"{{\\an8\\q2\\move({cx},{y + rise},{cx},{y},0,650)\\fsp{round(size * 0.22)}\\alpha&HFF&"
-           f"\\t(0,650,0.45,\\fsp0\\alpha&H00&)\\fad(0,{min(400, ms // 4)})}}{_esc(text)}")
+    tw = min(w * 0.94, text_width(text, size) + size * 0.12)
+    x0, line_h = round(cx - tw / 2), round(size * 1.25)
+    head = f"Dialogue: 3,{_t(start)},{_t(end)},Title,,0,0,0,,"
+    rect = lambda bw, bh: f"m 0 0 l {bw} 0 {bw} {bh} 0 {bh}"
     bar = (f"Dialogue: 3,{_t(start + 0.25)},{_t(end)},Title,,0,0,0,,"
-           f"{{\\an8\\pos({cx},{bar_y})\\p1\\bord0\\shad0\\1c{hi}\\fscx0\\t(0,450,0.5,\\fscx100)\\fad(0,{min(400, ms // 4)})}}"
-           f"m 0 0 l {bar_w} 0 {bar_w} {bar_h} 0 {bar_h}{{\\p0}}")
+           f"{{\\an8\\pos({cx},{bar_y})\\p1\\bord0\\shad0\\1c{hi}\\fscx0\\t(0,450,0.5,\\fscx100)\\fad(0,{out_fade})}}"
+           f"{rect(bar_w, bar_h)}{{\\p0}}")
+    if kind == "reveal":
+        txt = (head + f"{{\\an8\\q2\\shad0\\clip(0,{y - 4},{w},{y + line_h})\\move({cx},{y + line_h},{cx},{y},0,520)"
+               f"\\fad(0,{out_fade})}}{_esc(text)}")
+        return [txt, bar]
+    if kind == "type":
+        step = max(25, min(70, 900 // max(1, len(text))))
+        body = "".join(f"{{\\alpha&HFF&\\t({i * step},{i * step + 1},\\alpha&H00&)}}{_esc(c)}" for i, c in enumerate(text))
+        txt = head + f"{{\\an8\\q2\\pos({cx},{y})\\fad(0,{out_fade})}}" + body
+        done = len(text) * step
+        cur_w = max(6, round(size * 0.09))
+        cursor = (head + f"{{\\an7\\p1\\bord0\\shad0\\1c{hi}\\move({x0 + round(tw / len(text))},{y + round(size * 0.12)},{x0 + round(tw)},{y + round(size * 0.12)},0,{done - step})"
+                  f"\\t({done + 300},{done + 400},\\alpha&HFF&)}}{rect(cur_w, round(size * 1.0))}{{\\p0}}")
+        return [txt, cursor]
+    if kind == "block":
+        top, bot = y - round(size * 0.05), y + line_h
+        x1 = x0 + round(tw)
+        block = (head + f"{{\\an7\\pos({x0},{top})\\p1\\bord0\\shad0\\1c{hi}\\clip({x0},{top},{x0},{bot})"
+                 f"\\t(0,320,0.6,\\clip({x0},{top},{x1},{bot}))\\t(380,700,1.6,\\clip({x1},{top},{x1},{bot}))}}"
+                 f"{rect(round(tw), bot - top)}{{\\p0}}")
+        txt = (head + f"{{\\an8\\q2\\pos({cx},{y})\\clip({x0},{top},{x0},{bot})"
+               f"\\t(380,700,1.6,\\clip({x0},{top},{x1},{bot}))\\fad(0,{out_fade})}}{_esc(text)}")
+        return [txt, block]
+    if kind == "stamp":
+        txt = (head + f"{{\\an5\\q2\\pos({cx},{y + size // 2})\\fscx165\\fscy165\\alpha&HFF&"
+               f"\\t(0,170,1.8,\\fscx96\\fscy96\\alpha&H00&)\\t(170,300,\\fscx100\\fscy100)\\fad(0,{out_fade})}}{_esc(text)}")
+        return [txt, bar]
+    txt = (head + f"{{\\an8\\q2\\move({cx},{y + rise},{cx},{y},0,650)\\fsp{round(size * 0.22)}\\alpha&HFF&"
+           f"\\t(0,650,0.45,\\fsp0\\alpha&H00&)\\fad(0,{out_fade})}}{_esc(text)}")
     return [txt, bar]
 
 
 def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | None = None,
               end_card: str | None = None, cut_len: float = 0.0, card_len: float = 0.0,
-              lower_thirds=(), cards=(), extra_rows=(), skip=frozenset()) -> None:
+              lower_thirds=(), cards=(), extra_rows=(), skip=frozenset(), title_style: str = "track") -> None:
     """lower_thirds: [(LowerThird, start)]; cards: [(words, start, end, line)];
     extra_rows: ready-made events (stat and chart cards) on lines in `skip`."""
     from . import graphics
@@ -160,9 +212,9 @@ def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | 
         rows += graphics.card_events(ws, start, end, w, h, accent)
     rows += list(extra_rows)
     if title:
-        rows += title_events(title, w, h, accent, 0.1, min(3.0, max(1.5, cut_len - 0.5)), centre=False)
+        rows += title_events(title, w, h, accent, 0.1, min(3.0, max(1.5, cut_len - 0.5)), centre=False, kind=title_style)
     if end_card:
-        rows += title_events(end_card, w, h, accent, cut_len + 0.15, cut_len + card_len, centre=True)
+        rows += title_events(end_card, w, h, accent, cut_len + 0.15, cut_len + card_len, centre=True, kind=title_style)
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
