@@ -10,6 +10,8 @@ you can check by eye which take the cut used.
     python examples/fakeshoot.py round3 /tmp/round3     # clipped takes, a vertical pickup shot
     python examples/fakeshoot.py round4 /tmp/round4     # instant restarts inside one take
     python examples/fakeshoot.py round5 /tmp/round5     # same words, weaker delivery
+    python examples/fakeshoot.py fillers /tmp/fillers   # "um"s and a long pause inside the only takes
+    python examples/fakeshoot.py stress /tmp/stress     # 40 lines, ~90 takes in 6 files (about 5 minutes)
 
 In a take's text, " | " is a 0.9 s pause in the middle of the line and " / "
 a 0.2 s breath before an instant restart.
@@ -105,7 +107,47 @@ SHOOTS = {
             (2, 5, "So we visit him, and we lose track of it.", True),
         ],
     },
+    "fillers": {
+        "script": "fillers/script.txt",
+        "files": {1: "1280x720"},
+        "takes": [
+            (1, 1, "The night market, um, opens when the last train leaves.", True),
+            (1, 2, "Every stall sells | something you did not know you needed.", True),
+            (1, 3, "My favourite is, uh, a man who repairs broken clocks for free.", True),
+        ],
+    },
 }
+
+
+
+def _stress() -> dict:
+    """40 lines, ~90 takes over 6 files: every kind of problem, many times over."""
+    here = Path(__file__).parent
+    lines = [l.strip() for l in (here / "stress/script.txt").read_text().splitlines() if l.strip() and not l.startswith("#")]
+    takes = []
+    for i, line in enumerate(lines, 1):
+        f = 1 + (i - 1) // 7
+        w = line.rstrip(".").split()
+        kind = i % 10
+        if kind in (1, 6):  # a wrong word, then the right take
+            bad = " ".join(w[:-1] + ["tomorrow"]) + "."
+            takes += [(f, i, bad, False), (f, None, "Sorry, again.", False), (f, i, line, True)]
+        elif kind in (2, 7):  # false start
+            takes += [(f, i, " ".join(w[:3]), False), (f, i, line, True)]
+        elif kind == 3:  # same words, weaker delivery
+            takes += [(f, i, line, True), (f, i, "{quiet} " + line, False)]
+        elif kind == 4:  # a long pause mid-line
+            takes += [(f, i, " ".join(w[: len(w) // 2]) + " | " + " ".join(w[len(w) // 2 :]) + ".", True)]
+        elif kind == 8:  # rushed then good
+            takes += [(f, i, "{rushed} " + line, False), (f, i, line, True)]
+        elif kind == 9:  # the only take has an "um"
+            takes += [(f, i, " ".join(w[:3]) + ", um, " + " ".join(w[3:]) + ".", True)]
+        else:
+            takes += [(f, i, line, True)]
+    return {"script": "stress/script.txt", "files": {k: "1280x720" for k in range(1, 7)}, "takes": takes}
+
+
+SHOOTS["stress"] = _stress()
 
 GAP = 1.2  # seconds of room tone between takes
 MID_PAUSE = 0.9

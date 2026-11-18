@@ -59,13 +59,17 @@ def chunks(words, vertical: bool) -> list[list]:
     return out
 
 
-def caption_events(words, w: int, h: int, accent: str) -> list[str]:
+def caption_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset()) -> list[str]:
     """One event per spoken word: the phrase stays put, the word being said
     lights up in the accent colour with a small pop, words still to come wait
-    slightly dimmed."""
+    slightly dimmed. Highlighted words sit on an accent marker block (drawn
+    on a layer below with the same layout), in dark text. Lines in `skip`
+    (shown as full-screen cards) get no captions."""
     vertical = h > w
-    groups = chunks(words, vertical)
+    groups = chunks([x for x in words if x.line not in skip], vertical)
     hi = ass_colour(accent)
+    dark = "&H00141414&"
+    pop = "\\t(0,90,\\fscx112\\fscy112)\\t(90,190,\\fscx100\\fscy100)"
     rows = []
     for g_i, g in enumerate(groups):
         nxt = groups[g_i + 1][0].start if g_i + 1 < len(groups) else None
@@ -77,17 +81,28 @@ def caption_events(words, w: int, h: int, accent: str) -> list[str]:
             e = g[i + 1].start if i + 1 < len(g) else g_end
             if e - s < 0.02:
                 continue
-            parts = []
+            top, box = [], []
             for j, x in enumerate(g):
                 t = _esc(x.text)
-                if j == i:
-                    parts.append(f"{{\\1c{hi}\\t(0,90,\\fscx112\\fscy112)\\t(90,190,\\fscx100\\fscy100)}}{t}{{\\r}}")
+                anim = pop if j == i else ""
+                if x.mark:
+                    fill = f"\\1c{dark}\\3a&HFF&\\4a&HFF&"  # crisp dark text on the marker
+                elif j == i:
+                    fill = f"\\1c{hi}"
                 elif j > i:
-                    parts.append(f"{{\\1a&H50&}}{t}{{\\r}}")
+                    fill = "\\1a&H50&"
                 else:
-                    parts.append(t)
-            enter = "{\\fad(80,0)}" if i == 0 else ""  # each phrase eases in
-            rows.append(f"Dialogue: 2,{_t(s)},{_t(e)},Cap,,0,0,0,,{enter}{' '.join(parts)}")
+                    fill = ""
+                top.append(f"{{{fill}{anim}}}{t}{{\\r}}" if fill or anim else t)
+                show = "\\3a&H00&" if x.mark else "\\3a&HFF&"
+                # a space between two marked words is part of the marker, so the block is unbroken
+                sp = " " if j and x.mark and g[j - 1].mark else ""
+                box.append(f"{{\\1a&HFF&\\3c{hi}{show}{anim}}}{sp}{t}{{\\r}}")
+            enter = "{\\fad(80,0)}" if i == 0 else ""
+            rows.append(f"Dialogue: 2,{_t(s)},{_t(e)},Cap,,0,0,0,,{enter}{' '.join(top)}")
+            if any(x.mark for x in g):
+                joined = box[0] + "".join(("" if g[j].mark and g[j - 1].mark else " ") + b for j, b in enumerate(box[1:], 1))
+                rows.append(f"Dialogue: 1,{_t(s)},{_t(e)},CapBox,,0,0,0,,{enter}{joined}")
     return rows
 
 
@@ -112,7 +127,11 @@ def title_events(text: str, w: int, h: int, accent: str, start: float, end: floa
 
 
 def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | None = None,
-              end_card: str | None = None, cut_len: float = 0.0, card_len: float = 0.0) -> None:
+              end_card: str | None = None, cut_len: float = 0.0, card_len: float = 0.0,
+              lower_thirds=(), cards=()) -> None:
+    """lower_thirds: [(LowerThird, start)]; cards: [(words, start, end, line)]."""
+    from . import graphics
+
     vertical = h > w
     cap = round((0.062 if vertical else 0.055) * min(w, h))
     big = round((0.085 if vertical else 0.075) * min(w, h))
@@ -124,12 +143,20 @@ def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | 
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
         f"Style: Cap,Inter ExtraBold,{cap},&H00FFFFFF,&H00FFFFFF,&H00101010,&H90000000,0,0,0,0,100,100,0,0,1,"
         f"{max(2, round(cap * 0.09))},{max(1, round(cap * 0.05))},2,{round(0.08 * w)},{round(0.08 * w)},{round((0.2 if vertical else 0.07) * h)},1",
+        # Same layout as Cap; its opaque box (BorderStyle 3) is the highlighter marker.
+        f"Style: CapBox,Inter ExtraBold,{cap},&HFFFFFFFF,&HFFFFFFFF,&HFF101010,&HFF000000,0,0,0,0,100,100,0,0,3,"
+        f"{max(2, round(cap * 0.12))},0,2,{round(0.08 * w)},{round(0.08 * w)},{round((0.2 if vertical else 0.07) * h)},1",
         f"Style: Title,Inter Display Black,{big},&H00FFFFFF,&H00FFFFFF,&H00101010,&H80000000,0,0,0,0,100,100,0,0,1,"
         f"{max(2, round(big * 0.04))},{max(1, round(big * 0.04))},8,{round(0.06 * w)},{round(0.06 * w)},0,1",
+    ] + graphics.styles(w, h) + [
         "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
     if words:
-        rows += caption_events(words, w, h, accent)
+        rows += caption_events(words, w, h, accent, skip={c[3] for c in cards})
+    for lt, start in lower_thirds:
+        rows += graphics.lower_third_events(lt, start, w, h, accent)
+    for ws, start, end, _ in cards:
+        rows += graphics.card_events(ws, start, end, w, h, accent)
     if title:
         rows += title_events(title, w, h, accent, 0.1, min(3.0, max(1.5, cut_len - 0.5)), centre=False)
     if end_card:

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .cut import Clip, subtitle_filter
+from .cut import Clip, positions, subtitle_filter
 from .style import LOOKS, ass_filter, write_ass
 from .media import duration, has_video, run
 
@@ -42,11 +42,9 @@ def parse_broll(items: list[str], n_lines: int) -> list[Cutaway]:
 def line_spans(clips: list[Clip]) -> dict[int, tuple[float, float]]:
     """Where each script line sits on the finished timeline."""
     spans: dict[int, tuple[float, float]] = {}
-    t = 0.0
-    for c in clips:
+    for c, t in zip(clips, positions(clips)):
         a, _ = spans.get(c.line, (t, t))
         spans[c.line] = (a, t + c.length)
-        t += c.length
     return spans
 
 
@@ -55,6 +53,7 @@ def finish(
     cutaways: list[Cutaway] = (), music: Path | None = None, music_lufs: float = -22.0,
     title: str | None = None, end_card: str | None = None, card_len: float = 2.5,
     srt: Path | None = None, words=None, look: str = "natural", accent: str = "#FFD23F",
+    lower_thirds=(), card_lines=(), all_words=None,
 ) -> list[str]:
     """srt: classic one-line captions; words: timed words for animated captions."""
     """Returns plain notes on anything it had to adjust."""
@@ -104,9 +103,12 @@ def finish(
     if srt is not None:
         parts.append(f"[{v}]{subtitle_filter(srt, w, h)}[cap]")
         v = "cap"
-    if words or title or end_card:
+    if words or title or end_card or lower_thirds or card_lines:
+        lts = [(lt, spans[lt.line][0]) for lt in lower_thirds if lt.line in spans]
+        cards = [([x for x in all_words if x.line == n], *spans[n], n) for n in card_lines if n in spans]
+        notes += [f"lower third for line {lt.line + 1} skipped: that line is not in the cut" for lt in lower_thirds if lt.line not in spans]
         ass = out.with_suffix(".look.ass")
-        write_ass(ass, w, h, accent, words, title, end_card, cut_len, card)
+        write_ass(ass, w, h, accent, words, title, end_card, cut_len, card, lts, cards)
         parts.append(f"[{v}]{ass_filter(ass)}[tt]")
         v = "tt"
     parts.append(f"[{v}]format=yuv420p[vo]")

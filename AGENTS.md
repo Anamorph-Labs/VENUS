@@ -23,6 +23,10 @@ three questions.
 | Music, cutaway shots (B-roll), a title or a call to action | `--music`, `--broll LINE=FILE@SEC`, `--title`, `--end-card` |
 | Any line they love, hate or want dropped | `--pick LINE=TAKE` or `--pick LINE=none` |
 
+Start from a preset that matches where it will be posted and the feel
+(`alvenus presets`): `reels-punchy`, `cinematic-doc`, `explainer`, `podcast-clip`,
+`calm-story`. Then adjust single settings on top; what you type wins.
+
 ### When they point at a reference
 
 "Make it like this one" says more than any description. Ask for the reference
@@ -68,6 +72,19 @@ Mark the story's shape in the script: a **blank line** between lines is a scene
 break, and the cut gives it a longer breath (`--scene-beat`, default 0.9 s; the
 normal gap between lines is `--beat`, default 0.25 s). Put blank lines before the
 turn and before the payoff so they land.
+
+How a new scene comes in is `--transition`: `dip` (through black) for time
+passing or a serious turn, `crossfade` for a gentle move between ideas, `whip`
+or `zoom` for energy, `cut` (default) when the story should not pause.
+
+### Explainer graphics
+
+- `--lower-third "LINE=Name|Role"` introduces a person the first time they speak.
+- `--card LINE` turns one line into a full-screen text card, its words appearing as
+  they are said. Use it for the single most important statement (often the
+  payoff or a key number), not more than once or twice a minute.
+- `--highlight "LINE=words"` puts a marker behind the two or three words that carry
+  the line's meaning. Highlight sparingly; if everything is marked, nothing is.
 
 ## 3. Check the setup (first time only)
 

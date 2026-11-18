@@ -200,6 +200,39 @@ class MatchTests(unittest.TestCase):
         self.assertEqual(ws[0].start, 0.1)
         self.assertTrue(ws[0].end <= ws[1].start + 1e-9 and ws[1].start < ws[2].start)
 
+    def test_transitions_overlap_timeline(self):
+        from alvenus.cut import positions, total_length
+        clips = [Clip(0, 0, 2, 0), Clip(0, 3, 5, 1, transition="dip", tdur=0.5)]
+        self.assertEqual(positions(clips), [0.0, 1.5])
+        self.assertEqual(total_length(clips), 3.5)
+
+    def test_reframe_crop_expression(self):
+        from alvenus.reframe import crop_x
+        self.assertEqual(crop_x([(0.0, 0.5)], 1920, 608), "656.0")
+        self.assertEqual(crop_x([(0.0, 0.0)], 1920, 608), "0.0")  # never past the edge
+        self.assertIn("if(lt(t,2.00)", crop_x([(0.0, 0.75), (2.0, 0.25)], 1920, 608))
+
+    def test_presets_fill_settings(self):
+        from alvenus.presets import PRESETS, defaults
+        self.assertEqual(defaults("reels-punchy")["aspect"], "9:16")
+        self.assertTrue(all("about" in p and "look" in p for p in PRESETS.values()))
+        with self.assertRaises(SystemExit):
+            defaults("nope")
+
+    def test_filler_is_cut_out_of_a_take(self):
+        clips = take_clips(None, 0, 0, 1.0, 3.0, 10.0, max_pause=None, remove=[(1.8, 2.2)])
+        self.assertEqual(len(clips), 2)
+        self.assertLess(clips[0].end, 1.9)
+        self.assertGreater(clips[1].start, 2.1)
+
+    def test_highlight_marks_phrase(self):
+        from alvenus.graphics import mark, parse_highlights
+        from alvenus.wordtime import Word
+        script = ["He repairs broken clocks for free."]
+        ws = [Word(t, i, i + 1, line=0) for i, t in enumerate(script[0].split())]
+        mark(ws, parse_highlights(["1=broken clocks"], script))
+        self.assertEqual([w.text for w in ws if w.mark], ["broken", "clocks"])
+
 
 if __name__ == "__main__":
     unittest.main()

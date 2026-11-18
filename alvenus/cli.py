@@ -9,16 +9,18 @@ import time
 from pathlib import Path
 
 from . import asr
-from .cut import Clip, hide_jump_cuts, render, take_clips, write_srt
+from .cut import TRANSITIONS, Clip, hide_jump_cuts, render, take_clips, total_length, write_srt
 from .match import Take, assign, choose, join_paused
 from .review import notes as review_notes
 from .delivery import judge, measure
 from .finish import finish, line_spans, parse_broll
 from . import plan as plan_file
 from .style import LOOKS
+from .presets import PRESETS, defaults as preset_defaults, describe as describe_presets
 from .wordtime import timed_words
-from .refine import has_restart, keep_last_attempt
-from .media import duration, frame_rate, has_video, load_audio, need_ffmpeg, speech_regions
+from .graphics import mark as mark_words, parse_highlights, parse_lines, parse_lower_thirds
+from .refine import find_fillers, has_restart, keep_last_attempt
+from .media import duration, frame_rate, has_video, load_audio, need_ffmpeg, speech_regions, video_size
 from .timeline import write_edl
 
 SR = asr.SAMPLE_RATE
@@ -118,6 +120,9 @@ def cmd_cut(a: argparse.Namespace) -> None:
     script = read_script(Path(a.script))
     sources = find_sources(a.takes)
     cutaways = parse_broll(a.broll or [], len(script))
+    lower_thirds = parse_lower_thirds(a.lower_third or [], len(script))
+    card_lines = parse_lines(a.card or [], len(script), "--card")
+    highlights = parse_highlights(a.highlight or [], script)
     music = Path(a.music) if a.music else None
     if music is not None and not music.exists():
         raise SystemExit(f"--music: {music} not found")
@@ -173,15 +178,38 @@ def cmd_cut(a: argparse.Namespace) -> None:
     print("4/5 trimming" + ("" if a.keep_pauses else " (long pauses inside takes shortened)"))
     breaks = scene_breaks(Path(a.script))
     clips: list[Clip] = []
+    fillers_cut = 0
     for c in picked:
         t = c.take
         at_break = c.line in breaks
+        remove = [] if a.keep_fillers else find_fillers(t, sources[t.source], load_audio(sources[t.source], SR), model, SR, a.noise_db, script[c.line])
+        if remove:
+            fillers_cut += len(remove)
+            t.notes.append(f"{len(remove)} filler sound(s) cut out")
         clips += take_clips(sources[t.source], t.source, c.line, t.start, t.end, lengths[t.source],
                             tail=a.scene_beat if at_break else a.beat,
                             max_pause=None if a.keep_pauses else a.max_pause,
-                            room=quiet_around(t, pieces), hold_short=at_break)
+                            room=quiet_around(t, pieces), hold_short=at_break, remove=remove)
+    if fillers_cut:
+        print(f"   cut out {fillers_cut} filler sound(s) (um, uh) inside the chosen takes")
+    if a.reframe == "auto":
+        # Wide footage going into a taller frame follows the subject instead of blur-filling.
+        from .reframe import track
+
+        tw, th = (int(x) for x in ASPECTS[a.aspect].split("x"))
+        for c in clips:
+            sz = video_size(sources[c.source]) if has_video(sources[c.source]) else None
+            if sz and sz[0] / sz[1] > 1.15 * tw / th:
+                c.reframe = track(sources[c.source], c.start, c.end)
+        if any(c.reframe for c in clips):
+            print(f"   reframed {sum(1 for c in clips if c.reframe)} wide clip(s) to follow the subject")
     if not a.no_punch_in:
         hide_jump_cuts(clips)
+    if TRANSITIONS.get(a.transition):
+        # The first clip of each line that follows a blank line comes in with the transition.
+        for prev, c in zip(clips, clips[1:]):
+            if prev.line != c.line and prev.line in breaks:
+                c.transition, c.tdur = a.transition, a.transition_seconds
     room_tone = find_room_tone(pieces, picked[0].take.source, lengths[picked[0].take.source]) if picked else None
 
     print("5/5 cutting")
@@ -191,13 +219,14 @@ def cmd_cut(a: argparse.Namespace) -> None:
     fps = frame_rate(vids[0]) if vids else 30.0
     finish_notes: list[str] = []
     pop = a.captions and a.caption_style == "pop"
-    if cutaways or music or a.title or a.end_card or pop or a.look != "natural":
+    graphics_wanted = bool(lower_thirds or card_lines or highlights)
+    if cutaways or music or a.title or a.end_card or pop or a.look != "natural" or graphics_wanted:
         # Cut first (at higher quality), then grade and lay B-roll, music and
         # titles on top; captions go on last.
         base = out.with_name(out.stem + ".base.mp4")
         render(sources, clips, base, None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone, crf=14)
         words = None
-        if pop:
+        if pop or card_lines or highlights:
             loaded: dict[int, object] = {}
             def audio_of(k: int):
                 if k not in loaded:
@@ -205,9 +234,11 @@ def cmd_cut(a: argparse.Namespace) -> None:
                     loaded[k] = load_audio(sources[k], SR)
                 return loaded[k]
             words = timed_words(clips, script, audio_of, SR)
+            mark_words(words, highlights)
         finish_notes = finish(base, out, ASPECTS[a.aspect], fps, line_spans(clips), cutaways, music, a.music_lufs,
                               a.title, a.end_card, srt=srt if a.captions and not pop else None,
-                              words=words, look=a.look, accent=a.accent)
+                              words=words if pop else None, look=a.look, accent=a.accent,
+                              lower_thirds=lower_thirds, card_lines=card_lines, all_words=words)
         base.unlink()
         for n in finish_notes:
             print("   " + n)
@@ -249,7 +280,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
     }
     plan_file.write(out.with_suffix(".plan.json"), a, choices, cutaways)
     out.with_suffix(".decisions.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-    review = review_notes(script, choices, takes, sources, sum(c.length for c in clips))
+    review = review_notes(script, choices, takes, sources, total_length(clips))
     if finish_notes:
         review += "\n## Finishing\n\n" + "".join(f"- {n}\n" for n in finish_notes)
     out.with_suffix(".notes.md").write_text(review, encoding="utf-8")
@@ -329,6 +360,7 @@ def main(argv: list[str] | None = None) -> None:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     c = sub.add_parser("cut", help="pick the best take per script line and build the cut")
+    c.add_argument("--preset", help="starting style: " + ", ".join(PRESETS) + " (see: alvenus presets)")
     c.add_argument("--plan", help="edit plan JSON (each cut writes one beside its output); flags typed here win over it")
     c.add_argument("--script", help="text file, one spoken line per row")
     c.add_argument("--takes", nargs="+", help="recording(s) or folder(s) of clips, video or audio")
@@ -352,12 +384,28 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--look", default="natural", choices=sorted(LOOKS), help="colour grade for the whole cut, B-roll included")
     c.add_argument("--caption-style", default="pop", choices=["pop", "classic"], help="pop: short phrases, each word lights up as it is said; classic: one plain line")
     c.add_argument("--accent", default="#FFD23F", help="accent colour for captions, title bar and end card, as #RRGGBB")
+    c.add_argument("--transition", default="cut", choices=list(TRANSITIONS), help="how a new scene (after a blank line in the script) comes in")
+    c.add_argument("--transition-seconds", type=float, default=0.5, help="length of that transition")
+    c.add_argument("--lower-third", action="append", metavar="LINE=NAME|ROLE", help="animated name tag when a line starts, e.g. --lower-third \"1=Mara Ilić|Night baker\"")
+    c.add_argument("--card", action="append", metavar="LINE", help="show this line as a full-screen kinetic text card, words appearing as they are said (voice kept)")
+    c.add_argument("--highlight", action="append", metavar="LINE=WORDS", help="put a marker highlight behind words, e.g. --highlight \"3=broken clocks\"")
+    c.add_argument("--no-captions", dest="captions", action="store_false", help="turn captions off (when a preset turns them on)")
+    c.add_argument("--reframe", default="auto", choices=["auto", "blur"], help="wide footage in a taller frame: auto follows the subject; blur fits it whole on a blurred copy")
+    c.add_argument("--keep-fillers", action="store_true", help="leave filler sounds (um, uh) inside takes instead of cutting them out")
     c.add_argument("--no-punch-in", action="store_true", help="don't zoom in to hide jump cuts between shots from the same camera")
     c.add_argument("--fresh-listen", action="store_true", help="listen to every take again instead of reusing what was heard before")
     c.set_defaults(func=cmd_cut)
     args = list(sys.argv[1:] if argv is None else argv)
-    if args and args[0] == "cut" and "--plan" in args[:-1]:
-        c.set_defaults(**plan_file.load(Path(args[args.index("--plan") + 1])))
+    # Settings stack up: preset, then plan, then flags typed now.
+    if args and args[0] == "cut":
+        from_plan = plan_file.load(Path(args[args.index("--plan") + 1])) if "--plan" in args[:-1] else {}
+        preset = args[args.index("--preset") + 1] if "--preset" in args[:-1] else from_plan.get("preset")
+        if preset:
+            c.set_defaults(preset=preset, **preset_defaults(preset))
+        c.set_defaults(**from_plan)
+
+    ps = sub.add_parser("presets", help="list the starting styles")
+    ps.set_defaults(func=lambda a: print("Starting styles (use with: alvenus cut --preset NAME ...):\n" + describe_presets()))
 
     f = sub.add_parser("fetch-models", help="download the free Whisper model once")
     f.add_argument("--model", default=asr.DEFAULT_MODEL, choices=sorted(asr.MODELS))

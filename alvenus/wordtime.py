@@ -21,6 +21,8 @@ class Word:
     text: str  # as written in the script, punctuation kept
     start: float  # seconds on the cut's timeline
     end: float
+    line: int = -1  # script line it belongs to
+    mark: bool = False  # highlighted for emphasis (a marker swipe behind it)
 
 
 def syllables(word: str) -> int:
@@ -151,23 +153,30 @@ def place(tokens: list[str], peaks: list[float], start: float, end: float,
 def timed_words(clips, script: list[str], audio_of, sr: int) -> list[Word]:
     """Word times on the cut's timeline for every line in the cut.
     `audio_of(source)` returns that file's audio at `sr`."""
+    from .cut import positions
+
     out: list[Word] = []
-    t, i = 0.0, 0
+    pos = positions(clips)
+    i = 0
     while i < len(clips):
         line = clips[i].line
         peaks: list[float] = []
         dips: list[tuple[float, float]] = []
         on = off = None
-        line_start = t
+        line_start = t = pos[i]
         while i < len(clips) and clips[i].line == line:
             c = clips[i]
+            t = pos[i]
             a = audio_of(c.source)[int(c.start * sr) : int(c.end * sr)]
             p, s, e, d = analyse(a, sr)
             peaks += [t + x for x in p]
             dips += [(t + x, depth) for x, depth in d]
             on = t + s if on is None else on
             off = t + e
-            t += c.length
             i += 1
-        out += place(script[line].split(), peaks, on if on is not None else line_start, off if off is not None else t, dips)
+        t = pos[i - 1] + clips[i - 1].length
+        placed = place(script[line].split(), peaks, on if on is not None else line_start, off if off is not None else t, dips)
+        for w in placed:
+            w.line = line
+        out += placed
     return out

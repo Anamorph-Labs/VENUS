@@ -58,6 +58,22 @@ Font License, see `alvenus/fonts/OFL.txt`), so cuts look the same on every compu
 sheet with times, so you (or your AI) can choose shots. Every cut also writes a
 `.plan.json` holding every choice; edit it and run `alvenus cut --plan cut.plan.json`.
 What was heard is remembered, so re-cuts skip listening (`--fresh-listen` to redo it).
+Starting styles: `alvenus presets` lists them; `--preset reels-punchy`,
+`cinematic-doc`, `explainer`, `podcast-clip` or `calm-story` sets shape, pacing,
+captions, look and transitions in one go (anything you type still wins).
+`--transition dip|crossfade|zoom|whip|flash|slide|blur` sets how a new scene comes
+in after a blank line in the script.
+
+Explainer graphics: `--lower-third "1=Mara Ilić|Night baker"` (animated name tag),
+`--card 4` (line 4 as a full-screen kinetic text card, words appearing as they are
+said), `--highlight "3=broken clocks"` (a marker highlight behind those words).
+
+Clean-up and framing: filler sounds ("um", "uh") inside the chosen takes are cut
+out (`--keep-fillers` to leave them). Wide footage going into a taller frame
+follows the speaker instead of cropping the centre (`--reframe blur` fits it whole
+on a blurred copy instead). Clips are rendered one at a time, so memory stays flat
+on long shoots (a 4.5-minute, 72-take test shoot cuts in under 3 minutes once heard).
+
 Use `--model base.en` for a faster but less careful listen (~290 MB, about 2.5x faster).
 
 ## How it decides

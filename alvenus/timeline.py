@@ -33,6 +33,8 @@ def write_edl(path: Path, title: str, sources: list[Path], clips: list[Clip], sc
         )
         rows.append(f"* FROM CLIP NAME: {name}")
         rows.append(f"* LINE {c.line + 1}: {script[c.line]}")
+        if c.transition and c.tdur:
+            rows.append(f"* TRANSITION IN: {c.transition} {c.tdur:g}s (in the MP4; laid here as a straight cut)")
         rows.append("")
         rec += c.length
     path.write_text("\n".join(rows), encoding="utf-8")
