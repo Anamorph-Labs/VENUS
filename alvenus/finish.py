@@ -55,6 +55,7 @@ def finish(
     srt: Path | None = None, words=None, look: str = "natural", accent: str = "#FFD23F",
     lower_thirds=(), card_lines=(), all_words=None, stats=(), charts=(), sfx: list | None = None,
     line_charts=(), quotes=(), progress: bool = False, scene_marks=(),
+    maps=(), timelines=(), kinetic_lines=(), titles=(), split_labels=(),
 ) -> list[str]:
     """srt: classic one-line captions; words: timed words for animated captions;
     sfx: None for no sound effects, else [(time, kind)] for the cut's own
@@ -92,6 +93,22 @@ def finish(
         parts.append(f"[{v}][b{j}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[o{j}]")
         v = f"o{j}"
 
+    for j, mc in enumerate(maps):
+        if mc.line not in spans:
+            notes.append(f"map for line {mc.line + 1} skipped: that line is not in the cut")
+            continue
+        t0, t1 = spans[mc.line]
+        k, n_in = n_in, n_in + 1
+        args += ["-loop", "1", "-t", f"{t1 - t0 + 0.5:.3f}", "-i", mc.image]
+        parts.append(
+            f"[{k}:v]fps={fps:g},scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,"
+            # The map holds still so the pins stay on their places; the pins
+            # and the route are the movement.
+            f"format=yuva420p,"
+            f"fade=t=in:d=0.25:alpha=1,setpts=PTS+{t0:.3f}/TB[m{j}]")
+        parts.append(f"[{v}][m{j}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[om{j}]")
+        v = f"om{j}"
+
     if LOOKS.get(look):
         parts.append(f"[{v}]{LOOKS[look]}[graded]")
         v = "graded"
@@ -106,8 +123,9 @@ def finish(
     if srt is not None:
         parts.append(f"[{v}]{subtitle_filter(srt, w, h)}[cap]")
         v = "cap"
-    if words or title or end_card or lower_thirds or card_lines or stats or charts or line_charts or quotes or progress:
-        from .graphics import chart_events, line_chart_events, progress_events, quote_events, stat_events
+    if words or title or end_card or lower_thirds or card_lines or stats or charts or line_charts or quotes or progress or maps or timelines or kinetic_lines or titles or split_labels:
+        from .graphics import (chart_events, kinetic_events, line_chart_events, map_events, progress_events, quote_events,
+                               stat_events, timeline_events)
 
         extra, skip = [], set()
         for st in stats:
@@ -126,8 +144,27 @@ def finish(
             if q.line in spans:
                 extra += quote_events(q, *spans[q.line], w, h, accent)
                 skip.add(q.line)
+        for mc in maps:
+            if mc.line in spans:
+                extra += map_events(mc, *spans[mc.line], w, h, accent)
+        for tl in timelines:
+            if tl.line in spans:
+                extra += timeline_events(tl, *spans[tl.line], w, h, accent)
+                skip.add(tl.line)
+        for n, emph in kinetic_lines:
+            if n in spans and all_words:
+                extra += kinetic_events([x for x in all_words if x.line == n], *spans[n], w, h, accent, emph)
+                skip.add(n)
         if progress:
             extra += progress_events(cut_len, w, h, accent, list(scene_marks))
+        from .style import title_events
+
+        from .graphics import split_label_events
+
+        for (t0, t1), side, label in split_labels:
+            extra += split_label_events(label, side, t0, t1, w, h, accent)
+        for text, t0, t1 in titles:  # mid-video title cards
+            extra += title_events(text, w, h, accent, t0 + 0.1, t1, centre=True)
         lts = [(lt, spans[lt.line][0]) for lt in lower_thirds if lt.line in spans]
         cards = [([x for x in all_words if x.line == n], *spans[n], n) for n in card_lines if n in spans]
         notes += [f"lower third for line {lt.line + 1} skipped: that line is not in the cut" for lt in lower_thirds if lt.line not in spans]
@@ -147,9 +184,15 @@ def finish(
         ev = list(sfx)
         ev += [(spans[lt.line][0] + 0.05, "pop") for lt in lower_thirds if lt.line in spans]
         ev += [(spans[n][0], "pop") for n in card_lines if n in spans]
-        ev += [(spans[x.line][0], "pop") for x in list(stats) + list(charts) + list(line_charts) + list(quotes) if x.line in spans]
+        ev += [(spans[x.line][0], "pop") for x in list(stats) + list(charts) + list(line_charts) + list(quotes) + list(timelines) if x.line in spans]
+        for mc in maps:  # a pop as each pin lands
+            if mc.line in spans:
+                t0, t1 = spans[mc.line]
+                gap = min(0.8, max(0.35, (t1 - t0 - 0.8) / max(1, len(mc.pins))))
+                ev += [(t0 + 0.3 + gap * i, "pop") for i in range(len(mc.pins)) if t0 + 0.3 + gap * i < t1]
         if title:
             ev.append((0.15, "hit"))
+        ev += [(t0 + 0.1, "hit") for _, t0, _ in titles]
         if end_card:
             ev += [(cut_len, "whoosh"), (cut_len + 0.2, "hit")]
         if ev:

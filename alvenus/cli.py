@@ -19,7 +19,7 @@ from .style import LOOKS
 from .presets import PRESETS, defaults as preset_defaults, describe as describe_presets
 from .wordtime import timed_words
 from .graphics import (mark as mark_words, parse_charts, parse_highlights, parse_line_charts, parse_lines, parse_lower_thirds,
-                       parse_quotes, parse_stats)
+                       parse_maps, parse_quotes, parse_stats, parse_timelines)
 from .refine import find_fillers, has_restart, keep_last_attempt
 from .media import duration, frame_rate, has_video, load_audio, need_ffmpeg, speech_regions, video_size
 from .timeline import write_edl
@@ -128,9 +128,21 @@ def cmd_cut(a: argparse.Namespace) -> None:
     charts = parse_charts(a.chart or [], len(script))
     line_charts = parse_line_charts(getattr(a, "line_chart", None) or [], len(script))
     quotes = parse_quotes(getattr(a, "quote", None) or [], script)
+    maps = parse_maps(getattr(a, "map", None) or [], len(script))
+    for mc in maps:
+        if not Path(mc.image).exists():
+            raise SystemExit(f"--map: {mc.image} not found")
+    timelines = parse_timelines(getattr(a, "timeline", None) or [], len(script))
+    kinetic = []
+    for k in getattr(a, "kinetic", None) or []:
+        line, _, emph = k.partition("=")
+        if not line.strip().isdigit() or not 0 < int(line) <= len(script):
+            raise SystemExit(f"--kinetic {k!r}: use LINE or LINE=word, word (the words to make big)")
+        kinetic.append((int(line) - 1, {x.strip().lower() for x in emph.split(",") if x.strip()}))
     if getattr(a, "broll_dir", None):
         taken = ({c.line for c in cutaways} | set(card_lines) | {x.line for x in stats} | {x.line for x in charts}
-                 | {x.line for x in line_charts} | {x.line for x in quotes})
+                 | {x.line for x in line_charts} | {x.line for x in quotes} | {x.line for x in maps}
+                 | {x.line for x in timelines} | {n for n, _ in kinetic})
         auto, auto_notes = auto_broll(script, Path(a.broll_dir), taken, {c.path.resolve() for c in cutaways},
                                       {c.line for c in cutaways})
         cutaways = sorted(cutaways + auto, key=lambda c: c.line)
@@ -269,7 +281,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
     fps = frame_rate(vids[0]) if vids else 30.0
     finish_notes: list[str] = []
     pop = a.captions and a.caption_style == "pop"
-    graphics_wanted = bool(lower_thirds or card_lines or highlights or stats or charts or line_charts or quotes or getattr(a, "progress", False))
+    graphics_wanted = bool(lower_thirds or card_lines or highlights or stats or charts or line_charts or quotes or maps or timelines or kinetic or getattr(a, "progress", False))
     sfx = None
     if not getattr(a, "no_sfx", False):
         sfx = [(t + c.tdur / 2, "whoosh") for c, t in zip(clips, positions(clips)) 
@@ -280,7 +292,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
         base = out.with_name(out.stem + ".base.mp4")
         render(sources, clips, base, None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone, crf=14, voice=a.voice)
         words = None
-        if pop or card_lines or highlights:
+        if pop or card_lines or highlights or kinetic:
             loaded: dict[int, object] = {}
             def audio_of(k: int):
                 if k not in loaded:
@@ -294,7 +306,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
                               words=words if pop else None, look=a.look, accent=a.accent,
                               lower_thirds=lower_thirds, card_lines=card_lines, all_words=words,
                               stats=stats, charts=charts, sfx=sfx, line_charts=line_charts, quotes=quotes,
-                              progress=getattr(a, "progress", False),
+                              progress=getattr(a, "progress", False), maps=maps, timelines=timelines, kinetic_lines=kinetic,
                               scene_marks=[t for i, t in enumerate(positions(clips))
                                            if i and clips[i - 1].line != clips[i].line and clips[i - 1].line in breaks])
         thumb_from = base
@@ -304,7 +316,8 @@ def cmd_cut(a: argparse.Namespace) -> None:
     try:
         from .thumb import make as make_thumb, pick_moment
 
-        covered = (set(card_lines) | {x.line for x in list(stats) + list(charts) + list(line_charts) + list(quotes)}
+        covered = (set(card_lines) | {x.line for x in list(stats) + list(charts) + list(line_charts) + list(quotes) + maps + timelines}
+                   | {n for n, _ in kinetic}
                    | {c.line for c in cutaways})
         tw, th = (int(x) for x in ASPECTS[a.aspect].split("x"))
         make_thumb(thumb_from or out, pick_moment(line_spans(clips), covered, pushed), out.with_suffix(".thumb.jpg"),
@@ -372,6 +385,68 @@ def cmd_study(a: argparse.Namespace) -> None:
         path = Path(ref)
         style = study(path, Path(a.out_dir) if a.out_dir else path.parent, listen=not a.no_listen)
         print(describe(style) + "\n")
+
+
+def cmd_montage(a: argparse.Namespace) -> None:
+    from . import montage as mt
+
+    need_ffmpeg()
+    t0 = time.time()
+    settings: dict = {}
+    if a.plan:
+        shots, settings = mt.load_plan(Path(a.plan))
+        for k in ("music", "aspect", "look", "title", "accent", "out"):
+            if getattr(a, k) is None:  # flags typed now win over the plan
+                setattr(a, k, settings.get(k))
+    a.aspect, a.look, a.accent = a.aspect or "9:16", a.look or "punchy", a.accent or "#FFD23F"
+    if not a.music or not a.out or not (a.plan or a.clips):
+        raise SystemExit("montage needs --clips, --music and --out (or --plan)")
+    music, out = Path(a.music), Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if not a.plan:
+        files = mt.find_clips(a.clips)
+        if not files:
+            raise SystemExit("no video clips found")
+        print(f"1/3 looking at {len(files)} clip(s)")
+        infos = [mt.analyse(f) for f in files]
+        print("2/3 listening to the music")
+        beats, energy, down = mt.song_map(music)
+        total = min(a.length or duration(music), duration(music))
+        tempo = 60 / (beats[1] - beats[0]) if len(beats) > 1 else 0
+        print(f"   {tempo:.0f} beats a minute, {len(beats)} beats; quiet parts {sum(e < 0.4 for e in energy)}, loud {sum(e >= 0.75 for e in energy)}")
+        shots = mt.plan(infos, beats, energy, down, total, seed=a.seed)
+    print(f"3/3 cutting {len(shots)} shots")
+    mt.render(shots, music, out, ASPECTS[a.aspect], look=a.look, title=a.title, accent=a.accent)
+    plan_path = out.with_suffix(".montage.json")
+    mt.save_plan(plan_path, shots, {"music": str(music.resolve()), "out": str(out.resolve()), "aspect": a.aspect,
+                                    "look": a.look, "title": a.title, "accent": a.accent})
+    for k, s in enumerate(shots):
+        print(f"   {k + 1:>2} {Path(s.clip).name[:22]:22} {s.start:6.2f}s  {s.length:4.2f}s on screen  {s.why}")
+    print(f"wrote {out} ({sum(s.length for s in shots):.1f}s) in {time.time() - t0:.0f}s")
+    print(f"to change it, edit {plan_path} and run: alvenus montage --plan {plan_path}")
+
+
+def cmd_make(a: argparse.Namespace) -> None:
+    from . import story
+
+    if a.example:
+        Path(a.example).write_text(json.dumps(story.EXAMPLE, indent=2), encoding="utf-8")
+        print(f"wrote an example storyboard to {a.example}; every scene type is in it")
+        return
+    if not a.storyboard or not a.out:
+        raise SystemExit("make needs a storyboard file and --out (or --example FILE to see one)")
+    need_ffmpeg()
+    t0 = time.time()
+    sb = story.load(Path(a.storyboard))
+    aspect = a.aspect or sb.get("aspect", "16:9")
+    if aspect not in ASPECTS:
+        raise SystemExit(f"aspect {aspect!r}: choose from {', '.join(sorted(ASPECTS))}")
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    print(f"building {len(sb['scenes'])} scenes at {aspect}")
+    for n in story.build(sb, out, ASPECTS[aspect]):
+        print("   " + n)
+    print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s")
 
 
 def cmd_scan(a: argparse.Namespace) -> None:
@@ -451,6 +526,9 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--no-beat-sync", action="store_true", help="with --music, don't move scene changes onto the music's beat")
     c.add_argument("--line-chart", action="append", metavar="LINE=LABEL N, ...|TITLE", help="turn a line into a line chart that draws itself, e.g. --line-chart \"3=2019 4, 2021 6, 2023 11|Stalls per night\" (repeatable)")
     c.add_argument("--quote", action="append", metavar="LINE[=WHO]", help="show a line as a pull-quote card, e.g. --quote \"4=Mara Ilić\" (repeatable)")
+    c.add_argument("--map", action="append", metavar="LINE=IMAGE|x,y Label; ...", help="lay a map (any image) over a line; pins drop in order and a route joins them; x and y from 0 to 1, e.g. --map \"3=city.png|0.3,0.6 Old port; 0.7,0.4 Market\"")
+    c.add_argument("--timeline", action="append", metavar="LINE=WHEN what, ...|TITLE", help="a timeline that draws itself, e.g. --timeline \"2=1990 First stall, 2005 Market opens, 2024 500 stalls|How it grew\"")
+    c.add_argument("--kinetic", action="append", metavar="LINE[=word, word]", help="the line as big kinetic type, words slamming in as said; listed words (or long ones) big and in accent")
     c.add_argument("--progress", action="store_true", help="a thin bar along the bottom that fills as the video plays, notched at each new scene")
     c.add_argument("--push-in", action="append", metavar="LINE", help="a slow camera push-in across this line (repeatable); highlighted lines get one automatically")
     c.add_argument("--no-push-in", action="store_true", help="no slow push-ins at all")
@@ -486,6 +564,26 @@ def main(argv: list[str] | None = None) -> None:
         if preset:
             c.set_defaults(preset=preset, **preset_defaults(preset))
         c.set_defaults(**from_plan)
+
+    mo = sub.add_parser("montage", help="cut a folder of clips to a song: on the beat, calm or punchy with the music")
+    mo.add_argument("--clips", nargs="+", help="clip files or folders")
+    mo.add_argument("--music", help="the song")
+    mo.add_argument("--out", help="output MP4")
+    mo.add_argument("--plan", help="a .montage.json from an earlier run, edited or not")
+    mo.add_argument("--aspect", choices=sorted(ASPECTS), help="default 9:16")
+    mo.add_argument("--length", type=float, help="seconds (default: the whole song)")
+    mo.add_argument("--look", choices=sorted(LOOKS), help="default punchy")
+    mo.add_argument("--title", help="opening title")
+    mo.add_argument("--accent", help="#RRGGBB for the title bar")
+    mo.add_argument("--seed", type=int, default=0, help="a different number gives a different edit of the same material")
+    mo.set_defaults(func=cmd_montage)
+
+    mk = sub.add_parser("make", help="build a video from a storyboard (scenes of clips, images, titles, numbers, charts, maps...)")
+    mk.add_argument("storyboard", nargs="?", help="storyboard JSON (see: alvenus make --example sb.json)")
+    mk.add_argument("--out", help="output MP4")
+    mk.add_argument("--aspect", choices=sorted(ASPECTS), help="overrides the storyboard's aspect")
+    mk.add_argument("--example", metavar="FILE", help="write an example storyboard with every scene type, then stop")
+    mk.set_defaults(func=cmd_make)
 
     ps = sub.add_parser("presets", help="list the starting styles")
     ps.set_defaults(func=lambda a: print("Starting styles (use with: alvenus cut --preset NAME ...):\n" + describe_presets()))

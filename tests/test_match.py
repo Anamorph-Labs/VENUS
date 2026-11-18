@@ -322,6 +322,49 @@ class MatchTests(unittest.TestCase):
         self.assertTrue(all(is_filler(w) for w in ("um", "umm", "uhhh", "hmm", "mm")))
         self.assertFalse(any(is_filler(w) for w in ("the", "a", "am", "summer")))
 
+    def test_montage_plan_follows_the_music(self):
+        from alvenus.montage import ClipInfo, plan
+        def clip(name, n, motion):
+            return ClipInfo(name, n / 4, (1280, 720), [motion] * n, [8.0] * n, [120.0] * n, [60.0] * n)
+        clips = [clip("a.mp4", 60, 0.1), clip("b.mp4", 60, 0.5), clip("c.mp4", 60, 0.9)]
+        beats = [i * 0.5 for i in range(40)]
+        energy = [0.1] * 16 + [1.0] * 24  # quiet, then a drop at 8 s
+        shots = plan(clips, beats, energy, 0, 20.0)
+        self.assertAlmostEqual(sum(s.length for s in shots), 20.0, places=2)
+        starts = [sum(s.length for s in shots[:i]) for i in range(len(shots))]
+        self.assertTrue(all(abs(t / 0.5 - round(t / 0.5)) < 1e-6 for t in starts))  # every cut on a beat
+        self.assertTrue(all(a.clip != b.clip for a, b in zip(shots, shots[1:])))  # never the same clip twice running
+        quiet = [s for s, t in zip(shots, starts) if t < 8]
+        loud = [s for s, t in zip(shots, starts) if t >= 8.5]
+        self.assertGreater(min(s.length for s in quiet), max(s.length for s in loud) - 1e-6)
+        drop = [s for s, t in zip(shots, starts) if abs(t - 8) < 1e-6]
+        self.assertTrue(drop and drop[0].flash and drop[0].speed_end is not None)
+
+    def test_map_and_timeline_parse(self):
+        from alvenus.graphics import parse_maps, parse_timelines, pin_events, timeline_events
+        mc = parse_maps(["2=city.png|0.3,0.6 Old port; 0.7,0.4 Market"], 3)[0]
+        self.assertEqual((mc.line, mc.image, [p.label for p in mc.pins]), (1, "city.png", ["Old port", "Market"]))
+        self.assertTrue(pin_events(mc.pins, 0, 4, 1920, 1080, "#FFD23F"))
+        tl = parse_timelines(["1=1990 First stall, 2024 500 stalls|Growth"], 3)[0]
+        self.assertEqual(tl.items, [("1990", "First stall"), ("2024", "500 stalls")])
+        rows = timeline_events(tl, 0, 4, 1920, 1080, "#FFD23F")
+        self.assertTrue(all(r.startswith("Dialogue: ") and r.split(",")[3] in ("Card", "CardText") for r in rows))
+        with self.assertRaises(SystemExit):
+            parse_maps(["2=city.png|1.5,0.2 Off the map"], 3)
+
+    def test_storyboard_checks_and_beat_snap(self):
+        import json, tempfile
+        from pathlib import Path
+        from alvenus.story import _beat_snap, load
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "sb.json"
+            p.write_text(json.dumps({"scenes": [{"type": "clip"}, {"type": "wobble"}]}))
+            with self.assertRaises(SystemExit) as e:
+                load(p)
+            self.assertIn("needs \"file\"", str(e.exception))
+            self.assertIn("wobble", str(e.exception))
+        self.assertEqual(_beat_snap([3.0, 4.0], None), [3.0, 4.0])
+
 
 if __name__ == "__main__":
     unittest.main()

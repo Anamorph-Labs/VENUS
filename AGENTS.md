@@ -7,6 +7,14 @@ the taste and the story are yours.
 
 Your job: deliver the video the creator asked for, better than they expected.
 
+Venus makes three kinds of video. Pick by what the creator has:
+
+| They have | Make | Command |
+|---|---|---|
+| A script and takes of someone saying it | a talking-head cut | `alvenus cut` (sections 1 to 7) |
+| A folder of clips and a song, no speaking | a music edit | `alvenus montage` (section 8) |
+| An idea, plus some clips or images (or none) | a video built scene by scene | `alvenus make` (section 9) |
+
 ## 1. Understand what they want
 
 Before cutting, know these. Infer what you can from the conversation and the
@@ -105,6 +113,13 @@ or `zoom` for energy, `cut` (default) when the story should not pause.
   You can do better: run `alvenus scan FOLDER`, look at the contact sheet, and
   either add `"tags"` to clips in `broll.json` or place shots yourself with
   `--broll`. Explicit `--broll` lines always win.
+- `--map "LINE=IMAGE|x,y Label; x,y Label"` lays any map image (a screenshot, a
+  drawing) over the line; pins drop in order and a dashed route joins them. x and
+  y run 0 to 1 across and down the frame: look at the image to place them.
+- `--timeline "LINE=1990 First stall, 2005 Market opens|Title"` for a line about
+  how something changed over years (2 to 7 points).
+- `--kinetic "LINE=word, word"` turns the line into big kinetic type, the listed
+  words larger and in the accent colour. For the line people should remember.
 
 ## 3. Check the setup (first time only)
 
@@ -203,6 +218,57 @@ What Whisper heard is remembered, so a re-cut skips listening and takes seconds;
 Tell the creator, in plain words: what is in the cut and how long it is, what
 needs a reshoot and why, and where the files are. Mention the `.edl` if they
 want to finish the edit by hand.
+
+## 8. Music edits (`alvenus montage`)
+
+For reels, trailers, travel and event edits: a folder of clips cut to a song.
+
+```sh
+alvenus montage --clips shots/ --music song.mp3 --out reel.mp4 --aspect 9:16 --look punchy --title "After Dark"
+```
+
+Venus looks at every clip (movement, sharpness, brightness, colour, cuts inside
+it) and listens to the song (beat and energy). Quiet music gets longer, calmer
+shots with slow push-ins; loud music gets short shots that kick on each beat; a
+sudden rise in energy (a drop) gets the most movement, a white flash and a speed
+ramp. Every cut lands on a beat; no moment is used twice; the same clip never
+plays twice in a row. `--seed N` gives another edit of the same material.
+
+It writes `reel.montage.json`: every shot with its clip, start, length, speed
+(`speed_end` for a ramp), `push`, `pulse` and `flash`, and why it was chosen.
+Read it, look at the frames, and change what you would change as an editor (a
+better opening shot, a stronger final image), then `alvenus montage --plan
+reel.montage.json`. Keep the sum of shot lengths the same to stay on the beat.
+
+## 9. Videos from an idea (`alvenus make`)
+
+When the creator describes a video rather than handing you takes, you write a
+storyboard and Venus builds it. `alvenus make --example sb.json` writes one with
+every scene type.
+
+1. Agree the brief in two or three sentences: who it is for, the one thing they
+   should remember, length, shape (9:16, 16:9...), mood.
+2. Gather their material: clips, photos, a map image, a song. Run `alvenus scan`
+   on clip folders to see what is in them. Never invent facts or numbers: every
+   stat, chart value and date comes from the creator or a source they gave.
+3. Write the story first, as beats: a hook in the first 3 seconds, one idea per
+   scene, a turn, a payoff, a call to action. Then pick each scene's form:
+   - `clip` / `image`: real pictures (with `from` for where in the clip, `push`
+     for a slow move), and an optional `caption`.
+   - `title`: a big title, over a darkened clip or image if `file` is given.
+   - `text`: one strong sentence as kinetic type (`big_words` to stress).
+   - `stat`: one number that counts up; `chart`: bars comparing things;
+     `line_chart`: change over time; `timeline`: dated moments.
+   - `quote`: someone's words, with `who`.
+   - `map`: an image with `pins` ({x, y, label}, 0 to 1) and a route.
+   - `split`: two clips or images side by side with labels (before/after, A/B).
+   Vary the forms; don't put two graphic scenes in a row more than once or twice.
+   Scenes of 2.5 to 5 seconds; graphics need about a second more than pictures.
+4. Settings: `aspect`, `look`, `accent`, `music`, `voiceover` (a narration file
+   if they recorded one), `transition`, `cut_on_beat` (scene changes snap to the
+   music's beat), `captions`, `progress`, `end_card`.
+5. `alvenus make sb.json --out video.mp4`, look at frames from every scene, fix
+   what is weak, build again.
 
 ## Rules
 

@@ -59,6 +59,11 @@ def load(path: Path) -> dict:
     d["stat"] = [f"{x['line']}={x['value']}" + (f"|{x['label']}" if x.get("label") else "") for x in plan.get("stats") or []]
     d["line_chart"] = [f"{x['line']}=" + ", ".join(f"{b} {v:g}" for b, v in x["points"]) + (f"|{x['title']}" if x.get("title") else "")
                        for x in plan.get("line_charts") or []]
+    d["map"] = [f"{x['line']}={x['image']}|" + "; ".join(f"{p['x']},{p['y']} {p.get('label', '')}" for p in x["pins"])
+                for x in plan.get("maps") or []]
+    d["timeline"] = [f"{x['line']}=" + ", ".join(f"{w} {t}" for w, t in x["items"]) + (f"|{x['title']}" if x.get("title") else "")
+                     for x in plan.get("timelines") or []]
+    d["kinetic"] = [f"{x['line']}=" + ", ".join(x.get("big_words") or []) for x in plan.get("kinetic") or []]
     d["quote"] = [f"{x['line']}={x.get('who', '')}" for x in plan.get("quotes") or []]
     d["chart"] = [f"{x['line']}=" + ", ".join(f"{b} {v:g}" for b, v in x["bars"]) + (f"|{x['title']}" if x.get("title") else "")
                   for x in plan.get("charts") or []]
@@ -74,6 +79,17 @@ def _chart_entry(x: str) -> dict:
     data, _, title = rest.partition("|")
     bars = [[p.strip().rsplit(" ", 1)[0], float(p.strip().rsplit(" ", 1)[1])] for p in data.split(",")]
     return {"line": int(line), "bars": bars, "title": title}
+
+
+def _map_entry(x: str) -> dict:
+    from .graphics import parse_maps
+    mc = parse_maps([x], 10 ** 6)[0]
+    return {"line": mc.line + 1, "image": _abs(mc.image), "pins": [{"x": p.x, "y": p.y, "label": p.label} for p in mc.pins]}
+
+
+def _timelines(items):
+    from .graphics import parse_timelines
+    return parse_timelines(items, 10 ** 6)
 
 
 def _abs(p) -> str:
@@ -107,6 +123,11 @@ def write(path: Path, a, choices, cutaways) -> None:
                         for e in (_chart_entry(x) for x in getattr(a, "line_chart", None) or [])],
         "quotes": [{"line": int(x.split("=")[0]), "who": x.partition("=")[2]} for x in getattr(a, "quote", None) or []],
         "progress": bool(getattr(a, "progress", False)),
+        "maps": [_map_entry(x) for x in getattr(a, "map", None) or []],
+        "timelines": [{"line": t.line + 1, "items": [list(i) for i in t.items], "title": t.title}
+                      for t in _timelines(getattr(a, "timeline", None) or [])],
+        "kinetic": [{"line": int(x.partition("=")[0]), "big_words": [w.strip() for w in x.partition("=")[2].split(",") if w.strip()]}
+                    for x in getattr(a, "kinetic", None) or []],
         "music": _abs(a.music) if a.music else None, "music_lufs": a.music_lufs,
         "title": a.title, "end_card": a.end_card,
         "look": a.look, "caption_style": a.caption_style, "accent": a.accent,

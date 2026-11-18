@@ -103,6 +103,24 @@ on long shoots (a 4.5-minute, 72-take test shoot cuts in under 3 minutes once he
 
 Use `--model base.en` for a faster but less careful listen (~290 MB, about 2.5x faster).
 
+## Music edits and videos from an idea
+
+`alvenus montage --clips shots/ --music song.mp3 --out reel.mp4` cuts a folder of
+clips to a song: every cut on a beat, calm shots with slow push-ins in the quiet
+parts, short shots that kick on each beat in the loud parts, and the strongest
+movement with a flash and a speed ramp on the drop. The shot list is written to
+`reel.montage.json`; edit it and run `alvenus montage --plan reel.montage.json`.
+
+`alvenus make storyboard.json --out video.mp4` builds a video scene by scene from
+a storyboard your AI writes from your idea: clips, images, titles, kinetic text,
+counting numbers, bar and line charts, timelines, quotes, maps with pins and
+routes, and side-by-side comparisons, cut on the music's beat.
+`alvenus make --example sb.json` writes one with every kind of scene.
+
+More explainer graphics for talking-head cuts: `--map "3=city.png|0.3,0.6 Old port;
+0.7,0.4 Market"`, `--timeline "2=1990 First stall, 2024 500 stalls|How it grew"`,
+`--kinetic "5=lose, track"`.
+
 ## How it decides
 
 1. **Find takes**: split each file at pauses (FFmpeg `silencedetect`). Files are

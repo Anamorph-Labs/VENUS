@@ -410,3 +410,204 @@ def progress_events(length: float, w: int, h: int, accent: str, marks: list[floa
         if 0 < t < length:
             rows.append(_rect(10, 0, length, round(w * t / length), h, max(2, bh // 2), bh, "&H00101010&", "\\1a&H60&"))
     return rows
+
+
+# --- Explainer kit: pins, routes, timelines, kinetic type ------------------
+
+@dataclass
+class Pin:
+    x: float  # 0..1 across the frame
+    y: float  # 0..1 down the frame
+    label: str = ""
+
+
+@dataclass
+class MapCard:
+    line: int
+    image: str
+    pins: list  # [Pin]
+    route: bool = True  # draw a line from pin to pin
+
+
+@dataclass
+class Timeline:
+    line: int
+    items: list  # [(when, what)]
+    title: str = ""
+
+
+def parse_maps(items: list[str], n_lines: int) -> list[MapCard]:
+    """LINE=IMAGE|x,y Label; x,y Label  (x, y from 0 to 1 across and down the frame)."""
+    out = []
+    for it in items:
+        line, _, rest = it.partition("=")
+        image, _, pins_s = rest.partition("|")
+        pins = []
+        for part in [p for p in pins_s.split(";") if p.strip()]:
+            m = re.match(r"\s*([\d.]+)\s*,\s*([\d.]+)\s*(.*)$", part)
+            if not m or not (0 <= float(m.group(1)) <= 1 and 0 <= float(m.group(2)) <= 1):
+                raise SystemExit(f"--map {it!r}: each pin is 'x,y Label' with x and y from 0 to 1, e.g. 0.3,0.6 Old port")
+            pins.append(Pin(float(m.group(1)), float(m.group(2)), m.group(3).strip()))
+        if not line.strip().isdigit() or not 0 < int(line) <= n_lines or not pins:
+            raise SystemExit(f"--map {it!r}: use LINE=IMAGE|x,y Label; x,y Label")
+        out.append(MapCard(int(line) - 1, image.strip(), pins))
+    return out
+
+
+def parse_timelines(items: list[str], n_lines: int) -> list[Timeline]:
+    """LINE=1990 First stall, 2005 Night market opens, 2024 500 stalls|Title"""
+    out = []
+    for it in items:
+        line, _, rest = it.partition("=")
+        data, _, title = rest.partition("|")
+        ev = []
+        for part in [p for p in data.split(",") if p.strip()]:
+            when, _, what = part.strip().partition(" ")
+            ev.append((when, what.strip()))
+        if not line.strip().isdigit() or not 0 < int(line) <= n_lines or not 1 < len(ev) <= 7:
+            raise SystemExit(f"--timeline {it!r}: use LINE=WHEN what, WHEN what, ...|title (2 to 7 points)")
+        out.append(Timeline(int(line) - 1, ev, title.strip()))
+    return out
+
+
+def pin_events(pins: list, start: float, end: float, w: int, h: int, accent: str, route: bool = True,
+               gap: float = 0.55) -> list[str]:
+    """Pins drop in one after another with a ring that pulses out; a label
+    slides from each; a route draws itself from pin to pin."""
+    hi = ass_colour(accent)
+    r = max(8, round(0.012 * min(w, h)))
+    lab = round(0.032 * min(w, h))
+    th = max(4, round(0.006 * min(w, h)))
+    rows = []
+    pts = [(p.x * w, p.y * h) for p in pins]
+    for i, ((x, y), p) in enumerate(zip(pts, pins)):
+        t = start + 0.3 + gap * i
+        if t >= end:
+            break
+        if route and i:
+            x0, y0 = pts[i - 1]
+            # A gentle arc, drawn as short straight pieces revealed in order.
+            mx, my = (x0 + x) / 2, (y0 + y) / 2 - 0.12 * ((x - x0) ** 2 + (y - y0) ** 2) ** 0.5
+            seg_t0 = t - gap * 0.85
+            n = 14
+            arc = [((1 - u) ** 2 * x0 + 2 * (1 - u) * u * mx + u * u * x, (1 - u) ** 2 * y0 + 2 * (1 - u) * u * my + u * u * y)
+                   for u in [k / n for k in range(n + 1)]]
+            for k in range(n):
+                if k % 2:  # dashed, like a route on a map
+                    continue
+                a0 = seg_t0 + (gap * 0.7) * k / n
+                rows.append(f"Dialogue: 6,{_t(a0)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{hi}\\fad(60,200)}}"
+                            f"{_seg(*arc[k], *arc[k + 1], th)}{{\\p0}}")
+        ring = (f"Dialogue: 7,{_t(t)},{_t(min(end, t + 0.9))},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord{max(2, th // 2)}\\shad0"
+                f"\\1a&HFF&\\3c{hi}\\org({round(x)},{round(y)})\\t(0,800,\\fscx260\\fscy260\\3a&HFF&)}}{_dot(x, y, r)}{{\\p0}}")
+        dot = (f"Dialogue: 8,{_t(t)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord{max(2, th // 2)}\\3c&H00FFFFFF&\\shad0\\1c{hi}"
+               f"\\org({round(x)},{round(y)})\\fscx0\\fscy0\\t(0,160,\\fscx125\\fscy125)\\t(160,260,\\fscx100\\fscy100)\\fad(0,200)}}"
+               f"{_dot(x, y, r)}{{\\p0}}")
+        rows += [ring, dot]
+        if p.label:
+            right = x < w * 0.7
+            an, lx = (4, round(x + r * 2.2)) if right else (6, round(x - r * 2.2))
+            rows.append(f"Dialogue: 8,{_t(t + 0.15)},{_t(end)},LT,,0,0,0,,{{\\an{an}\\pos({lx},{round(y)})\\fs{lab}\\bord0"
+                        f"\\4c&H00141414&\\shad0\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{_esc(p.label)}")
+    return rows
+
+
+def map_events(mc: MapCard, start: float, end: float, w: int, h: int, accent: str) -> list[str]:
+    """The pins and route of a map card (the image itself is laid under them
+    by the finishing pass)."""
+    return pin_events(mc.pins, start, end, w, h, accent, mc.route, gap=min(0.8, max(0.35, (end - start - 0.8) / max(1, len(mc.pins)))))
+
+
+def timeline_events(tl: Timeline, start: float, end: float, w: int, h: int, accent: str) -> list[str]:
+    """A line draws across the screen; each moment pops in along it with its
+    date above and what happened below. The latest moment is in accent."""
+    hi = ass_colour(accent)
+    vertical = h > w
+    left, right = round(0.1 * w), round(0.9 * w)
+    y = round(h * 0.52)
+    th = max(4, round(0.006 * min(w, h)))
+    lab = round(0.036 * min(w, h))
+    n = len(tl.items)
+    draw = min(1.4, max(0.6, 0.5 * (end - start)))
+    rows = [_panel(start, end, w, h)]
+    if tl.title:
+        rows.append(f"Dialogue: 7,{_t(start + 0.1)},{_t(end)},CardText,,0,0,0,,{{\\an7\\pos({left},{round(h * 0.14)})"
+                    f"\\fs{round(lab * 1.6)}\\fad(200,200)}}{_esc(tl.title)}")
+    ms0, ms1 = 250, 250 + int(draw * 1000)
+    rows.append(f"Dialogue: 6,{_t(start)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c&H00808080&"
+                f"\\clip({left},0,{left},{h})\\t({ms0},{ms1},0.6,\\clip({left},0,{right},{h}))\\fad(0,200)}}"
+                f"{_seg(left, y, right, y, th)}{{\\p0}}")
+    for i, (when, what) in enumerate(tl.items):
+        x = left + (right - left) * (i / (n - 1))
+        t = start + 0.25 + draw * (i / (n - 1))
+        col = hi if i == n - 1 else "&H00FFFFFF&"
+        rows.append(f"Dialogue: 8,{_t(t)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{col}"
+                    f"\\org({round(x)},{y})\\fscx0\\fscy0\\t(0,180,\\fscx130\\fscy130)\\t(180,280,\\fscx100\\fscy100)\\fad(0,200)}}"
+                    f"{_dot(x, y, th * 2.2)}{{\\p0}}")
+        up = i % 2 == 0 or not vertical  # on a narrow screen, alternate above and below
+        wy, ty = (y - th * 5, y + th * 5) if up else (y + th * 5, y - th * 5)
+        rows.append(f"Dialogue: 8,{_t(t + 0.05)},{_t(end)},CardText,,0,0,0,,{{\\an{2 if up else 8}\\pos({round(x)},{wy})"
+                    f"\\fs{round(lab * 1.5)}\\1c{col}\\fad(150,200)}}{_esc(when)}")
+        if what:
+            rows.append(f"Dialogue: 8,{_t(t + 0.15)},{_t(end)},CardText,,0,0,0,,{{\\an{8 if up else 2}\\pos({round(x)},{ty})"
+                        f"\\fs{lab}\\fnInter SemiBold\\1c&H00D0D0D0&\\q0\\fad(150,200)}}{_esc(what)}")
+    return rows
+
+
+def kinetic_events(words, start: float, end: float, w: int, h: int, accent: str, emphasis: set[str] = frozenset()) -> list[str]:
+    """Kinetic type: each word slams in as it is said, stacked into lines
+    of big type; important words are bigger and in the accent colour."""
+    hi = ass_colour(accent)
+    vertical = h > w
+    base = round(0.1 * min(w, h))
+    m = round(0.08 * w)
+    rows = [_panel(start, end, w, h)]
+    if not words:
+        return rows
+    # Lay words out into lines that fit, measuring roughly (0.55 em per letter).
+    lines, cur, cur_w = [], [], 0.0
+    for wd in words:
+        key = re.sub(r"[^\w']", "", wd.text.lower())
+        big = key in emphasis or (not emphasis and len(key) >= 7)
+        size = round(base * (1.45 if big else 1.0))
+        ww = (len(wd.text) + 1) * 0.48 * size  # Inter ExtraBold runs about half an em a letter
+        if cur and cur_w + ww > w - 2 * m:
+            lines.append(cur)
+            cur, cur_w = [], 0.0
+        cur.append((wd, size, big, ww))
+        cur_w += ww
+    if cur:
+        lines.append(cur)
+    lh = [max(s for _, s, _, _ in ln) * 1.1 for ln in lines]
+    y = (h - sum(lh)) / 2
+    # Each word is its own event carrying the whole line, the other words
+    # invisible: libass lays the line out once, so spacing is exact and every
+    # word lands exactly where it will stay.
+    for ln, hgt in zip(lines, lh):
+        y += hgt
+        for k, (wd, size, big, _) in enumerate(ln):
+            t = max(start, wd.start)
+            parts = []
+            for i, (o, osz, obig, _) in enumerate(ln):
+                if i == k:
+                    col = f"\\1c{hi}" if big else ""
+                    parts.append(f"{{\\fs{osz}{col}\\alpha&H80&\\fscx140\\fscy140\\t(0,140,0.6,\\fscx100\\fscy100\\alpha&H00&)}}{_esc(o.text)}{{\\r}}")
+                else:
+                    parts.append(f"{{\\fs{osz}\\alpha&HFF&}}{_esc(o.text)}{{\\r}}")
+            rows.append(f"Dialogue: 7,{_t(t)},{_t(end)},CardText,,0,0,0,,{{\\an1\\q2\\pos({m},{round(y)})\\fad(0,200)}}" + " ".join(parts))
+    return rows
+
+
+def split_label_events(label: str, side: str, start: float, end: float, w: int, h: int, accent: str) -> list[str]:
+    """A label pill on one half of a split screen: dark text on the accent
+    colour, sliding up into place."""
+    hi = ass_colour(accent)
+    vertical = h > w
+    size = round(0.04 * min(w, h))
+    if vertical:
+        x, y = w // 2, (h // 2 - round(0.04 * h)) if side == "left" else (h - round(0.06 * h))
+    else:
+        x, y = (w // 4 if side == "left" else 3 * w // 4), h - round(0.1 * h)
+    t = start + (0.2 if side == "left" else 0.4)
+    return [f"Dialogue: 8,{_t(t)},{_t(end)},CapBox,,0,0,0,,{{\\an2\\pos({x},{y})\\fs{size}\\3c{hi}\\3a&H00&\\bord{max(4, size // 3)}"
+            f"\\1c&H00141414&\\1a&H00&\\move({x},{y + size},{x},{y},0,250)\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{_esc(label)}"]
