@@ -275,9 +275,14 @@ every scene type.
 4. Settings: `aspect`, `look`, `accent`, `music`, `voiceover` (a narration file
    if they recorded one), `style` (a style pack), `transition`, `title_style`,
    `cut_on_beat` (scene changes snap to the music's beat), `captions`, `progress`,
-   `end_card`.
-5. `alvenus make sb.json --out video.mp4`, look at frames from every scene, fix
-   what is weak, build again.
+   `end_card`, `background` (aurora, orbs, grid, ink, spotlight, dark; also per
+   scene). With no footage at all, a storyboard of title, text, stat, chart,
+   timeline and quote scenes on a background is a complete video.
+5. `alvenus make sb.json --draft --out draft.mp4` first: it takes seconds. Look at
+   `draft.sheet.jpg` (one frame per scene), fix what is weak, repeat; then build
+   without `--draft`. Venus reviews the result itself and fixes reading time,
+   faint text and flashing on its own; read what it changed (printed, and the
+   saved `.storyboard.json`) and what it could not fix (in the output).
 
 ## Rules
 

@@ -421,5 +421,55 @@ class Run3(unittest.TestCase):
             self.assertEqual(_reading(ev, 10.0, ["One, two, three, four, five and six."]), [])  # heard as it is read
 
 
+class Run4(unittest.TestCase):
+    def test_autofix_lengthens_darkens_and_calms(self):
+        from alvenus.selfcheck import Finding
+        from alvenus.story import autofix
+        sb = {"transition": "glitch", "end_card": "Bye", "scenes": [
+            {"type": "title", "text": "A long title here", "seconds": 1.5},
+            {"type": "clip", "file": "x.mp4", "seconds": 3},
+            {"type": "chart", "bars": [["a", 1]], "seconds": 3}],
+            "_spans": {0: (0.0, 1.5), 1: (1.5, 4.5), 2: (4.5, 7.5)}}
+        found = [Finding("short", "reading", [0.2], need=2.0, shown=1.3),
+                 Finding("faint", "contrast", [2.0]),
+                 Finding("flash", "flash", [4.4]),
+                 Finding("end", "reading", [7.6], need=1.5, shown=1.0),
+                 Finding("chart text", "contrast", [5.0])]  # a chart draws its own panel: nothing to darken
+        done = autofix(sb, found)
+        sc = sb["scenes"]
+        self.assertEqual(sc[0]["seconds"], 2.6)
+        self.assertEqual(sc[1]["darken"], 0.15)
+        self.assertEqual(sc[2]["transition"], "crossfade")
+        self.assertEqual(sb["end_card_seconds"], 3.4)
+        self.assertNotIn("darken", sc[2])
+        self.assertEqual(len(done), 4)
+        self.assertEqual(autofix(sb, []), [])
+
+    def test_draft_shrinks_and_speeds_up(self):
+        from alvenus import media
+        from alvenus.draft import enable, fast_args
+        sizes = {"16:9": "1920x1080", "4:5": "1080x1350"}
+        old = media.DRAFT
+        try:
+            enable(sizes)
+            self.assertEqual(sizes, {"16:9": "640x360", "4:5": "360x450"})
+            self.assertTrue(media.DRAFT)
+        finally:
+            media.DRAFT = old
+        self.assertEqual(fast_args(["ffmpeg", "-preset", "medium", "-crf", "14", "o.mp4"]),
+                         ["ffmpeg", "-preset", "ultrafast", "-crf", "26", "o.mp4"])
+
+    def test_backgrounds_and_packs(self):
+        from alvenus.backgrounds import KINDS, source
+        from alvenus.presets import PRESETS
+        for k in KINDS:
+            src, vf = source(k, 1080, 1920, 30, 2.0, "#3DF5C8")
+            self.assertTrue(src and vf.endswith("yuv420p") or "vignette" in vf)
+        for p in PRESETS.values():
+            self.assertIn(p["background"], KINDS)
+        with self.assertRaises(ValueError):
+            source("lava", 640, 360, 30, 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

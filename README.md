@@ -97,8 +97,21 @@ track|reveal|type|block|stamp` sets how the title and end card animate in.
 Self-review: every cut, montage and storyboard video is watched once more before
 it is handed over: text on screen long enough to read and readable against what
 is behind it, no stray black, no rapid flashing (a seizure risk), sound and picture
-in step, no dead silence. Findings go in `.notes.md`; `alvenus review VIDEO` runs
-it on any video.
+in step, no dead silence, no text running off the frame. Findings go in
+`.notes.md`; `alvenus review VIDEO` runs it on any video. For storyboard videos
+and music edits Venus also fixes what it can by itself (a longer scene for text
+that needs it, a darker picture behind faint text, a dissolve instead of a
+flashing cut, calmer shots where a music edit flashes too much) and builds again;
+the fixed storyboard is saved beside the video (`--no-fix` to only report).
+
+Drafts: add `--draft` to `cut`, `montage` or `make` for a quick look at a third of
+the size with the fastest settings (a 30 s storyboard video in about 30 s). Every
+render also writes `.sheet.jpg`, one page with a labelled frame from each scene.
+
+Backgrounds: storyboard scenes without footage (titles, text, numbers, charts,
+timelines, quotes) are drawn on a living background made by Venus itself:
+`"background": "aurora" | "orbs" | "grid" | "ink" | "spotlight" | "dark"` for the
+whole video or per scene, tinted from the accent colour; each style pack picks one.
 
 Explainer graphics: `--lower-third "1=Mara Ilić|Night baker"` (animated name tag),
 `--card 4` (line 4 as a full-screen kinetic text card, words appearing as they are

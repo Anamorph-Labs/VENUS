@@ -128,53 +128,97 @@ TITLE_STYLES = {
 }
 
 
+def fit_lines(text: str, size: float, max_w: float, max_lines: int = 2) -> tuple[list[str], float]:
+    """Break `text` into balanced lines no wider than max_w, shrinking the
+    type (to 60% at most) rather than ever running off the frame."""
+    words = text.split()
+    for _ in range(12):
+        for n in range(1, max_lines + 1):
+            lines = _balanced(words, n)
+            if max(text_width(x, size) for x in lines) <= max_w:
+                return lines, size
+        size *= 0.92
+    return _balanced(words, max_lines), size
+
+
+def _balanced(words: list[str], n: int) -> list[str]:
+    """Split words into n lines of similar length."""
+    if n <= 1 or len(words) <= 1:
+        return [" ".join(words)]
+    total = sum(len(x) + 1 for x in words)
+    lines, cur, target = [], [], total / n
+    for x in words:
+        if cur and sum(len(y) + 1 for y in cur) + len(x) / 2 > target and len(lines) < n - 1:
+            lines.append(" ".join(cur))
+            cur = []
+        cur.append(x)
+    return lines + [" ".join(cur)]
+
+
 def title_events(text: str, w: int, h: int, accent: str, start: float, end: float, centre: bool,
                  kind: str = "track") -> list[str]:
-    """A motion title in one of TITLE_STYLES."""
-    size = round((0.085 if h > w else 0.075) * min(w, h))
+    """A motion title in one of TITLE_STYLES; long titles wrap to two lines
+    and shrink a little rather than run off the frame."""
+    size0 = round((0.085 if h > w else 0.075) * min(w, h))
+    lines, size = fit_lines(text, size0, 0.86 * w)
+    size = round(size)
+    n = len(lines)
+    line_h = round(size * 1.2)
+    block_h = line_h * n
     cx = w // 2
-    y = h // 2 - size if centre else round((0.14 if h > w else 0.11) * h)
+    y = h // 2 - block_h // 2 - size // 3 if centre else round((0.14 if h > w else 0.11) * h)
     rise = round(0.025 * h)
     ms = int((end - start) * 1000)
     out_fade = min(400, ms // 4)
     bar_w, bar_h = round(0.16 * w if w < h else 0.12 * w), max(6, round(size * 0.11))
-    bar_y = y + round(size * 1.3)
+    bar_y = y + block_h + round(size * 0.12)
     hi = ass_colour(accent)
-    tw = min(w * 0.94, text_width(text, size) + size * 0.12)
-    x0, line_h = round(cx - tw / 2), round(size * 1.25)
+    tw = min(w * 0.94, max(text_width(x, size) for x in lines) + size * 0.12)
+    x0 = round(cx - tw / 2)
+    body = "\\N".join(_esc(x) for x in lines)
+    fs = f"\\fs{size}" if size != size0 else ""
     head = f"Dialogue: 3,{_t(start)},{_t(end)},Title,,0,0,0,,"
     rect = lambda bw, bh: f"m 0 0 l {bw} 0 {bw} {bh} 0 {bh}"
     bar = (f"Dialogue: 3,{_t(start + 0.25)},{_t(end)},Title,,0,0,0,,"
            f"{{\\an8\\pos({cx},{bar_y})\\p1\\bord0\\shad0\\1c{hi}\\fscx0\\t(0,450,0.5,\\fscx100)\\fad(0,{out_fade})}}"
            f"{rect(bar_w, bar_h)}{{\\p0}}")
     if kind == "reveal":
-        txt = (head + f"{{\\an8\\q2\\shad0\\clip(0,{y - 4},{w},{y + line_h})\\move({cx},{y + line_h},{cx},{y},0,520)"
-               f"\\fad(0,{out_fade})}}{_esc(text)}")
+        txt = (head + f"{{\\an8\\q2{fs}\\shad0\\clip(0,{y - 4},{w},{y + block_h + 6})\\move({cx},{y + block_h},{cx},{y},0,520)"
+               f"\\fad(0,{out_fade})}}{body}")
         return [txt, bar]
     if kind == "type":
-        step = max(25, min(70, 900 // max(1, len(text))))
-        body = "".join(f"{{\\alpha&HFF&\\t({i * step},{i * step + 1},\\alpha&H00&)}}{_esc(c)}" for i, c in enumerate(text))
-        txt = head + f"{{\\an8\\q2\\pos({cx},{y})\\fad(0,{out_fade})}}" + body
-        done = len(text) * step
+        chars = len(text)
+        step = max(25, min(70, 900 // max(1, chars)))
+        k, parts = 0, []
+        for li, line in enumerate(lines):
+            if li:
+                parts.append("\\N")
+            for c in line:
+                parts.append(f"{{\\alpha&HFF&\\t({k * step},{k * step + 1},\\alpha&H00&)}}{_esc(c)}")
+                k += 1
+        txt = head + f"{{\\an8\\q2{fs}\\pos({cx},{y})\\fad(0,{out_fade})}}" + "".join(parts)
+        done = k * step
+        if n > 1:  # the cursor only rides along a single line; two lines get the accent bar
+            return [txt, bar.replace(f"{_t(start + 0.25)}", f"{_t(start + done / 1000)}", 1)]
         cur_w = max(6, round(size * 0.09))
-        cursor = (head + f"{{\\an7\\p1\\bord0\\shad0\\1c{hi}\\move({x0 + round(tw / len(text))},{y + round(size * 0.12)},{x0 + round(tw)},{y + round(size * 0.12)},0,{done - step})"
+        cursor = (head + f"{{\\an7\\p1\\bord0\\shad0\\1c{hi}\\move({x0 + round(tw / max(1, chars))},{y + round(size * 0.12)},{x0 + round(tw)},{y + round(size * 0.12)},0,{done - step})"
                   f"\\t({done + 300},{done + 400},\\alpha&HFF&)}}{rect(cur_w, round(size * 1.0))}{{\\p0}}")
         return [txt, cursor]
     if kind == "block":
-        top, bot = y - round(size * 0.05), y + line_h
+        top, bot = y - round(size * 0.05), y + block_h + round(size * 0.05)
         x1 = x0 + round(tw)
         block = (head + f"{{\\an7\\pos({x0},{top})\\p1\\bord0\\shad0\\1c{hi}\\clip({x0},{top},{x0},{bot})"
                  f"\\t(0,320,0.6,\\clip({x0},{top},{x1},{bot}))\\t(380,700,1.6,\\clip({x1},{top},{x1},{bot}))}}"
                  f"{rect(round(tw), bot - top)}{{\\p0}}")
-        txt = (head + f"{{\\an8\\q2\\pos({cx},{y})\\clip({x0},{top},{x0},{bot})"
-               f"\\t(380,700,1.6,\\clip({x0},{top},{x1},{bot}))\\fad(0,{out_fade})}}{_esc(text)}")
+        txt = (head + f"{{\\an8\\q2{fs}\\pos({cx},{y})\\clip({x0},{top},{x0},{bot})"
+               f"\\t(380,700,1.6,\\clip({x0},{top},{x1},{bot}))\\fad(0,{out_fade})}}{body}")
         return [txt, block]
     if kind == "stamp":
-        txt = (head + f"{{\\an5\\q2\\pos({cx},{y + size // 2})\\fscx165\\fscy165\\alpha&HFF&"
-               f"\\t(0,170,1.8,\\fscx96\\fscy96\\alpha&H00&)\\t(170,300,\\fscx100\\fscy100)\\fad(0,{out_fade})}}{_esc(text)}")
+        txt = (head + f"{{\\an5\\q2{fs}\\pos({cx},{y + block_h // 2})\\fscx165\\fscy165\\alpha&HFF&"
+               f"\\t(0,170,1.8,\\fscx96\\fscy96\\alpha&H00&)\\t(170,300,\\fscx100\\fscy100)\\fad(0,{out_fade})}}{body}")
         return [txt, bar]
-    txt = (head + f"{{\\an8\\q2\\move({cx},{y + rise},{cx},{y},0,650)\\fsp{round(size * 0.22)}\\alpha&HFF&"
-           f"\\t(0,650,0.45,\\fsp0\\alpha&H00&)\\fad(0,{out_fade})}}{_esc(text)}")
+    txt = (head + f"{{\\an8\\q2{fs}\\move({cx},{y + rise},{cx},{y},0,650)\\fsp{round(size * 0.22)}\\alpha&HFF&"
+           f"\\t(0,650,0.45,\\fsp0\\alpha&H00&)\\fad(0,{out_fade})}}{body}")
     return [txt, bar]
 
 

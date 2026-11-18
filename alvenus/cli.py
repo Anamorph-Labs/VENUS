@@ -112,8 +112,30 @@ def apply_picks(choices, takes: list[Take], picks: list[str], n_lines: int) -> N
             c.candidates.append(t)
 
 
+def write_sheet(out: Path, marks: list[tuple[float, str]]) -> None:
+    """A one-page sheet with a frame from every scene, beside the video."""
+    try:
+        from .draft import sheet
+
+        if len(marks) > 24:
+            marks = [marks[round(i * (len(marks) - 1) / 23)] for i in range(24)]
+        sheet(out, marks, out.with_suffix(".sheet.jpg"))
+        print(f"   scene sheet: {out.with_suffix('.sheet.jpg')}")
+    except Exception as e:  # a sheet must never cost the video
+        print(f"   (no scene sheet: {e})")
+
+
+def draft_mode(a: argparse.Namespace) -> None:
+    if getattr(a, "draft", False):
+        from .draft import enable
+
+        enable(ASPECTS)
+        print("draft: a third of the size, quickest settings; look, change, then render without --draft")
+
+
 def cmd_cut(a: argparse.Namespace) -> None:
     need_ffmpeg()
+    draft_mode(a)
     missing = [f"--{k}" for k in ("script", "takes", "out") if not getattr(a, k)]
     if missing:
         raise SystemExit(f"cut needs {', '.join(missing)} (on the command line or in --plan)")
@@ -330,6 +352,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
         for n in finish_notes:
             print("   " + n)
     write_edl(out.with_suffix(".edl"), out.stem, sources, clips, script, fps)
+    write_sheet(out, [((a0 + a1) / 2, f"line {n + 1}") for n, (a0, a1) in sorted(line_spans(clips).items())])
 
     report = {
         "sources": [str(s) for s in sources],
@@ -393,6 +416,7 @@ def cmd_montage(a: argparse.Namespace) -> None:
     from . import montage as mt
 
     need_ffmpeg()
+    draft_mode(a)
     t0 = time.time()
     settings: dict = {}
     if a.plan:
@@ -421,12 +445,29 @@ def cmd_montage(a: argparse.Namespace) -> None:
     print(f"3/3 cutting {len(shots)} shots")
     mt.render(shots, music, out, ASPECTS[a.aspect], look=a.look, title=a.title, accent=a.accent,
               title_style=a.title_style or sty.get("title_style", "stamp"))
+    if not a.draft:  # flashing found? calm the shots there (no white flash, no zoom kick) and cut again
+        try:
+            from .selfcheck import review
+
+            hot = [t for f in review(out) if getattr(f, "kind", "") == "flash" for t in f.times]
+        except Exception:
+            hot = []
+        pos = [sum(x.length for x in shots[:k]) for k in range(len(shots))]
+        calm = [k for k, (p, s) in enumerate(zip(pos, shots)) if any(p - 1.0 < t < p + s.length + 1.0 for t in hot) and (s.flash or s.pulse)]
+        if calm:
+            for k in calm:
+                shots[k].flash, shots[k].pulse = False, 0.0
+            print(f"self-review: too much flashing; calmed shot(s) {', '.join(str(k + 1) for k in calm)} and cutting again")
+            mt.render(shots, music, out, ASPECTS[a.aspect], look=a.look, title=a.title, accent=a.accent,
+                      title_style=a.title_style or sty.get("title_style", "stamp"))
     plan_path = out.with_suffix(".montage.json")
     mt.save_plan(plan_path, shots, {"music": str(music.resolve()), "out": str(out.resolve()), "aspect": a.aspect,
                                     "look": a.look, "title": a.title, "accent": a.accent,
                                     "title_style": a.title_style or sty.get("title_style", "stamp")})
     for k, s in enumerate(shots):
         print(f"   {k + 1:>2} {Path(s.clip).name[:22]:22} {s.start:6.2f}s  {s.length:4.2f}s on screen  {s.why}")
+    pos = [sum(x.length for x in shots[:k]) for k in range(len(shots))]
+    write_sheet(out, [(p + s.length / 2, f"{k + 1} {Path(s.clip).stem[:18]}") for k, (p, s) in enumerate(zip(pos, shots))])
     print(self_review(out).strip())
     print(f"wrote {out} ({sum(s.length for s in shots):.1f}s) in {time.time() - t0:.0f}s")
     print(f"to change it, edit {plan_path} and run: alvenus montage --plan {plan_path}")
@@ -460,10 +501,11 @@ def cmd_make(a: argparse.Namespace) -> None:
     if not a.storyboard or not a.out:
         raise SystemExit("make needs a storyboard file and --out (or --example FILE to see one)")
     need_ffmpeg()
+    draft_mode(a)
     t0 = time.time()
     sb = story.load(Path(a.storyboard))
     style = a.style or sb.get("style")
-    sb = {**pack(style, "aspect", "look", "accent", "transition", "transition_seconds", "title_style"), **sb}
+    sb = {**pack(style, "aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background"), **sb}
     aspect = a.aspect or sb.get("aspect", "16:9")
     if aspect not in ASPECTS:
         raise SystemExit(f"aspect {aspect!r}: choose from {', '.join(sorted(ASPECTS))}")
@@ -472,6 +514,26 @@ def cmd_make(a: argparse.Namespace) -> None:
     print(f"building {len(sb['scenes'])} scenes at {aspect}")
     for n in story.build(sb, out, ASPECTS[aspect]):
         print("   " + n)
+    fixed: list[str] = []
+    for _ in range(2 if not (a.no_fix or a.draft) else 0):  # watch, fix, build again; twice at most
+        try:
+            from .selfcheck import review
+
+            changes = story.autofix(sb, review(out))
+        except Exception as e:
+            print(f"   (self-review could not run: {e})")
+            break
+        if not changes:
+            break
+        fixed += changes
+        print("self-review: fixing " + "; ".join(changes) + ". Building again.")
+        story.build(sb, out, ASPECTS[aspect])
+    if fixed:
+        keep = {k: v for k, v in sb.items() if not k.startswith("_")}
+        keep["scenes"] = [{k: v for k, v in sc.items() if not k.startswith("_")} for sc in sb["scenes"]]
+        out.with_suffix(".storyboard.json").write_text(json.dumps(keep, indent=2), encoding="utf-8")
+        print(f"   fixed storyboard saved as {out.with_suffix('.storyboard.json')}")
+    write_sheet(out, [(a0 + (a1 - a0) * 0.6, f"{i + 1} {sb['scenes'][i]['type']}") for i, (a0, a1) in sorted(sb["_spans"].items())])
     print(self_review(out).strip())
     print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s")
 
@@ -537,6 +599,7 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--plan", help="edit plan JSON (each cut writes one beside its output); flags typed here win over it")
     c.add_argument("--script", help="text file, one spoken line per row")
     c.add_argument("--takes", nargs="+", help="recording(s) or folder(s) of clips, video or audio")
+    c.add_argument("--draft", action="store_true", help="quick look: a third of the size, fastest settings, plus a sheet of every scene")
     c.add_argument("--out", help="output MP4 (an .edl timeline, .srt captions and .notes.md review are written beside it)")
     c.add_argument("--captions", action="store_true", help="burn the script lines in as captions")
     c.add_argument("--aspect", default="16:9", choices=sorted(ASPECTS), help="frame shape: 16:9 wide, 9:16 vertical, 1:1 square, 4:5 feed")
@@ -596,6 +659,7 @@ def main(argv: list[str] | None = None) -> None:
     mo = sub.add_parser("montage", help="cut a folder of clips to a song: on the beat, calm or punchy with the music")
     mo.add_argument("--clips", nargs="+", help="clip files or folders")
     mo.add_argument("--music", help="the song")
+    mo.add_argument("--draft", action="store_true", help="quick look: a third of the size, fastest settings, plus a sheet of every scene")
     mo.add_argument("--out", help="output MP4")
     mo.add_argument("--plan", help="a .montage.json from an earlier run, edited or not")
     mo.add_argument("--aspect", choices=sorted(ASPECTS), help="default 9:16")
@@ -610,9 +674,11 @@ def main(argv: list[str] | None = None) -> None:
 
     mk = sub.add_parser("make", help="build a video from a storyboard (scenes of clips, images, titles, numbers, charts, maps...)")
     mk.add_argument("storyboard", nargs="?", help="storyboard JSON (see: alvenus make --example sb.json)")
+    mk.add_argument("--draft", action="store_true", help="quick look: a third of the size, fastest settings, plus a sheet of every scene")
     mk.add_argument("--out", help="output MP4")
     mk.add_argument("--aspect", choices=sorted(ASPECTS), help="overrides the storyboard's aspect")
     mk.add_argument("--style", choices=list(PRESETS), help="a style pack: look, colour, transitions and titles (the storyboard's own settings still win)")
+    mk.add_argument("--no-fix", action="store_true", help="only report what the self-review finds; don't change and rebuild")
     mk.add_argument("--example", metavar="FILE", help="write an example storyboard with every scene type, then stop")
     mk.set_defaults(func=cmd_make)
 

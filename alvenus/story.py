@@ -31,7 +31,7 @@ KINDS = {"clip", "image", "title", "text", "stat", "chart", "line_chart", "quote
 EXAMPLE = {
     "aspect": "16:9", "look": "natural", "accent": "#FFD23F", "music": "song.mp3", "voiceover": None,
     "transition": "crossfade", "transition_seconds": 0.4, "cut_on_beat": True, "captions": True, "progress": False,
-    "end_card": "Follow for more", "title_style": "track",
+    "end_card": "Follow for more", "title_style": "track", "background": "aurora",
     "scenes": [
         {"type": "title", "text": "The Night Market", "file": "street.mp4", "seconds": 3},
         {"type": "clip", "file": "street.mp4", "from": 4.0, "seconds": 4, "caption": "It opens when the last train leaves."},
@@ -91,6 +91,14 @@ def load(path: Path) -> dict:
     for key, allowed in (("transition", TRANSITIONS), ("title_style", TITLE_STYLES), ("style", PRESETS)):
         if sb.get(key) and sb[key] not in allowed:
             problems.append(f"{key} {sb[key]!r}: choose one of {', '.join(allowed)}")
+    from .backgrounds import KINDS as BGS
+
+    for i, sc in enumerate([sb] + list(sb.get("scenes") or [])):
+        if sc.get("background") and sc["background"] not in BGS:
+            problems.append(f"{'storyboard' if i == 0 else f'scene {i}'}: background {sc['background']!r}: choose one of {', '.join(BGS)}")
+    for i, sc in enumerate(sb.get("scenes") or []):
+        if sc.get("transition") and (sc["transition"] not in TRANSITIONS or sc["transition"] == "cut"):
+            problems.append(f"scene {i + 1}: transition {sc['transition']!r}: choose one of {', '.join(t for t in TRANSITIONS if t != 'cut')}")
     if problems:
         raise SystemExit("storyboard problems:\n  " + "\n  ".join(problems))
     return sb
@@ -148,14 +156,17 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
         return
     if media:
         dim = kind in ("title", "text", "quote", "stat")  # text over a picture: darken it so the words read
-        tail = ",eq=brightness=-0.22:saturation=0.75,boxblur=6:1" if dim else ""
+        dark = float(sc.get("darken", 0.22 if dim else 0.0))
+        tail = f",eq=brightness=-{dark:.2f}:saturation=0.75,boxblur=6:1" if dim else (f",eq=brightness=-{dark:.2f}" if dark else "")
         push = float(sc.get("push", 0.06 if kind == "image" else 0.04 if kind == "clip" else 0.03))
         inp = (["-loop", "1"] if _still(media) else ["-ss", f"{float(sc.get('from', 0)):.3f}"]) + ["-t", f"{d + 0.2:.3f}", "-i", media]
         run(base + inp + ["-vf", f"fps={fps:g},{_cover(w, h)}{_push(d, fps, push)}{tail},format=yuv420p"] + enc)
         return
-    # Graphic scenes draw their own panel; title and text get a soft gradient.
-    run(base + ["-f", "lavfi", "-i", f"gradients=s={w}x{h}:r={fps:g}:c0=0x15171c:c1=0x23262e:x0=0:y0=0:x1={w}:y1={h}:speed=0.002:d={d + 0.2:.3f}"]
-        + ["-vf", "format=yuv420p"] + enc)
+    # No footage: a living background made here (see backgrounds.py).
+    from .backgrounds import source
+
+    src, vf = source(sc.get("background") or sc.get("_bg") or "dark", w, h, fps, d + 0.2, sc.get("_accent", "#FFD23F"))
+    run(base + ["-f", "lavfi", "-i", src, "-vf", vf] + enc)
 
 
 def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
@@ -166,6 +177,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
 
     w, h = (int(x) for x in size.split("x"))
     scenes = sb["scenes"]
+    for sc in scenes:  # what a footage-free scene is drawn on
+        sc["_bg"], sc["_accent"] = sb.get("background", "dark"), sb.get("accent", "#FFD23F")
     lengths = [float(sc.get("seconds", 3.0)) for sc in scenes]
     if sb.get("cut_on_beat", True):
         lengths = _beat_snap(lengths, sb.get("music"))
@@ -189,7 +202,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         for i in range(1, len(files)):
             o = "vj" if i == len(files) - 1 else f"x{i}"
             if td:
-                parts.append(join_pair(prev, f"{i}:v", o, trans, td, starts[i], f"{w}x{h}", fps, i))
+                parts.append(join_pair(prev, f"{i}:v", o, scenes[i].get("transition", trans), td, starts[i], f"{w}x{h}", fps, i))
             else:
                 parts.append(f"[{prev}][{i}:v]concat=n=2:v=1[{o}]")
             prev = o
@@ -213,6 +226,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     # Every scene is a "line" of the finishing pass: graphics, captions,
     # sound effects and music all hang off where each scene sits.
     spans = {i: (starts[i], starts[i] + lengths[i]) for i in range(len(scenes))}
+    sb["_spans"] = spans  # where each scene sits, for the self-review's fixes
     words, all_words, stats, charts, lcharts, quotes, maps, tls, kinetic, titles = [], [], [], [], [], [], [], [], [], []
 
     def spread(text: str, line: int, t0: float, t1: float, fill: float = 0.75):
@@ -251,12 +265,60 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                 if sc[side].get("label"):
                     lower.append((i, side, sc[side]["label"]))
     sfx = [(starts[i] + td / 2, "whoosh") for i in range(1, len(scenes))] if trans in ("whip", "slide", "zoom", "flash", "circle", "glitch") else []
-    notes += finish(base, out, size, fps, spans, music=Path(sb["music"]) if sb.get("music") else None,
-                    music_lufs=float(sb.get("music_lufs", -16.0 if not sb.get("voiceover") else -22.0)),
-                    end_card=sb.get("end_card"), words=words or None, look=sb.get("look", "natural"),
-                    accent=sb.get("accent", "#FFD23F"), all_words=all_words, stats=stats, charts=charts,
-                    sfx=None if sb.get("sound_effects") is False else sfx, line_charts=lcharts, quotes=quotes,
-                    progress=bool(sb.get("progress")), scene_marks=starts[1:], maps=maps, timelines=tls,
-                    kinetic_lines=kinetic, titles=titles, title_style=sb.get("title_style", "track"), split_labels=[(spans[i], side, lab) for i, side, lab in lower])
+    from . import graphics
+
+    graphics.PANELS = False  # the scene's own background shows behind charts, numbers and quotes
+    try:
+        notes += finish(base, out, size, fps, spans, music=Path(sb["music"]) if sb.get("music") else None,
+                        music_lufs=float(sb.get("music_lufs", -16.0 if not sb.get("voiceover") else -22.0)),
+                        end_card=sb.get("end_card"), card_len=float(sb.get("end_card_seconds", 2.5)), words=words or None, look=sb.get("look", "natural"),
+                        accent=sb.get("accent", "#FFD23F"), all_words=all_words, stats=stats, charts=charts,
+                        sfx=None if sb.get("sound_effects") is False else sfx, line_charts=lcharts, quotes=quotes,
+                        progress=bool(sb.get("progress")), scene_marks=starts[1:], maps=maps, timelines=tls,
+                        kinetic_lines=kinetic, titles=titles, title_style=sb.get("title_style", "track"), split_labels=[(spans[i], side, lab) for i, side, lab in lower])
+    finally:
+        graphics.PANELS = True
     base.unlink()
     return notes
+
+
+def autofix(sb: dict, findings) -> list[str]:
+    """Change the storyboard so the problems the self-review found go away:
+    text too quick to read gets a longer scene, text that is hard to read gets
+    a darker picture behind it, flashing transitions become dissolves. Returns
+    what was changed, in plain words ([] = nothing left that can be fixed)."""
+    spans = sb.get("_spans") or {}
+    scenes = sb["scenes"]
+    if not spans:
+        return []
+    end = max(t1 for _, t1 in spans.values())
+
+    def scene_at(t: float) -> int | None:
+        return next((i for i, (a, b) in spans.items() if a - 0.05 <= t < b), None)
+
+    done: list[str] = []
+    for f in findings:
+        kind = getattr(f, "kind", None)
+        for t in getattr(f, "times", [])[:12]:
+            if kind == "reading":
+                more = round(f.extra["need"] - f.extra["shown"] + 0.4, 1)
+                if t >= end - 0.05 and sb.get("end_card"):
+                    sb["end_card_seconds"] = round(float(sb.get("end_card_seconds", 2.5)) + more, 1)
+                    done.append(f"end card held {more}s longer")
+                elif (i := scene_at(t)) is not None and float(scenes[i].get("seconds", 3.0)) < 12:
+                    scenes[i]["seconds"] = round(spans[i][1] - spans[i][0] + more, 1)
+                    done.append(f"scene {i + 1} lengthened to {scenes[i]['seconds']}s so its text can be read")
+            elif kind == "contrast":
+                i = scene_at(t)
+                if i is None or scenes[i].get("type") not in ("clip", "image", "title", "text", "quote", "stat", "split"):
+                    continue
+                cur = float(scenes[i].get("darken", 0.22 if scenes[i]["type"] in ("title", "text", "quote", "stat") else 0.0))
+                if cur < 0.45 and not any(d.startswith(f"scene {i + 1} darkened") for d in done):
+                    scenes[i]["darken"] = round(min(0.45, cur + 0.15), 2)
+                    done.append(f"scene {i + 1} darkened behind its text")
+            elif kind == "flash":
+                near = min(range(1, len(scenes)), key=lambda j: abs(spans[j][0] - t), default=None)
+                if near is not None and abs(spans[near][0] - t) < 1.0 and scenes[near].get("transition", sb.get("transition")) in ("glitch", "flash"):
+                    scenes[near]["transition"] = "crossfade"
+                    done.append(f"scene {near + 1} now dissolves in instead of flashing")
+    return list(dict.fromkeys(done))

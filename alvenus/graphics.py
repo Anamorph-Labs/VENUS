@@ -187,7 +187,12 @@ def parse_charts(items: list[str], n_lines: int) -> list[Chart]:
     return out
 
 
+PANELS = True  # off for storyboards, whose footage-free scenes bring their own background
+
+
 def _panel(start: float, end: float, w: int, h: int) -> str:
+    if not PANELS:
+        return f"Comment: 5,{_t(start)},{_t(end)},Card,,0,0,0,,no panel"
     return (f"Dialogue: 5,{_t(start)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c&H00171311&"
             f"\\fad(150,200)}}m 0 0 l {w} 0 {w} {h} 0 {h}{{\\p0}}")
 
@@ -498,11 +503,12 @@ def pin_events(pins: list, start: float, end: float, w: int, h: int, accent: str
                 a0 = seg_t0 + (gap * 0.7) * k / n
                 rows.append(f"Dialogue: 6,{_t(a0)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{hi}\\fad(60,200)}}"
                             f"{_seg(*arc[k], *arc[k + 1], th)}{{\\p0}}")
-        ring = (f"Dialogue: 7,{_t(t)},{_t(min(end, t + 0.9))},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord{max(2, th // 2)}\\shad0"
-                f"\\1a&HFF&\\3c{hi}\\org({round(x)},{round(y)})\\t(0,800,\\fscx260\\fscy260\\3a&HFF&)}}{_dot(x, y, r)}{{\\p0}}")
-        dot = (f"Dialogue: 8,{_t(t)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord{max(2, th // 2)}\\3c&H00FFFFFF&\\shad0\\1c{hi}"
-               f"\\org({round(x)},{round(y)})\\fscx0\\fscy0\\t(0,160,\\fscx125\\fscy125)\\t(160,260,\\fscx100\\fscy100)\\fad(0,200)}}"
-               f"{_dot(x, y, r)}{{\\p0}}")
+        # Each dot is drawn round its own centre and placed there, so it grows from where it sits.
+        ring = (f"Dialogue: 7,{_t(t)},{_t(min(end, t + 0.9))},Card,,0,0,0,,{{\\an5\\pos({round(x)},{round(y)})\\p1\\bord{max(2, th // 2)}\\shad0"
+                f"\\1a&HFF&\\3c{hi}\\t(0,800,\\fscx260\\fscy260\\3a&HFF&)}}{_dot(0, 0, r)}{{\\p0}}")
+        dot = (f"Dialogue: 8,{_t(t)},{_t(end)},Card,,0,0,0,,{{\\an5\\pos({round(x)},{round(y)})\\p1\\bord{max(2, th // 2)}\\3c&H00FFFFFF&\\shad0\\1c{hi}"
+               f"\\fscx0\\fscy0\\t(0,160,\\fscx125\\fscy125)\\t(160,260,\\fscx100\\fscy100)\\fad(0,200)}}"
+               f"{_dot(0, 0, r)}{{\\p0}}")
         rows += [ring, dot]
         if p.label:
             right = x < w * 0.7
@@ -541,15 +547,21 @@ def timeline_events(tl: Timeline, start: float, end: float, w: int, h: int, acce
         x = left + (right - left) * (i / (n - 1))
         t = start + 0.25 + draw * (i / (n - 1))
         col = hi if i == n - 1 else "&H00FFFFFF&"
-        rows.append(f"Dialogue: 8,{_t(t)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{col}"
-                    f"\\org({round(x)},{y})\\fscx0\\fscy0\\t(0,180,\\fscx130\\fscy130)\\t(180,280,\\fscx100\\fscy100)\\fad(0,200)}}"
-                    f"{_dot(x, y, th * 2.2)}{{\\p0}}")
+        rows.append(f"Dialogue: 8,{_t(t)},{_t(end)},Card,,0,0,0,,{{\\an5\\pos({round(x)},{y})\\p1\\bord0\\shad0\\1c{col}"
+                    f"\\fscx0\\fscy0\\t(0,180,\\fscx130\\fscy130)\\t(180,280,\\fscx100\\fscy100)\\fad(0,200)}}"
+                    f"{_dot(0, 0, th * 2.2)}{{\\p0}}")
+        # Labels stay inside the frame: a label at either end is nudged in rather than cut off.
+        from .style import text_width
+
+        def keep_in(text: str, size: float, font: str = "InterDisplay-Black.otf") -> int:
+            half = text_width(text, size, font) / 2
+            return round(min(max(x, 0.04 * w + half), 0.96 * w - half))
         up = i % 2 == 0 or not vertical  # on a narrow screen, alternate above and below
         wy, ty = (y - th * 5, y + th * 5) if up else (y + th * 5, y - th * 5)
-        rows.append(f"Dialogue: 8,{_t(t + 0.05)},{_t(end)},CardText,,0,0,0,,{{\\an{2 if up else 8}\\pos({round(x)},{wy})"
+        rows.append(f"Dialogue: 8,{_t(t + 0.05)},{_t(end)},CardText,,0,0,0,,{{\\an{2 if up else 8}\\pos({keep_in(when, lab * 1.5)},{wy})"
                     f"\\fs{round(lab * 1.5)}\\1c{col}\\fad(150,200)}}{_esc(when)}")
         if what:
-            rows.append(f"Dialogue: 8,{_t(t + 0.15)},{_t(end)},CardText,,0,0,0,,{{\\an{8 if up else 2}\\pos({round(x)},{ty})"
+            rows.append(f"Dialogue: 8,{_t(t + 0.15)},{_t(end)},CardText,,0,0,0,,{{\\an{8 if up else 2}\\pos({keep_in(what, lab, 'Inter-SemiBold.otf')},{ty})"
                         f"\\fs{lab}\\fnInter SemiBold\\1c&H00D0D0D0&\\q0\\fad(150,200)}}{_esc(what)}")
     return rows
 

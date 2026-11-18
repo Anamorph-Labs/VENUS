@@ -24,6 +24,16 @@ SMALL = (64, 36)
 CAPTION_STYLES = {"Cap", "CapBox"}  # captions follow the voice, so they are read as they are heard
 
 
+class Finding(str):
+    """A plain-language problem that also says what kind it is and when, so
+    Venus can fix it: kind is reading, contrast, black, flash, sync or silence."""
+
+    def __new__(cls, text: str, kind: str, times=(), **extra):
+        f = super().__new__(cls, text)
+        f.kind, f.times, f.extra = kind, list(times), extra
+        return f
+
+
 def _probe(video: Path) -> dict:
     out = run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,start_time,duration,width,height,r_frame_rate",
                "-show_entries", "format=duration", "-of", "json", str(video)]).stdout
@@ -65,6 +75,7 @@ def _reading(events, total: float, spoken=()) -> list[str]:
     Captions and anything that repeats a spoken line are heard as they are read."""
     said = [set(_norm(x)) for x in spoken]
     seen: dict[str, float] = {}
+    first: dict[str, float] = {}
     for t0, t1, style, text in events:
         if t1 - t0 < 0.25:  # one frame of an animation (a counter ticking up), not text to read
             continue
@@ -73,12 +84,14 @@ def _reading(events, total: float, spoken=()) -> list[str]:
             continue
         end = min(t1, total)
         seen[text] = max(seen.get(text, 0.0), end - t0)  # kinetic lines repeat the text per word
+        first.setdefault(text, t0)
     notes = []
     for text, shown in seen.items():
         need = 0.5 + 0.28 * len(text.split())
         if shown < need:
             short = text if len(text) <= 40 else text[:37] + "..."
-            notes.append(f"text \"{short}\" is on screen {shown:.1f}s; it needs about {need:.1f}s to read")
+            notes.append(Finding(f"text \"{short}\" is on screen {shown:.1f}s; it needs about {need:.1f}s to read",
+                                 "reading", [first[text]], need=need, shown=shown))
     return notes
 
 
@@ -100,7 +113,7 @@ def _dilate(m: np.ndarray, r: int) -> np.ndarray:
 
 def _contrast(video: Path, ass: Path, events, w: int, h: int, total: float) -> list[str]:
     """Render the text layer alone, over black and over white, to find every
-    pixel it touches. In the finished frame, letters with their own light and
+    pixel it touches (and whether any of it runs off the frame). In the finished frame, letters with their own light and
     dark (an outline, or words on a plate) read over anything; plain letters
     are compared with what is just around them."""
     from .style import FONTS
@@ -115,7 +128,7 @@ def _contrast(video: Path, ass: Path, events, w: int, h: int, total: float) -> l
         times = [times[round(i * (len(times) - 1) / 29)] for i in range(30)]
     sw, sh = w, h  # full size: thin outlines blur into the letters when shrunk
     r = max(2, round(min(sw, sh) * 0.006))
-    bad = []
+    bad, cut_off = [], []
     def layer(t: float, bg: str) -> np.ndarray:
         return _gray(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i", f"color={bg}:s={w}x{h}:r=25:d=0.04",
                       "-vf", f"setpts=PTS+{t:.3f}/TB,subtitles='{esc(ass)}':fontsdir='{esc(FONTS)}',scale={sw}:{sh}",
@@ -131,6 +144,9 @@ def _contrast(video: Path, ass: Path, events, w: int, h: int, total: float) -> l
         text = (kb > 24) | (kw < 231)  # every pixel the text layer touches, see-through or not
         if text.sum() < 40 or text.mean() > 0.4:  # nothing, or a full-screen card
             continue
+        band = text[int(0.05 * sh):int(0.95 * sh)]  # the progress line along the bottom may touch the sides
+        if band[:, :2].any() or band[:, -2:].any():
+            cut_off.append(t)
         f = frame[0].astype(np.int16)
         lo, hi = np.percentile(f[text], [5, 95])
         if hi - lo > 90:  # letters against their own outline or plate: readable over anything
@@ -143,10 +159,13 @@ def _contrast(video: Path, ass: Path, events, w: int, h: int, total: float) -> l
             bad.append((t, on, around))
     notes = []
     for t, on, around in bad[:6]:
-        notes.append(f"text at {t:.1f}s is hard to read: it is {'about as bright as' if abs(on - around) < 25 else 'too close in brightness to'} "
-                     f"what is behind it")
+        notes.append(Finding(f"text at {t:.1f}s is hard to read: it is {'about as bright as' if abs(on - around) < 25 else 'too close in brightness to'} "
+                             f"what is behind it", "contrast", [t]))
+    if cut_off:
+        notes.append(Finding(f"text runs off the edge of the frame at {cut_off[0]:.1f}s"
+                             + (f" (and {len(cut_off) - 1} more places)" if len(cut_off) > 1 else ""), "edge", cut_off))
     if len(bad) > 6:
-        notes.append(f"...and {len(bad) - 6} more places with hard-to-read text")
+        notes.append(Finding(f"...and {len(bad) - 6} more places with hard-to-read text", "contrast", [b[0] for b in bad[6:]]))
     return notes
 
 
@@ -168,11 +187,11 @@ def _picture(video: Path, fps: float, total: float) -> list[str]:
     for a, b in runs:
         long = b - a
         if a < 0.05 and long > 0.35:
-            notes.append(f"the video opens on {long:.1f}s of black")
+            notes.append(Finding(f"the video opens on {long:.1f}s of black", "black", [a]))
         elif b > total - 0.1 and long < 2.5:
             continue  # a fade out at the end
         elif long > 1.2:
-            notes.append(f"{long:.1f}s of black picture at {a:.1f}s")
+            notes.append(Finding(f"{long:.1f}s of black picture at {a:.1f}s", "black", [a]))
     # Flashing: big swings in overall brightness that reverse; count flashes per second.
     mean = frames.reshape(len(frames), -1).mean(axis=1)
     d = np.diff(mean)
@@ -185,7 +204,8 @@ def _picture(video: Path, fps: float, total: float) -> list[str]:
         if n > worst:
             worst, at = n, i / fps
     if worst / 2 > 3:
-        notes.append(f"about {worst // 2} bright flashes in one second at {at:.1f}s; more than 3 a second can trigger seizures")
+        notes.append(Finding(f"about {worst // 2} bright flashes in one second at {at:.1f}s; more than 3 a second can trigger seizures",
+                             "flash", [at]))
     return notes
 
 
@@ -199,9 +219,9 @@ def _sound(video: Path, info: dict, total: float) -> list[str]:
     vd, ad = float(v.get("duration") or total), float(a.get("duration") or total)
     vs, as_ = float(v.get("start_time") or 0), float(a.get("start_time") or 0)
     if abs(vd - ad) > 0.15:
-        notes.append(f"sound and picture differ in length by {abs(vd - ad):.2f}s")
+        notes.append(Finding(f"sound and picture differ in length by {abs(vd - ad):.2f}s", "sync"))
     if abs(vs - as_) > 0.05:
-        notes.append(f"sound starts {as_ - vs:+.2f}s from the picture")
+        notes.append(Finding(f"sound starts {as_ - vs:+.2f}s from the picture", "sync"))
     from .media import load_audio
 
     y = load_audio(video, 8000)
@@ -216,7 +236,7 @@ def _sound(video: Path, info: dict, total: float) -> list[str]:
             if run_len > longest:
                 longest, where = run_len, (i - run_len + 1) * 0.1
         if longest * 0.1 >= 1.0:
-            notes.append(f"{longest * 0.1:.1f}s of dead silence at {where:.1f}s")
+            notes.append(Finding(f"{longest * 0.1:.1f}s of dead silence at {where:.1f}s", "silence", [where]))
     return notes
 
 

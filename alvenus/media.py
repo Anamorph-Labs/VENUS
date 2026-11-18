@@ -16,7 +16,14 @@ def need_ffmpeg() -> None:
             raise SystemExit(f"{tool} not found. Please install FFmpeg (https://ffmpeg.org/download.html).")
 
 
+DRAFT = False  # set by draft.enable(): every encode at the quickest settings
+
+
 def run(args: list[str]) -> subprocess.CompletedProcess:
+    if DRAFT and args and args[0] == "ffmpeg":
+        from .draft import fast_args
+
+        args = fast_args(args)
     proc = subprocess.run(args, capture_output=True, text=True)
     if proc.returncode != 0:
         tail = "\n".join(proc.stderr.strip().splitlines()[-15:])
