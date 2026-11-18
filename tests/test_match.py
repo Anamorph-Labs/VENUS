@@ -233,6 +233,33 @@ class MatchTests(unittest.TestCase):
         mark(ws, parse_highlights(["1=broken clocks"], script))
         self.assertEqual([w.text for w in ws if w.mark], ["broken", "clocks"])
 
+    def test_stat_and_chart_parse_and_count(self):
+        from alvenus.graphics import count_frames, parse_charts, parse_stats
+        st = parse_stats(["3=$1,200|raised"], 5)[0]
+        self.assertEqual((st.line, st.label), (2, "raised"))
+        frames = count_frames("$1,200")
+        self.assertEqual(frames[-1], "$1,200")
+        self.assertTrue(all(f.startswith("$") for f in frames))
+        ch = parse_charts(["2=Fruit 4, Lamps 7.5|Sales"], 5)[0]
+        self.assertEqual([b[1] for b in ch.bars], [4.0, 7.5])
+        with self.assertRaises(SystemExit):
+            parse_charts(["2=Fruit 4"], 5)  # one bar is not a chart
+
+    def test_auto_broll_matches_names_and_spaces_out(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        from alvenus.finish import auto_broll
+        script = ["Intro line.", "Every stall sells fruit.", "He repairs clocks.", "Time runs out.", "Goodbye."]
+        with tempfile.TemporaryDirectory() as d:
+            for n in ("market_stalls.mp4", "clock.mp4", "time.mp4", "intro.mp4"):
+                (Path(d) / n).write_bytes(b"")
+            with mock.patch("alvenus.finish.has_video", return_value=True):
+                cw, _ = auto_broll(script, Path(d), set(), set())
+                self.assertEqual([(c.line, c.path.name) for c in cw], [(1, "market_stalls.mp4"), (3, "time.mp4")])
+                cw, _ = auto_broll(script, Path(d), {1}, set())  # line 2 is a card
+                self.assertEqual([c.line for c in cw], [2])
+
 
 if __name__ == "__main__":
     unittest.main()

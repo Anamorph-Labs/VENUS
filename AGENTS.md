@@ -20,7 +20,7 @@ three questions.
 | Will people watch with the sound off (most social feeds) | `--captions` |
 | The rhythm between lines | `--beat` (default 0.25 s) and `--scene-beat` at blank lines (0.9 s); `--no-punch-in` if they dislike zoom cuts |
 | The look and brand (colour mood, brand colour) | `--look warm/cool/film/punchy/mono`, `--accent "#RRGGBB"` |
-| Music, cutaway shots (B-roll), a title or a call to action | `--music`, `--broll LINE=FILE@SEC`, `--title`, `--end-card` |
+| Music, cutaway shots (B-roll), a title or a call to action | `--music`, `--broll LINE=FILE@SEC` or `--broll-dir FOLDER` (automatic), `--title`, `--end-card` |
 | Any line they love, hate or want dropped | `--pick LINE=TAKE` or `--pick LINE=none` |
 
 Start from a preset that matches where it will be posted and the feel
@@ -85,6 +85,15 @@ or `zoom` for energy, `cut` (default) when the story should not pause.
   payoff or a key number), not more than once or twice a minute.
 - `--highlight "LINE=words"` puts a marker behind the two or three words that carry
   the line's meaning. Highlight sparingly; if everything is marked, nothing is.
+- `--stat "LINE=NUMBER|label"` shows one big number counting up while the line is
+  said (keeps `$`, `%`, `x`, commas and decimals). Use it when a line's point is a
+  number the viewer should remember.
+- `--chart "LINE=Label n, Label n|Title"` shows 2 to 8 bars growing one by one, the
+  tallest in the accent colour. Use it when the line compares amounts.
+- `--broll-dir FOLDER` picks cutaways by matching file names to the line's words.
+  You can do better: run `alvenus scan FOLDER`, look at the contact sheet, and
+  either add `"tags"` to clips in `broll.json` or place shots yourself with
+  `--broll`. Explicit `--broll` lines always win.
 
 ## 3. Check the setup (first time only)
 

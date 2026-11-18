@@ -128,8 +128,9 @@ def title_events(text: str, w: int, h: int, accent: str, start: float, end: floa
 
 def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | None = None,
               end_card: str | None = None, cut_len: float = 0.0, card_len: float = 0.0,
-              lower_thirds=(), cards=()) -> None:
-    """lower_thirds: [(LowerThird, start)]; cards: [(words, start, end, line)]."""
+              lower_thirds=(), cards=(), extra_rows=(), skip=frozenset()) -> None:
+    """lower_thirds: [(LowerThird, start)]; cards: [(words, start, end, line)];
+    extra_rows: ready-made events (stat and chart cards) on lines in `skip`."""
     from . import graphics
 
     vertical = h > w
@@ -152,11 +153,12 @@ def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | 
         "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
     if words:
-        rows += caption_events(words, w, h, accent, skip={c[3] for c in cards})
+        rows += caption_events(words, w, h, accent, skip={c[3] for c in cards} | set(skip))
     for lt, start in lower_thirds:
         rows += graphics.lower_third_events(lt, start, w, h, accent)
     for ws, start, end, _ in cards:
         rows += graphics.card_events(ws, start, end, w, h, accent)
+    rows += list(extra_rows)
     if title:
         rows += title_events(title, w, h, accent, 0.1, min(3.0, max(1.5, cut_len - 0.5)), centre=False)
     if end_card:

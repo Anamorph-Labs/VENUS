@@ -15,14 +15,14 @@ _SIMPLE = {
     "model": "model", "max_pause": "max_pause", "keep_pauses": "keep_pauses",
     "beat": "beat", "scene_beat": "scene_beat", "music": "music", "music_lufs": "music_lufs",
     "title": "title", "end_card": "end_card", "look": "look", "caption_style": "caption_style", "accent": "accent",
-    "transition": "transition", "transition_seconds": "transition_seconds", "preset": "preset", "reframe": "reframe", "noise_db": "noise_db", "min_silence": "min_silence",
+    "transition": "transition", "transition_seconds": "transition_seconds", "preset": "preset", "reframe": "reframe", "broll_dir": "broll_dir", "noise_db": "noise_db", "min_silence": "min_silence",
 }
 
 HELP = (
     "Edit this file and run: alvenus cut --plan THIS_FILE. "
     "picks: {line: take number or \"none\"} overrules the automatic choice (take numbers are in the "
     ".decisions.json file; chosen_now shows what the last cut used). broll: cutaway shots laid over "
-    "a line with the voice kept, {line, file, from_second}. Blank values mean off."
+    "a line with the voice kept, {line, file, from_second} (shots picked by --broll-dir are written here, so the plan stays fixed). Blank values mean off."
 )
 
 
@@ -49,11 +49,21 @@ def load(path: Path) -> dict:
     d["lower_third"] = [f"{x['line']}={x['name']}" + (f"|{x['role']}" if x.get("role") else "") for x in plan.get("lower_thirds") or []]
     d["card"] = [str(n) for n in plan.get("cards") or []]
     d["highlight"] = [f"{x['line']}={x['words']}" for x in plan.get("highlights") or []]
+    d["stat"] = [f"{x['line']}={x['value']}" + (f"|{x['label']}" if x.get("label") else "") for x in plan.get("stats") or []]
+    d["chart"] = [f"{x['line']}=" + ", ".join(f"{b} {v:g}" for b, v in x["bars"]) + (f"|{x['title']}" if x.get("title") else "")
+                  for x in plan.get("charts") or []]
     d["broll"] = []
     for b in plan.get("broll") or []:
         f = b["file"] if Path(b["file"]).is_absolute() else str((base / b["file"]).resolve())
         d["broll"].append(f"{b['line']}={f}" + (f"@{b['from_second']}" if b.get("from_second") else ""))
     return d
+
+
+def _chart_entry(x: str) -> dict:
+    line, _, rest = x.partition("=")
+    data, _, title = rest.partition("|")
+    bars = [[p.strip().rsplit(" ", 1)[0], float(p.strip().rsplit(" ", 1)[1])] for p in data.split(",")]
+    return {"line": int(line), "bars": bars, "title": title}
 
 
 def _abs(p) -> str:
@@ -79,6 +89,9 @@ def write(path: Path, a, choices, cutaways) -> None:
                           "role": (x.split("|", 1)[1] if "|" in x else "")} for x in getattr(a, "lower_third", None) or []],
         "cards": [int(x) for x in getattr(a, "card", None) or []],
         "highlights": [{"line": int(x.split("=")[0]), "words": x.split("=", 1)[1]} for x in getattr(a, "highlight", None) or []],
+        "stats": [{"line": int(x.split("=")[0]), "value": x.split("=", 1)[1].split("|")[0],
+                   "label": (x.split("|", 1)[1] if "|" in x else "")} for x in getattr(a, "stat", None) or []],
+        "charts": [_chart_entry(x) for x in getattr(a, "chart", None) or []],
         "music": _abs(a.music) if a.music else None, "music_lufs": a.music_lufs,
         "title": a.title, "end_card": a.end_card,
         "look": a.look, "caption_style": a.caption_style, "accent": a.accent,

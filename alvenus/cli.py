@@ -13,12 +13,12 @@ from .cut import TRANSITIONS, Clip, hide_jump_cuts, render, take_clips, total_le
 from .match import Take, assign, choose, join_paused
 from .review import notes as review_notes
 from .delivery import judge, measure
-from .finish import finish, line_spans, parse_broll
+from .finish import auto_broll, finish, line_spans, parse_broll
 from . import plan as plan_file
 from .style import LOOKS
 from .presets import PRESETS, defaults as preset_defaults, describe as describe_presets
 from .wordtime import timed_words
-from .graphics import mark as mark_words, parse_highlights, parse_lines, parse_lower_thirds
+from .graphics import mark as mark_words, parse_charts, parse_highlights, parse_lines, parse_lower_thirds, parse_stats
 from .refine import find_fillers, has_restart, keep_last_attempt
 from .media import duration, frame_rate, has_video, load_audio, need_ffmpeg, speech_regions, video_size
 from .timeline import write_edl
@@ -123,6 +123,15 @@ def cmd_cut(a: argparse.Namespace) -> None:
     lower_thirds = parse_lower_thirds(a.lower_third or [], len(script))
     card_lines = parse_lines(a.card or [], len(script), "--card")
     highlights = parse_highlights(a.highlight or [], script)
+    stats = parse_stats(a.stat or [], len(script))
+    charts = parse_charts(a.chart or [], len(script))
+    if getattr(a, "broll_dir", None):
+        taken = {c.line for c in cutaways} | set(card_lines) | {x.line for x in stats} | {x.line for x in charts}
+        auto, auto_notes = auto_broll(script, Path(a.broll_dir), taken, {c.path.resolve() for c in cutaways},
+                                      {c.line for c in cutaways})
+        cutaways = sorted(cutaways + auto, key=lambda c: c.line)
+        for n in auto_notes:
+            print("   " + n)
     music = Path(a.music) if a.music else None
     if music is not None and not music.exists():
         raise SystemExit(f"--music: {music} not found")
@@ -219,7 +228,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
     fps = frame_rate(vids[0]) if vids else 30.0
     finish_notes: list[str] = []
     pop = a.captions and a.caption_style == "pop"
-    graphics_wanted = bool(lower_thirds or card_lines or highlights)
+    graphics_wanted = bool(lower_thirds or card_lines or highlights or stats or charts)
     if cutaways or music or a.title or a.end_card or pop or a.look != "natural" or graphics_wanted:
         # Cut first (at higher quality), then grade and lay B-roll, music and
         # titles on top; captions go on last.
@@ -238,7 +247,8 @@ def cmd_cut(a: argparse.Namespace) -> None:
         finish_notes = finish(base, out, ASPECTS[a.aspect], fps, line_spans(clips), cutaways, music, a.music_lufs,
                               a.title, a.end_card, srt=srt if a.captions and not pop else None,
                               words=words if pop else None, look=a.look, accent=a.accent,
-                              lower_thirds=lower_thirds, card_lines=card_lines, all_words=words)
+                              lower_thirds=lower_thirds, card_lines=card_lines, all_words=words,
+                              stats=stats, charts=charts)
         base.unlink()
         for n in finish_notes:
             print("   " + n)
@@ -376,6 +386,7 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--keep-pauses", action="store_true", help="never shorten pauses inside a take")
     c.add_argument("--beat", type=float, default=0.25, help="breathing room after each line, seconds")
     c.add_argument("--scene-beat", type=float, default=0.9, help="longer breath after a line followed by a blank line in the script")
+    c.add_argument("--broll-dir", metavar="FOLDER", help="pick cutaway shots from this folder by matching their names (and tags in its broll.json) to the script's words")
     c.add_argument("--broll", action="append", metavar="LINE=FILE[@SEC]", help="lay a cutaway shot over a line, voice kept, e.g. --broll 3=market.mp4@4.5 (repeatable)")
     c.add_argument("--music", help="music file to play under the cut; it dips whenever someone speaks")
     c.add_argument("--music-lufs", type=float, default=-22.0, help="music loudness between lines (voice sits at -16)")
@@ -389,6 +400,8 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--lower-third", action="append", metavar="LINE=NAME|ROLE", help="animated name tag when a line starts, e.g. --lower-third \"1=Mara Ilić|Night baker\"")
     c.add_argument("--card", action="append", metavar="LINE", help="show this line as a full-screen kinetic text card, words appearing as they are said (voice kept)")
     c.add_argument("--highlight", action="append", metavar="LINE=WORDS", help="put a marker highlight behind words, e.g. --highlight \"3=broken clocks\"")
+    c.add_argument("--stat", action="append", metavar="LINE=NUMBER|LABEL", help="big-number card over a line, counting up as it is said, e.g. --stat \"3=73%%|of stalls open after midnight\"")
+    c.add_argument("--chart", action="append", metavar="LINE=BARS|TITLE", help="animated bar chart over a line, e.g. --chart \"2=Mon 3, Tue 5, Wed 9|Stalls open\"")
     c.add_argument("--no-captions", dest="captions", action="store_false", help="turn captions off (when a preset turns them on)")
     c.add_argument("--reframe", default="auto", choices=["auto", "blur"], help="wide footage in a taller frame: auto follows the subject; blur fits it whole on a blurred copy")
     c.add_argument("--keep-fillers", action="store_true", help="leave filler sounds (um, uh) inside takes instead of cutting them out")

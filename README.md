@@ -43,8 +43,17 @@ Finishing touches: `--broll 3=market.mp4@4.5` lays a cutaway shot over line 3
 (from 4.5 s into the file) while the voice keeps playing; `--music song.mp3` plays
 music under the cut that dips whenever someone speaks (`--music-lufs` sets how
 loud it is between lines); `--title "..."` shows a title over the opening seconds;
-`--end-card "..."` adds a closing card. Captions always stay on top. The `.edl`
+`--end-card "..."` adds a closing card. `--broll-dir shots/` picks cutaways by
+itself: it matches each clip's file name (and any `tags` you add in that folder's
+`broll.json` from `alvenus scan`) to the words of each line, keeps the first and
+last lines on the speaker, and uses at most one line in two. Its picks are written
+into the plan, so you can change them. Captions always stay on top. The `.edl`
 holds the main cut only, not the B-roll or music.
+
+Explainer data: `--stat "4=112|clocks repaired this year"` turns line 4 into a
+big number that counts up; `--chart "2=Fruit 4, Lamps 7, Books 5|What the stalls sell"`
+turns line 2 into a bar chart whose bars grow one by one, the tallest in the accent
+colour.
 
 The look: `--captions` are animated by default: short phrases, each word lights
 up in the accent colour as it is said (`--caption-style classic` for one plain

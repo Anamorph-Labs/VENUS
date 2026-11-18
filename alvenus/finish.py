@@ -53,7 +53,7 @@ def finish(
     cutaways: list[Cutaway] = (), music: Path | None = None, music_lufs: float = -22.0,
     title: str | None = None, end_card: str | None = None, card_len: float = 2.5,
     srt: Path | None = None, words=None, look: str = "natural", accent: str = "#FFD23F",
-    lower_thirds=(), card_lines=(), all_words=None,
+    lower_thirds=(), card_lines=(), all_words=None, stats=(), charts=(),
 ) -> list[str]:
     """srt: classic one-line captions; words: timed words for animated captions."""
     """Returns plain notes on anything it had to adjust."""
@@ -103,12 +103,23 @@ def finish(
     if srt is not None:
         parts.append(f"[{v}]{subtitle_filter(srt, w, h)}[cap]")
         v = "cap"
-    if words or title or end_card or lower_thirds or card_lines:
+    if words or title or end_card or lower_thirds or card_lines or stats or charts:
+        from .graphics import chart_events, stat_events
+
+        extra, skip = [], set()
+        for st in stats:
+            if st.line in spans:
+                extra += stat_events(st, *spans[st.line], w, h, accent)
+                skip.add(st.line)
+        for ch in charts:
+            if ch.line in spans:
+                extra += chart_events(ch, *spans[ch.line], w, h, accent)
+                skip.add(ch.line)
         lts = [(lt, spans[lt.line][0]) for lt in lower_thirds if lt.line in spans]
         cards = [([x for x in all_words if x.line == n], *spans[n], n) for n in card_lines if n in spans]
         notes += [f"lower third for line {lt.line + 1} skipped: that line is not in the cut" for lt in lower_thirds if lt.line not in spans]
         ass = out.with_suffix(".look.ass")
-        write_ass(ass, w, h, accent, words, title, end_card, cut_len, card, lts, cards)
+        write_ass(ass, w, h, accent, words, title, end_card, cut_len, card, lts, cards, extra, skip)
         parts.append(f"[{v}]{ass_filter(ass)}[tt]")
         v = "tt"
     parts.append(f"[{v}]format=yuv420p[vo]")
@@ -143,3 +154,62 @@ def finish(
     ]
     run(args)
     return notes
+
+
+_STOP = set("a an and are as at be but by for from has have he her his i in is it its me my of on or our she so that the their them they this to was we were what when with you your".split())
+
+
+def _stem(w: str) -> str:
+    w = w.lower()
+    for end in ("ing", "es", "s"):
+        if len(w) > len(end) + 2 and w.endswith(end):
+            return w[: -len(end)]
+    return w
+
+
+def _tokens(text: str) -> set[str]:
+    import re
+    return {_stem(t) for t in re.findall(r"[a-zA-Z]+", text.replace("_", " ")) if t.lower() not in _STOP and len(t) > 2}
+
+
+def auto_broll(script: list[str], folder: Path, taken: set[int], used: set[Path], near: set[int] = frozenset()) -> tuple[list[Cutaway], list[str]]:
+    """Match cutaway clips in `folder` to script lines by their names, plus any
+    "tags" written into the folder's broll.json (from `alvenus scan`). The
+    first and last lines stay on the speaker, as do lines in `taken` (cards,
+    stats, charts, explicit B-roll). Each clip is used once, and at most one
+    line in two gets a cutaway (counting the `near` lines that already have one)
+    so the speaker stays the anchor."""
+    import json
+
+    from .scan import VIDEO
+
+    if not folder.is_dir():
+        raise SystemExit(f"--broll-dir {folder}: not a folder")
+    tags: dict[str, str] = {}
+    info = folder / "broll.json"
+    if info.exists():
+        try:
+            for c in json.loads(info.read_text(encoding="utf-8")).get("clips", []):
+                t = c.get("tags") or ""
+                tags[Path(c["file"]).name] = " ".join(t) if isinstance(t, list) else str(t)
+        except (ValueError, KeyError, TypeError):
+            pass
+    clips = [f for f in sorted(folder.iterdir()) if f.suffix.lower() in VIDEO and f.resolve() not in used and has_video(f)]
+    words = {f: _tokens(f.stem + " " + tags.get(f.name, "")) for f in clips}
+    scored = []
+    for n, line in enumerate(script):
+        if n in taken or n == 0 or n == len(script) - 1:
+            continue
+        lw = _tokens(line)
+        for f in clips:
+            hit = len(lw & words[f])
+            if hit:
+                scored.append((hit, -n, n, f))
+    out, lines, notes = [], set(near), []
+    for hit, _, n, f in sorted(scored, key=lambda s: (-s[0], -s[1])):
+        if n in lines or n - 1 in lines or n + 1 in lines or any(c.path == f for c in out):
+            continue
+        out.append(Cutaway(n, f))
+        lines.add(n)
+        notes.append(f"B-roll {f.name} over line {n + 1} (matched: {', '.join(sorted(_tokens(script[n]) & words[f]))})")
+    return sorted(out, key=lambda c: c.line), notes
