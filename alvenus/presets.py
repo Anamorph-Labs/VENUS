@@ -59,7 +59,7 @@ PRESETS: dict[str, dict] = {
 def defaults(name: str) -> dict:
     if name not in PRESETS:
         raise SystemExit(f"--preset {name!r}: choose one of {', '.join(PRESETS)}")
-    return {k: v for k, v in PRESETS[name].items() if k != "about"}
+    return {k: v for k, v in PRESETS[name].items() if k not in ("about", "learned_from")}
 
 
 def pack(name: str | None, *keys: str) -> dict:
@@ -73,3 +73,17 @@ def pack(name: str | None, *keys: str) -> dict:
 
 def describe() -> str:
     return "\n".join(f"  {n:14} {p['about']}" for n, p in PRESETS.items())
+
+
+def _learned() -> None:
+    """Packs learned from the person's own reference videos (alvenus study --as NAME)."""
+    try:
+        from . import style
+        from .learnstyle import load_user_packs
+
+        load_user_packs(PRESETS, style.LOOKS)
+    except Exception:  # a broken pack file must never stop Venus starting
+        pass
+
+
+_learned()

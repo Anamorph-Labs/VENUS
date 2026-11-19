@@ -53,18 +53,32 @@ def has_video(path: str | Path) -> bool:
 
 
 def video_size(path: str | Path) -> tuple[int, int] | None:
-    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", str(path)]).stdout.strip()
-    if not out:
+    """The picture's size as it is shown: phones store upright video sideways
+    with a note to turn it, so a turned picture swaps width and height."""
+    import json
+
+    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+               "stream=width,height:stream_side_data=rotation:stream_tags=rotate", "-of", "json", str(path)]).stdout
+    try:
+        st = json.loads(out)["streams"][0]
+    except (ValueError, KeyError, IndexError):
         return None
-    w, h = out.split(",")[:2]
-    return int(w), int(h)
+    w, h = int(st["width"]), int(st["height"])
+    turn = st.get("tags", {}).get("rotate")
+    for sd in st.get("side_data_list", []) or []:
+        if "rotation" in sd:
+            turn = sd["rotation"]
+    if turn is not None and round(abs(float(turn))) % 180 == 90:
+        w, h = h, w
+    return w, h
 
 
 def frame_rate(path: str | Path, default: float = 30.0) -> float:
     out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", str(path)]).stdout.strip()
+    out = out.split(",")[0].split()[0] if out else out  # some phone files add an empty field
     if not out or "/" not in out:
         return default
-    n, d = out.split("/")
+    n, d = out.split("/")[:2]
     return float(n) / float(d) if float(d) else default
 
 

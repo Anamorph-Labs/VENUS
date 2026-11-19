@@ -352,6 +352,14 @@ def cmd_cut(a: argparse.Namespace) -> None:
         for n in finish_notes:
             print("   " + n)
     write_edl(out.with_suffix(".edl"), out.stem, sources, clips, script, fps)
+    try:
+        from .handoff import write_xml
+
+        alts = write_xml(out.with_suffix(".xml"), out.stem, sources, clips, script, fps, ASPECTS[a.aspect], choices, music)
+        print(f"   timeline for Premiere / Resolve: {out.with_suffix('.xml').name}"
+              + (f" ({alts} unused take(s) on switched-off tracks, ready to swap in)" if alts else ""))
+    except Exception as e:  # the hand-off must never cost the cut
+        print(f"   (no XML timeline: {e})")
     write_sheet(out, [((a0 + a1) / 2, f"line {n + 1}") for n, (a0, a1) in sorted(line_spans(clips).items())])
 
     report = {
@@ -406,6 +414,16 @@ def cmd_study(a: argparse.Namespace) -> None:
     from .reference import describe, study
 
     need_ffmpeg()
+    if a.as_pack:
+        from .learnstyle import learn
+
+        pack_, path, report = learn(a.reference, a.as_pack)
+        where = Path(a.out_dir) if a.out_dir else (Path(a.reference[0]) if Path(a.reference[0]).is_dir() else Path(a.reference[0]).parent)
+        (where / f"{a.as_pack}.style.md").write_text(report, encoding="utf-8")
+        print(pack_["about"])
+        print(f"saved the style pack as {path}; what was measured: {where / (a.as_pack + '.style.md')}")
+        print(f"use it: alvenus cut ... --preset {a.as_pack}  |  alvenus montage ... --style {a.as_pack}  |  alvenus make sb.json --style {a.as_pack}")
+        return
     for ref in a.reference:
         path = Path(ref)
         style = study(path, Path(a.out_dir) if a.out_dir else path.parent, listen=not a.no_listen)
@@ -524,6 +542,17 @@ def cmd_make(a: argparse.Namespace) -> None:
         raise SystemExit(f"aspect {aspect!r}: choose from {', '.join(sorted(ASPECTS))}")
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
+    if a.scene:
+        n = a.scene
+        if not 1 <= n <= len(sb["scenes"]):
+            raise SystemExit(f"--scene {n}: the storyboard has scenes 1 to {len(sb['scenes'])}")
+        one = {**sb, "scenes": [sb["scenes"][n - 1]], "end_card": None, "music": None, "progress": False}
+        print(f"scene {n} on its own, to check it quickly")
+        story.build(one, out, ASPECTS[aspect])
+        print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s")
+        return
+    if a.versions:
+        return make_versions(sb, style, aspect, out, t0)
     print(f"building {len(sb['scenes'])} scenes at {aspect}")
     for n in story.build(sb, out, ASPECTS[aspect]):
         print("   " + n)
@@ -547,8 +576,84 @@ def cmd_make(a: argparse.Namespace) -> None:
         out.with_suffix(".storyboard.json").write_text(json.dumps(keep, indent=2), encoding="utf-8")
         print(f"   fixed storyboard saved as {out.with_suffix('.storyboard.json')}")
     write_sheet(out, [(a0 + (a1 - a0) * 0.6, f"{i + 1} {sb['scenes'][i]['type']}") for i, (a0, a1) in sorted(sb["_spans"].items())])
+    out.with_suffix(".why.md").write_text(story.explain(sb), encoding="utf-8")
+    redrawn = sb.get("_redrawn")
+    if redrawn is not None and len(redrawn) < len(sb["scenes"]):
+        print(f"   redrew {len(redrawn)} of {len(sb['scenes'])} scenes; the rest were kept from the last build")
     print(self_review(out).strip())
-    print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s")
+    print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s; why it is cut this way: {out.with_suffix('.why.md')}")
+
+
+ENERGETIC = {"reels-punchy", "hype"}
+
+
+def make_versions(sb: dict, style: str | None, aspect: str, out: Path, t0: float) -> None:
+    """Three takes on the same storyboard, side by side, each with the reason it
+    exists, so choosing is a glance instead of a guess. Quick drafts: pick one,
+    then build it in full from its saved storyboard."""
+    from PIL import Image, ImageDraw
+
+    from . import story
+    from .draft import enable
+    from .selfcheck import review
+
+    vertical = aspect in ("9:16", "4:5")
+    own = style or ("reels-punchy" if vertical else "explainer")
+    other = ("editorial" if not vertical else "calm-story") if own in ENERGETIC else ("hype" if vertical else "reels-punchy")
+    plans = [
+        ("A", own, 1.0, "as you wrote it" + (f", in the {own} style" if style else f", in the {own} style (a fit for {aspect})")),
+        ("B", other, 1.0, ("calmer: slower scene changes, softer titles, a warmer look" if own in ENERGETIC
+                           else "punchier: quicker, bolder scene changes and titles that land hard")
+                          + f" ({other} style), to see if the idea plays better that way"),
+        ("C", own, 0.85, "the same style, every scene 15% shorter, for feeds where attention is short "
+                         "(scenes with words stay long enough to read)"),
+    ]
+    enable(ASPECTS)
+    rows, sheets = [], []
+    for tag, pk, pace, reason in plans:
+        keys = ("look", "accent", "transition", "transition_seconds", "title_style", "background")
+        mine = {k: v for k, v in sb.items() if k not in keys or pk == own}
+        v = {**pack(pk, *keys), **mine, "style": pk, "aspect": aspect}
+        v["scenes"] = [{k: x for k, x in sc.items() if not k.startswith("_")} for sc in sb["scenes"]]
+        if pace != 1.0:
+            for sc in v["scenes"]:
+                sc["seconds"] = round(max(1.6, float(sc.get("seconds", 3.0)) * pace), 2)
+        o = out.with_name(f"{out.stem}-{tag}{out.suffix}")
+        print(f"version {tag}: {reason}")
+        story.build(v, o, ASPECTS[aspect])
+        changes = story.autofix(v, review(o))
+        if changes:
+            print("   self-review: " + "; ".join(changes) + ". Building again.")
+            story.build(v, o, ASPECTS[aspect])
+        write_sheet(o, [(a0 + (a1 - a0) * 0.6, f"{i + 1} {v['scenes'][i]['type']}") for i, (a0, a1) in sorted(v["_spans"].items())])
+        keep = {k: x for k, x in v.items() if not k.startswith("_")}
+        keep["scenes"] = [{k: x for k, x in sc.items() if not k.startswith("_")} for sc in v["scenes"]]
+        o.with_suffix(".storyboard.json").write_text(json.dumps(keep, indent=2), encoding="utf-8")
+        rows.append(f"| {tag} | {o.name} | {pk} | {duration(o):.1f} s | {reason} |")
+        sheets.append((tag, o.with_suffix(".sheet.jpg")))
+    imgs = [(t, Image.open(p)) for t, p in sheets if p.exists()]
+    if imgs:
+        wmax = max(im.width for _, im in imgs)
+        band = 70
+        page = Image.new("RGB", (wmax, sum(im.height + band for _, im in imgs)), (18, 18, 20))
+        d, y = ImageDraw.Draw(page), 0
+        from .style import FONTS
+        from PIL import ImageFont
+
+        try:
+            font = ImageFont.truetype(str(Path(FONTS) / "InterDisplay-Black.otf"), 44)
+        except OSError:
+            font = ImageFont.load_default()
+        for (t, im), r in zip(imgs, rows):
+            d.text((20, y + 12), f"{t}   {r.split('|')[3].strip()}   {r.split('|')[4].strip()}", fill=(255, 255, 255), font=font)
+            page.paste(im, (0, y + band))
+            y += im.height + band
+        page.save(out.with_name(f"{out.stem}-versions.jpg"), quality=88)
+    md = ["# Three versions", "", "Quick drafts of the same storyboard. Pick one, then build it in full:",
+          f"`alvenus make {out.stem}-B.storyboard.json --out final.mp4` (or A, or C).", "",
+          "| | file | style | length | why this version |", "|---|---|---|---|---|"] + rows
+    out.with_name(f"{out.stem}-versions.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    print(f"wrote 3 versions, {out.stem}-versions.jpg to compare them and {out.stem}-versions.md with the reasons, in {time.time() - t0:.0f}s")
 
 
 def cmd_scan(a: argparse.Namespace) -> None:
@@ -561,6 +666,28 @@ def cmd_scan(a: argparse.Namespace) -> None:
         print(f"{Path(c['file']).name}: {c['seconds']}s, {c['shape']} ({c['size']}), {sound}, "
               f"{len(c['cuts_inside_at'])} cut(s) inside")
     print("frames to look at: " + ", ".join(r["contact_sheets"]))
+
+
+def cmd_find(a: argparse.Namespace) -> None:
+    from .footage import SHEET, find, sheet
+
+    need_ffmpeg()
+    hits = find(a.query, a.clips, a.top)
+    if not hits:
+        print("nothing found")
+        return
+    print(f'moments that look like "{a.query}" (best first):')
+    for i, h in enumerate(hits, 1):
+        print(f"  {i}. {h['file']}  {h['from']:.1f}s to {h['to']:.1f}s  (match {h['match']})")
+    out = Path(a.sheet) if a.sheet else Path(a.clips[0] if Path(a.clips[0]).is_dir() else Path(a.clips[0]).parent) / f"{SHEET}.jpg"
+    try:
+        sheet(hits, a.query, out)
+        print(f"frames side by side: {out}")
+    except Exception as e:
+        print(f"   (no picture of the results: {e})")
+    best = hits[0]
+    print(f"use it as a cutaway: --broll LINE={best['file']}@{best['from']:g}, or in a storyboard: "
+          f'{{"type": "clip", "file": "{best["file"]}", "from": {best["from"]:g}}}')
 
 
 def cmd_doctor(a: argparse.Namespace) -> None:
@@ -578,7 +705,7 @@ def cmd_doctor(a: argparse.Namespace) -> None:
 
     print("Checking your setup:")
     say(sys.version_info >= (3, 10), f"Python {sys.version.split()[0]}", "install Python 3.10 or newer")
-    for mod in ("numpy", "onnxruntime"):
+    for mod in ("numpy", "onnxruntime", "PIL"):
         try:
             __import__(mod)
             say(True, f"{mod} installed")
@@ -599,6 +726,10 @@ def cmd_doctor(a: argparse.Namespace) -> None:
         if name == asr.DEFAULT_MODEL or have:
             say(have, f"Whisper {name} downloaded" + (" (fast decoder too)" if have and fast else ""),
                 f"alvenus fetch-models --model {name}")
+    from .footage import FILES, model_dir
+
+    clip = all((model_dir() / Path(f).name).exists() for f in FILES)
+    print(f"  {'OK ' if clip else '-- '} footage search model {'downloaded' if clip else 'not downloaded (optional: alvenus fetch-models --find, or it downloads the first time you use alvenus find)'}")
     print("\nAll set." if ok else "\nFix the NO lines above, then run this again.")
     raise SystemExit(0 if ok else 1)
 
@@ -691,6 +822,9 @@ def main(argv: list[str] | None = None) -> None:
     mk.add_argument("--out", help="output MP4")
     mk.add_argument("--aspect", choices=sorted(ASPECTS), help="overrides the storyboard's aspect")
     mk.add_argument("--style", choices=list(PRESETS), help="a style pack: look, colour, transitions and titles (the storyboard's own settings still win)")
+    mk.add_argument("--scene", type=int, metavar="N", help="build only scene N, in seconds, to check a change before building it all")
+    mk.add_argument("--versions", action="store_true", help="three quick versions side by side (your style, the opposite energy, "
+                    "tighter pace), each with the reason it exists")
     mk.add_argument("--no-fix", action="store_true", help="only report what the self-review finds; don't change and rebuild")
     mk.add_argument("--example", metavar="FILE", help="write an example storyboard with every scene type, then stop")
     from .templates import TEMPLATES
@@ -706,16 +840,34 @@ def main(argv: list[str] | None = None) -> None:
     ps = sub.add_parser("presets", help="list the style packs")
     ps.set_defaults(func=lambda a: print("Style packs (use with: alvenus cut --preset NAME, montage --style NAME, make --style NAME):\n" + describe_presets()))
 
-    f = sub.add_parser("fetch-models", help="download the free Whisper model once")
+    f = sub.add_parser("fetch-models", help="download the free models once (Whisper to hear; with --find, CLIP to search footage)")
     f.add_argument("--model", default=asr.DEFAULT_MODEL, choices=sorted(asr.MODELS))
     f.add_argument("--models")
-    f.set_defaults(func=lambda a: print(asr.fetch_models(a.models, a.model)))
+    f.add_argument("--find", action="store_true", help="also the footage-search model (about 150 MB)")
+
+    def fetch_all(a: argparse.Namespace) -> None:
+        print(asr.fetch_models(a.models, a.model))
+        if a.find:
+            from .footage import fetch
+
+            print(fetch())
+
+    f.set_defaults(func=fetch_all)
 
     r = sub.add_parser("study", help="measure the style of a reference video (shape, cut rhythm, pace, pauses)")
     r.add_argument("reference", nargs="+", help="reference video file(s) on this computer")
     r.add_argument("--out-dir", help="where to write .style.json and .sheet.png (default: beside the reference)")
     r.add_argument("--no-listen", action="store_true", help="skip transcribing (faster; no words-per-minute)")
+    r.add_argument("--as", dest="as_pack", metavar="NAME", help="learn a style pack from these references (a folder of about 5 "
+                   "videos of one kind) and save it as NAME, to use like any pack: cut --preset NAME, make --style NAME")
     r.set_defaults(func=cmd_study)
+
+    fd = sub.add_parser("find", help='ask your footage: find the moment you describe ("someone laughing") in a folder of clips')
+    fd.add_argument("query", help="what you are looking for, in plain words")
+    fd.add_argument("clips", nargs="+", help="clip folders or files")
+    fd.add_argument("--top", type=int, default=5, help="how many moments to show (default 5)")
+    fd.add_argument("--sheet", help="where to save the picture of the results (default venus-found.jpg in the folder)")
+    fd.set_defaults(func=cmd_find)
 
     b = sub.add_parser("scan", help="look through cutaway clips (B-roll): length, shape, and a contact sheet of frames with times")
     b.add_argument("clips", nargs="+", help="B-roll folder(s) or file(s)")

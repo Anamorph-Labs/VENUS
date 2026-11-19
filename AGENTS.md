@@ -53,6 +53,21 @@ of frames (`reference.sheet.png`). Look at the sheet if you can see images: it
 shows framing, colour and whether captions are burned in. Use `suggested_settings`
 from `reference.style.json` as your starting flags.
 
+When they have several references of one kind (about five of their favourite
+explainers, trailers...), turn them into a style pack of their own:
+
+```sh
+alvenus study refs/ --as my-vox
+```
+
+Venus measures shape, pace, cuts versus dissolves, colour (saturation, contrast,
+warmth, shadow and highlight tint, lifted blacks, vignette) and the accent colour
+that keeps coming back, writes `my-vox.style.md` explaining it, and saves a pack
+usable as `cut --preset my-vox`, `montage --style my-vox`, `make --style my-vox`.
+Its grade is fitted to each piece of footage when used (it grades a few frames,
+measures, corrects), so their clips land on the references' colour. Nothing from
+the references is copied into the video.
+
 ### When their words and their wishes disagree
 
 Creators often describe a style loosely or inaccurately: "fast" may mean short,
@@ -224,8 +239,17 @@ What Whisper heard is remembered, so a re-cut skips listening and takes seconds;
 Read the "Self-review" section of `.notes.md` first and fix what it finds
 (longer scene, darker grade or different accent behind text, fewer flash cuts)
 before showing anything. Then tell the creator, in plain words: what is in the cut
-and how long it is, what needs a reshoot and why, and where the files are. Mention the `.edl` if they
-want to finish the edit by hand.
+and how long it is, what needs a reshoot and why, and where the files are. If they
+want to finish the edit by hand, point them at the `.xml` timeline: Premiere Pro
+(File > Import) and DaVinci Resolve (File > Import > Timeline) open it with the
+media linked, the unused takes on switched-off tracks above each line, and a
+marker per line saying which take was picked and why (the `.edl` is the plain
+fallback).
+
+To find a shot in their footage by what is in it, ask it:
+`alvenus find "someone laughing" clips/` lists the best moments with times and a
+picture of them (it looks at every clip once with a free local model, then answers
+in a second). Use the result as `--broll LINE=FILE@SECONDS` or a storyboard clip.
 
 ## 8. Music edits (`alvenus montage`)
 
@@ -291,6 +315,15 @@ first scene is a hook under 2.5 seconds; keep the shape, replace the words.
    without `--draft`. Venus reviews the result itself and fixes reading time,
    faint text and flashing on its own; read what it changed (printed, and the
    saved `.storyboard.json`) and what it could not fix (in the output).
+6. Changing one thing keeps the rest: edit that scene in the storyboard and build
+   again; only scenes whose picture changed are redrawn (words, titles and sound
+   are always fresh). `--scene 3` builds scene 3 alone in seconds, to check a
+   change. `video.why.md` explains every scene's length and change of scene, so the
+   creator can disagree with something specific.
+7. When the creator is unsure of the feel, `--versions` builds three quick drafts
+   side by side (their style, the opposite energy, a tighter pace), with
+   `video-versions.jpg` to compare and `video-versions.md` with why each exists.
+   They pick one; build it in full from its saved `.storyboard.json`.
 
 ## Rules
 

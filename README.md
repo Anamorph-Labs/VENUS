@@ -11,7 +11,11 @@ brings the understanding and the storytelling: see [AGENTS.md](AGENTS.md).
 
 ## Try it
 
-You need Python 3.10+ and [FFmpeg](https://ffmpeg.org/download.html).
+One step: `bash install.sh` (macOS, Linux) or `powershell -ExecutionPolicy Bypass
+-File install.ps1` (Windows). It checks Python 3.10+, installs FFmpeg if it is
+missing (Homebrew, apt or winget), puts Venus in its own folder, downloads the free
+models once (`--small` for the lighter listener, `--find` for footage search) and
+runs `alvenus doctor`. Or by hand, with Python 3.10+ and [FFmpeg](https://ffmpeg.org/download.html):
 
 ```sh
 pip install .                           # gives you the `alvenus` command
@@ -24,15 +28,26 @@ alvenus cut --script examples/night2/script.txt \
 
 Next to the MP4 you get:
 
-- `cut.edl`: an editable timeline. Import it in DaVinci Resolve (File > Import >
-  Timeline) or Premiere Pro (File > Import) and point it at your clips folder.
+- `cut.xml`: the edit, for Premiere Pro (File > Import) or DaVinci Resolve (File >
+  Import > Timeline). The media is already linked, the takes Venus did not use sit
+  on switched-off tracks above each line (swapping is a toggle), and a marker on
+  each line says which take was picked and why. `cut.edl` is the plain fallback.
 - `cut.srt`: captions, one per script line.
 - `cut.notes.md`: the second reader's notes: what to reshoot, what to check, close calls.
 - `cut.decisions.json`: for every line, every take that was heard, what Whisper
   heard, and why one was chosen.
 
 Study a reference video to match its style: `alvenus study reference.mp4` measures
-its shape, cut rhythm, pace, pauses and loudness and suggests settings.
+its shape, cut rhythm, pace, pauses and loudness and suggests settings. Give it a
+folder of about five of one kind and it learns a style pack of your own:
+`alvenus study refs/ --as my-vox`, then `--preset my-vox` (or `--style my-vox`). Its
+colour grade is fitted to each of your clips, so they land on the references' look.
+
+Ask your footage: `alvenus find "someone laughing" clips/` finds the moments that
+match, with times and a picture of them, using a free model on your computer.
+
+Phone footage works as it comes: sideways-stored portrait video, HEVC `.mov`,
+60 fps and variable frame rate.
 
 Steer it with `--aspect 9:16` (or 16:9, 1:1, 4:5), `--pick 2=5` (use take 5 for
 line 2), `--pick 4=none` (drop line 4), `--max-pause` / `--keep-pauses`,
@@ -144,6 +159,10 @@ Storyboards also have lists that build point by point, side-by-side comparisons,
 and callouts (a ring, a line and a label pointing at something in a clip).
 Scenes without footage move like a filmed shot: the type drifts slowly over a
 background that moves less, for depth (`"camera": false` to keep them still).
+Change one scene and build again: only what changed is redrawn (kept in
+`.venus-cache` beside the video). `--scene 3` builds one scene alone in seconds;
+`--versions` builds three quick drafts side by side with the reason for each; and
+`video.why.md` says why every scene is as long as it is.
 
 More explainer graphics for talking-head cuts: `--map "3=city.png|0.3,0.6 Old port;
 0.7,0.4 Market"`, `--timeline "2=1990 First stall, 2024 500 stalls|How it grew"`,
@@ -181,5 +200,6 @@ More explainer graphics for talking-head cuts: `--map "3=city.png|0.3,0.6 Old po
 | Our code | MIT | this repo |
 | FFmpeg | LGPL/GPL | separate program the user installs |
 | Whisper small.en / base.en weights (OpenAI), ONNX export by onnx-community | MIT | downloaded by the user at first run |
-| onnxruntime, numpy | MIT, BSD | pip packages |
+| CLIP ViT-B/32 weights (OpenAI), ONNX export by Xenova | MIT | footage search; downloaded by the user on first use |
+| onnxruntime, numpy, Pillow | MIT, BSD, MIT-CMU | pip packages |
 | Flite (test voice only, inside FFmpeg) | BSD-style | only for making test takes |

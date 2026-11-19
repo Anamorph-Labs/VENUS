@@ -240,8 +240,11 @@ def _shot_filter(sh: Shot, src_size, w: int, h: int, fps: float, look: str, refr
     vf = f"{timing},fps={fps:g},{fit},setsar=1"
     if sh.gain:
         vf += f",eq=brightness={sh.gain:.3f}"
-    if LOOKS.get(look):
-        vf += "," + LOOKS[look]
+    from .learnstyle import matched
+
+    grade_ = matched(look, sh.clip) or LOOKS.get(look)  # a learned look is matched shot by shot
+    if grade_:
+        vf += "," + grade_
     if sh.push or sh.pulse:
         z0, z1 = (1.0, 1.0 + sh.push) if sh.push > 0 else (1.0 - sh.push, 1.0)
         n = max(1, round(d * fps))

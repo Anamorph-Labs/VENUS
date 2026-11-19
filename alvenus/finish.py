@@ -110,8 +110,11 @@ def finish(
         parts.append(f"[{v}][m{j}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[om{j}]")
         v = f"om{j}"
 
-    if LOOKS.get(look):
-        parts.append(f"[{v}]{LOOKS[look]}[graded]")
+    from .learnstyle import matched
+
+    grade_ = matched(look, base) or LOOKS.get(look)  # a learned look is matched to this very footage
+    if grade_:
+        parts.append(f"[{v}]{grade_}[graded]")
         v = "graded"
     if card:
         # The end card sits on the last frame, held, blurred and darkened.

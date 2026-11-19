@@ -507,5 +507,99 @@ class Run5(unittest.TestCase):
                     self.assertEqual(len(story.load(p)["scenes"]), len(sb["scenes"]))
 
 
+class Runs6to9(unittest.TestCase):
+    def test_scene_key_ignores_words_but_not_pictures(self):
+        from alvenus.story import _scene_key
+        a = {"type": "list", "title": "Why", "items": ["a", "b"], "_bg": "ink", "_accent": "#FF0000", "_dir": 1}
+        b = {**a, "items": ["c", "d", "e"], "title": "Other"}
+        self.assertEqual(_scene_key(a, 4.0, 640, 360, 30), _scene_key(b, 4.0, 640, 360, 30))
+        self.assertNotEqual(_scene_key(a, 4.0, 640, 360, 30), _scene_key({**a, "_bg": "grid"}, 4.0, 640, 360, 30))
+        self.assertNotEqual(_scene_key(a, 4.0, 640, 360, 30), _scene_key(a, 4.5, 640, 360, 30))
+
+    def test_explain_names_the_hook_and_reading_time(self):
+        from alvenus.story import explain
+        sb = {"scenes": [{"type": "text", "text": "Your battery is lying.", "seconds": 2},
+                         {"type": "list", "items": ["one two", "three"], "seconds": 4}],
+              "_spans": {0: (0.0, 2.0), 1: (2.0, 6.2)},
+              "_why": {"asked": [2, 4], "got": [2.0, 4.2], "beat": True, "trans": "ink", "td": 0.9}}
+        md = explain(sb)
+        self.assertIn("an ink", md)
+        self.assertIn("the hook", md)
+        self.assertIn("so the cut falls on the beat", md)
+        self.assertIn("3 words on screen", md)
+
+    def test_xml_timeline_has_switched_off_alternates_and_markers(self):
+        import tempfile
+        import xml.etree.ElementTree as ET
+        from pathlib import Path
+        from alvenus.cut import Clip
+        from alvenus.handoff import write_xml
+        from alvenus.match import Choice, Take
+        t1 = Take(1, 1.0, 3.0, "hello there", 0.0, line=0, score=1.0, recall=1.0, source=0)
+        t2 = Take(2, 5.0, 7.5, "hello there", 0.0, line=0, score=0.95, recall=1.0, source=0)
+        t3 = Take(3, 9.0, 11.0, "second line", 0.0, line=1, score=1.0, recall=1.0, source=1)
+        clips = [Clip(0, 1.0, 3.0, 0), Clip(1, 9.0, 11.0, 1)]
+        choices = [Choice(0, t1, "same words, better delivery", [t1, t2]), Choice(1, t3, "only take of this line", [t3])]
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "cut.xml"
+            n = write_xml(p, "cut", [Path(d) / "a.mov", Path(d) / "b.mp4"], clips, ["hello there", "second line"], 30.0,
+                          "1920x1080", choices)
+            root = ET.parse(p).getroot()
+        self.assertEqual(n, 1)
+        vt = root.find("sequence/media/video").findall("track")
+        self.assertEqual(len(vt), 2)
+        self.assertEqual(vt[1].findtext("enabled"), "FALSE")
+        self.assertEqual([c.findtext("start") for c in vt[0].findall("clipitem")], ["0", "60"])
+        self.assertEqual(len(root.findall("sequence/marker")), 2)
+        self.assertTrue(root.find(".//pathurl").text.startswith("file://localhost/"))
+        defs = [f.get("id") for f in root.iter("file") if f.find("pathurl") is not None]
+        self.assertEqual(sorted(defs), ["file-1", "file-2"])  # each file described once
+
+    def test_phone_files_rotation_and_frame_rate(self):
+        import json
+        from types import SimpleNamespace
+        from alvenus import media
+        old = media.run
+        try:
+            media.run = lambda args: SimpleNamespace(stdout=json.dumps({"streams": [{"width": 1920, "height": 1080,
+                                                     "side_data_list": [{"rotation": -90}]}]}))
+            self.assertEqual(media.video_size("x.mov"), (1080, 1920))
+            media.run = lambda args: SimpleNamespace(stdout="30/1,\n")
+            self.assertEqual(media.frame_rate("x.mov"), 30.0)
+        finally:
+            media.run = old
+
+    def test_learned_packs_load_without_shadowing(self):
+        import json, os, tempfile
+        from pathlib import Path
+        from alvenus.learnstyle import MATCH, _filter, load_user_packs
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "my-doc.json").write_text(json.dumps({"about": "x", "aspect": "16:9", "look": "learned-my-doc",
+                                                             "grade": "eq=saturation=0.8", "colour": {"saturation": 0.2}}))
+            (Path(d) / "hype.json").write_text(json.dumps({"about": "evil", "grade": "eq"}))
+            old = os.environ.get("ALVENUS_PACKS")
+            os.environ["ALVENUS_PACKS"] = d
+            try:
+                presets, looks = {"hype": {"about": "built in"}}, {}
+                load_user_packs(presets, looks)
+            finally:
+                if old is None:
+                    os.environ.pop("ALVENUS_PACKS")
+                else:
+                    os.environ["ALVENUS_PACKS"] = old
+        self.assertEqual(presets["hype"]["about"], "built in")
+        self.assertEqual(looks["learned-my-doc"], "eq=saturation=0.8")
+        self.assertIn("learned-my-doc", MATCH)
+        f = _filter({"sat": 9, "con": 0.1, "warm": 0, "tint": 0, "glow": 0, "lift": 0, "roll": 0, "vignette": False})
+        self.assertIn("contrast=0.700:saturation=1.700", f)  # wild guesses are held to sane limits
+
+    def test_clip_tokenizer_matches_openai(self):
+        from alvenus.footage import FILES, _Tokenizer, model_dir
+        path = model_dir() / "tokenizer.json"
+        if not path.exists():
+            self.skipTest("footage-search model not downloaded")
+        self.assertEqual(_Tokenizer(path).encode("a photo of a cat"), [49406, 320, 1125, 539, 320, 2368, 49407])
+
+
 if __name__ == "__main__":
     unittest.main()

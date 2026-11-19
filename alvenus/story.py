@@ -182,6 +182,28 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
     run(base + ["-f", "lavfi", "-i", src, "-vf", vf] + enc)
 
 
+def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
+    """Everything that changes a scene's picture: its settings (but not its
+    words, which are drawn later over the whole video), its length, the frame,
+    and the files it uses as they are now."""
+    import hashlib
+
+    from . import media
+
+    words = {"text", "caption", "label", "items", "title", "who", "value", "points", "callout", "big_words", "pins", "bars"}
+    keep = {k: v for k, v in sc.items() if k not in words and not (sc["type"] == "compare" and k in ("left", "right"))}
+    if sc["type"] in ("map",):  # a map's pins are drawn later too, but its picture is the image
+        keep["image"] = sc.get("image")
+    stamps = []
+    for f in [sc.get("file"), sc.get("image"), (sc.get("left") or {}).get("file") if isinstance(sc.get("left"), dict) else None,
+              (sc.get("right") or {}).get("file") if isinstance(sc.get("right"), dict) else None]:
+        if f and Path(f).exists():
+            st = Path(f).stat()
+            stamps.append((f, st.st_size, st.st_mtime_ns))
+    blob = json.dumps([keep, round(d, 3), w, h, fps, media.DRAFT, stamps, 1], sort_keys=True, default=str)
+    return hashlib.sha1(blob.encode()).hexdigest()[:16]
+
+
 def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     from .cut import TRANSITIONS, join_pair
     from .finish import finish
@@ -201,15 +223,27 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     trans = sb.get("transition", "crossfade")
     td = float(sb.get("transition_seconds", 0.4)) if TRANSITIONS.get(trans) else 0.0
     td = min(td, min(lengths) / 3)
+    sb["_why"] = {"asked": [float(sc.get("seconds", 3.0)) for sc in scenes], "got": lengths,
+                  "beat": bool(sb.get("music") and sb.get("cut_on_beat", True)), "trans": trans, "td": td}
     starts = [sum(lengths[:i]) for i in range(len(lengths))]
     total = sum(lengths)
     tmp = Path(tempfile.mkdtemp(prefix="alvenus-s-", dir=out.parent))
     notes: list[str] = []
     try:
-        files = [tmp / f"sc{i:03d}.mp4" for i in range(len(scenes))]
         seg = [L + (td if i < len(scenes) - 1 else 0.0) for i, L in enumerate(lengths)]
+        # Each scene's picture is kept, keyed by everything that shapes it, so
+        # changing one scene (or only words, sound or titles) redraws only that one.
+        cache = out.parent / ".venus-cache" / out.stem
+        cache.mkdir(parents=True, exist_ok=True)
+        keys = [_scene_key(scenes[i], seg[i], w, h, fps) for i in range(len(scenes))]
+        todo = [i for i in range(len(scenes)) if not (cache / f"{keys[i]}.mp4").exists()]
         with ThreadPoolExecutor(max(1, min(3, (os.cpu_count() or 2) - 1))) as pool:
-            list(pool.map(lambda i: _scene_video(scenes[i], seg[i], w, h, fps, files[i], i), range(len(scenes))))
+            list(pool.map(lambda i: _scene_video(scenes[i], seg[i], w, h, fps, cache / f"{keys[i]}.mp4", i), todo))
+        for f in cache.glob("*.mp4"):  # only the current version of each scene is kept
+            if f.stem not in keys:
+                f.unlink()
+        files = [cache / f"{k}.mp4" for k in keys]
+        sb["_redrawn"] = todo
         # Join with transitions; the sound bed is the voiceover, or silence.
         args = ["ffmpeg", "-nostdin", "-y", "-v", "error"]
         for f in files:
@@ -360,3 +394,47 @@ def autofix(sb: dict, findings) -> list[str]:
                     scenes[near]["transition"] = "crossfade"
                     done.append(f"scene {near + 1} now dissolves in instead of flashing")
     return list(dict.fromkeys(done))
+
+
+WHAT = {
+    "title": "a title card", "text": "one strong line as moving type", "stat": "one number that counts up",
+    "chart": "bars comparing things", "line_chart": "a line showing change over time", "quote": "someone's words",
+    "timeline": "dated moments in order", "map": "a map with pins", "split": "two pictures side by side",
+    "list": "points that arrive one at a time", "compare": "two sides, one after the other", "clip": "footage",
+    "image": "a still picture with a slow move",
+}
+
+
+def explain(sb: dict) -> str:
+    """Why the video is cut the way it is, scene by scene, in plain words: the
+    note a good editor leaves so the creator can disagree with something specific."""
+    why, spans, scenes = sb.get("_why") or {}, sb.get("_spans") or {}, sb["scenes"]
+    out = ["# Why it is cut this way", ""]
+    trans = why.get("trans", "crossfade")
+    out.append(f"Scenes change with {'an' if trans[0] in 'aeiou' else 'a'} {trans}" + (f" of {why.get('td', 0):.1f} s" if why.get("td") else "")
+               + (", and every change lands on a beat of the music." if why.get("beat") else "."))
+    out.append("")
+    for i, sc in enumerate(scenes):
+        a, b = spans.get(i, (0.0, 0.0))
+        asked, got = why.get("asked", [0] * len(scenes))[i], b - a
+        bits = [f"**{i + 1}. {sc['type']}** ({a:.1f} to {b:.1f} s): {WHAT.get(sc['type'], sc['type'])}"]
+        words = len(" ".join(str(sc.get(k, "")) for k in ("text", "caption", "label", "title", "who")).split())
+        words += sum(len(str(x).split()) for x in sc.get("items") or [])
+        for side in ("left", "right"):
+            if sc["type"] == "compare" and isinstance(sc.get(side), dict):
+                words += len(" ".join([str(sc[side].get("title", ""))] + [str(x) for x in sc[side].get("points") or []]).split())
+        words += len(str((sc.get("callout") or {}).get("label", "")).split())
+        if i == 0 and got <= 2.7:
+            bits.append("the hook: it is over inside the first few seconds, before a viewer decides to scroll")
+        if abs(got - asked) > 0.05:
+            bits.append(f"{asked:g} s asked, {got:.1f} s used so the cut falls on the beat" if why.get("beat")
+                        else f"{asked:g} s asked, {got:.1f} s used")
+        if words:
+            need = 0.5 + 0.28 * words
+            bits.append(f"{words} words on screen need about {need:.1f} s to read" + (" (tight)" if need > got - 0.2 else ""))
+        if sc.get("callout"):
+            bits.append(f"a callout points at \"{sc['callout'].get('label', '')}\"")
+        if sc.get("transition"):
+            bits.append(f"comes in with a {sc['transition']} of its own")
+        out.append("- " + "; ".join(bits) + ".")
+    return "\n".join(out) + "\n"
