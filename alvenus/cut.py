@@ -195,7 +195,13 @@ def subtitle_filter(srt: Path, w: int, h: int) -> str:
     fs = round(0.06 * min(w, h) * 288 / h, 1)
     from .style import FONTS
 
-    style = f"FontName=Inter SemiBold,FontSize={fs},Outline=1.6,Shadow=1,MarginV=40,MarginL=20,MarginR=20"
+    from .genre import matte
+
+    mv, bar = 40, matte(w, h)
+    if bar:  # in the cinema bar, like subtitles in a cinema
+        fs = round(fs * 0.78, 1)
+        mv = max(4, round((bar - 0.06 * min(w, h) * 0.78) / 2 * 288 / h))
+    style = f"FontName=Inter SemiBold,FontSize={fs},Outline=1.6,Shadow=1,MarginV={mv},MarginL=20,MarginR=20"
     esc = lambda p: str(p).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
     return f"subtitles='{esc(srt)}':fontsdir='{esc(FONTS)}':force_style='{style}'"
 

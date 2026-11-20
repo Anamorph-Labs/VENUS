@@ -286,7 +286,9 @@ def render(shots: list[Shot], music: Path, out: Path, size: str, fps: float = 30
         lst = tmp / "shots.txt"
         lst.write_text("".join(f"file 's{k:04d}.mp4'\n" for k in range(len(shots))), encoding="utf-8")
         vf = "null"
-        if title:
+        from . import genre
+
+        if title or genre.EXTRAS:
             from .style import ass_filter, write_ass
 
             ass = out.with_suffix(".montage.ass")

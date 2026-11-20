@@ -19,6 +19,10 @@ LOOKS = {
     "film": "colorbalance=rs=-0.06:gs=-0.01:bs=0.06:rh=0.07:gh=0.02:bh=-0.06,"
             "curves=all='0/0.04 0.25/0.22 0.75/0.79 1/0.96',eq=saturation=0.92,vignette=PI/5,noise=alls=5:allf=t",
     "punchy": "eq=contrast=1.1:saturation=1.22,unsharp=5:5:0.4",
+    "doc": "colorbalance=rs=-0.03:bs=0.04:rh=0.03:bh=-0.02,curves=all='0/0.05 0.3/0.28 0.7/0.71 1/0.94',"
+           "eq=saturation=0.82,vignette=PI/4.5,noise=alls=3:allf=t",
+    "travel": "colorbalance=rs=0.04:bs=-0.05:rm=0.05:gm=0.01:bm=-0.04:rh=0.04:bh=-0.02,curves=all='0/0.03 0.5/0.52 1/0.97',"
+              "eq=saturation=1.16:contrast=1.04,vignette=PI/6",
     "mono": "hue=s=0,curves=all='0/0.02 0.5/0.47 1/0.98',vignette=PI/5,noise=alls=5:allf=t",
 }
 
@@ -125,6 +129,8 @@ TITLE_STYLES = {
     "type": "typed out letter by letter behind an accent cursor",
     "block": "an accent block wipes across and leaves the title behind it",
     "stamp": "lands hard from big to size with a quick settle",
+    "chapter": "documentary chapter: a small spaced label over a serif title rising slowly, a hairline drawing out ('Part one|The night shift')",
+    "place": "travel arrival: the place in huge condensed capitals tracking in, the country by hand across it, coordinates typed below ('Lisbon|Portugal|38.72 N, 9.14 W')",
 }
 
 
@@ -159,6 +165,10 @@ def title_events(text: str, w: int, h: int, accent: str, start: float, end: floa
                  kind: str = "track") -> list[str]:
     """A motion title in one of TITLE_STYLES; long titles wrap to two lines
     and shrink a little rather than run off the frame."""
+    if kind in ("chapter", "place"):
+        from . import genre
+
+        return (genre.chapter_title if kind == "chapter" else genre.place_title)(text, w, h, accent, start, end, centre)
     size0 = round((0.085 if h > w else 0.075) * min(w, h))
     lines, size = fit_lines(text, size0, 0.86 * w)
     size = round(size)
@@ -224,7 +234,7 @@ def title_events(text: str, w: int, h: int, accent: str, start: float, end: floa
 
 def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | None = None,
               end_card: str | None = None, cut_len: float = 0.0, card_len: float = 0.0,
-              lower_thirds=(), cards=(), extra_rows=(), skip=frozenset(), title_style: str = "track") -> None:
+              lower_thirds=(), cards=(), extra_rows=(), skip=frozenset(), title_style: str = "track", extras: bool = True) -> None:
     """lower_thirds: [(LowerThird, start)]; cards: [(words, start, end, line)];
     extra_rows: ready-made events (stat and chart cards) on lines in `skip`."""
     from . import graphics
@@ -255,6 +265,10 @@ def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | 
     for ws, start, end, _ in cards:
         rows += graphics.card_events(ws, start, end, w, h, accent)
     rows += list(extra_rows)
+    from . import genre
+
+    if extras:
+        rows += genre.events(w, h, cut_len + card_len, accent)
     if title:
         rows += title_events(title, w, h, accent, 0.1, min(3.0, max(1.5, cut_len - 0.5)), centre=False, kind=title_style)
     if end_card:

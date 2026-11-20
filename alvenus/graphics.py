@@ -69,6 +69,10 @@ def mark(words, highlights: list[tuple[int, list[str]]]) -> None:
 def lower_third_events(lt: LowerThird, start: float, w: int, h: int, accent: str, length: float = 3.8) -> list[str]:
     """An accent bar draws down, then the name wipes out from behind it and
     the role follows; it all fades away after a few seconds."""
+    from . import genre
+
+    if genre.EXTRAS.get("lower_third_style") == "doc":
+        return genre.lower_third(lt.name, lt.role, start, w, h, accent)
     vertical = h > w
     size = round((0.052 if vertical else 0.05) * min(w, h))
     small = round(size * 0.62)
@@ -193,8 +197,11 @@ PANELS = True  # off for storyboards, whose footage-free scenes bring their own 
 def _panel(start: float, end: float, w: int, h: int) -> str:
     if not PANELS:
         return f"Comment: 5,{_t(start)},{_t(end)},Card,,0,0,0,,no panel"
-    return (f"Dialogue: 5,{_t(start)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c&H00171311&"
-            f"\\fad(150,200)}}m 0 0 l {w} 0 {w} {h} 0 {h}{{\\p0}}")
+    from .genre import matte
+
+    b = matte(w, h)  # inside the cinema bars, when there are any
+    return (f"Dialogue: 5,{_t(start)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,{b})\\p1\\bord0\\shad0\\1c&H00171311&"
+            f"\\fad(150,200)}}m 0 0 l {w} 0 {w} {h - 2 * b} 0 {h - 2 * b}{{\\p0}}")
 
 
 def _rect(layer: int, start: float, end: float, x: int, y: int, bw: int, bh: int, colour: str, extra: str = "") -> str:

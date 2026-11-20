@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -133,6 +134,29 @@ def draft_mode(a: argparse.Namespace) -> None:
         print("draft: a third of the size, quickest settings; look, change, then render without --draft")
 
 
+def extras_of(a, spans: dict, n_lines: int) -> dict:
+    """The documentary and travel touches asked for on the command line (or by a preset)."""
+    ex: dict = {}
+    lb = getattr(a, "letterbox", None)
+    if lb:
+        ex["letterbox"] = True if lb in (True, "true", "on", "") else float(lb)
+    if getattr(a, "datestamp", None):
+        ex["datestamp"] = a.datestamp
+    if getattr(a, "lower_third_style", None):
+        ex["lower_third_style"] = a.lower_third_style
+    places = []
+    for it in getattr(a, "place", None) or []:
+        line, _, text = it.partition("=")
+        if not line.strip().isdigit() or not 0 < int(line) <= n_lines or not text.strip():
+            raise SystemExit(f"--place {it!r}: use LINE=TEXT, e.g. --place \"2=Juniper Street, 3:12 AM\"")
+        if int(line) - 1 in spans:
+            t0, t1 = spans[int(line) - 1]
+            places.append((text.strip(), t0 + 0.2, max(t1, t0 + 3.5)))
+    if places:
+        ex["places"] = places
+    return ex
+
+
 def cmd_cut(a: argparse.Namespace) -> None:
     need_ffmpeg()
     draft_mode(a)
@@ -155,6 +179,11 @@ def cmd_cut(a: argparse.Namespace) -> None:
         if not Path(mc.image).exists():
             raise SystemExit(f"--map: {mc.image} not found")
     timelines = parse_timelines(getattr(a, "timeline", None) or [], len(script))
+    from .talk import parse_chapters, parse_layouts
+
+    layouts = parse_layouts(getattr(a, "layout", None) or [], len(script))
+    chapters = parse_chapters(getattr(a, "chapter", None) or [], len(script))
+    talk_on = bool(getattr(a, "talk", False) or layouts)
     kinetic = []
     for k in getattr(a, "kinetic", None) or []:
         line, _, emph = k.partition("=")
@@ -311,7 +340,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
     fps = frame_rate(vids[0]) if vids else 30.0
     finish_notes: list[str] = []
     pop = a.captions and a.caption_style == "pop"
-    graphics_wanted = bool(lower_thirds or card_lines or highlights or stats or charts or line_charts or quotes or maps or timelines or kinetic or getattr(a, "progress", False))
+    graphics_wanted = talk_on or bool(getattr(a, "letterbox", None) or getattr(a, "place", None) or getattr(a, "datestamp", None)) or bool(lower_thirds or card_lines or highlights or stats or charts or line_charts or quotes or maps or timelines or kinetic or getattr(a, "progress", False))
     sfx = None
     if not getattr(a, "no_sfx", False):
         sfx = [(t + c.tdur / 2, "whoosh") for c, t in zip(clips, positions(clips)) 
@@ -322,7 +351,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
         base = out.with_name(out.stem + ".base.mp4")
         render(sources, clips, base, None, size=ASPECTS[a.aspect], fps=fps, room_tone=room_tone, crf=14, voice=a.voice)
         words = None
-        if pop or card_lines or highlights or kinetic:
+        if pop or card_lines or highlights or kinetic or talk_on:
             loaded: dict[int, object] = {}
             def audio_of(k: int):
                 if k not in loaded:
@@ -331,15 +360,42 @@ def cmd_cut(a: argparse.Namespace) -> None:
                 return loaded[k]
             words = timed_words(clips, spoken, audio_of, SR)
             mark_words(words, highlights)
+        talk = None
+        if talk_on:
+            from .talk import direct, why
+
+            spans_ = line_spans(clips)
+            graphic = {x.line for x in list(stats) + list(charts) + list(line_charts) + list(quotes) + list(timelines)}
+            wordish = {n for n, _ in highlights} | {n for n, _ in kinetic}
+            kinds = direct(spans_, graphic, wordish, set(card_lines) | {m.line for m in maps} | {c.line for c in cutaways}, layouts)
+            emphasis = {n: e for n, e in kinetic if e}
+            for n, ws in highlights:
+                emphasis.setdefault(n, set()).update(re.sub(r"[^\w%']", "", x.lower()) for x in ws)
+            talk = {"kinds": kinds, "emphasis": emphasis, "chapters": chapters, "label": a.title or "", "breaks": breaks,
+                    "set": getattr(a, "talk_set", None) or "dark"}
+            order = sorted(spans_)
+            opened = [n for n in order if kinds[n] != "full"]
+            print(f"   talk layout: {len(opened)} of {len(order)} line(s) open up beside the speaker")
+            (out.with_suffix(".layout.md")).write_text(
+                "# Layout of each line\n\nChange one with `--layout LINE=full` or `--layout LINE=side`.\n\n"
+                + "".join(f"- Line {n + 1}: **{'full frame' if kinds[n] == 'full' else 'beside its ' + ('graphic' if kinds[n] == 'graphic' else 'words')}**, "
+                          f"{why(kinds[n], n, graphic, wordish, layouts, i == 0, i == len(order) - 1)}\n" for i, n in enumerate(order)),
+                encoding="utf-8")
+        from . import genre
+
+        genre.EXTRAS = extras_of(a, line_spans(clips), len(script))
         finish_notes = finish(base, out, ASPECTS[a.aspect], fps, line_spans(clips), cutaways, music, a.music_lufs,
                               a.title, a.end_card, srt=srt if a.captions and not pop else None,
                               words=words if pop else None, look=a.look, accent=a.accent,
                               lower_thirds=lower_thirds, card_lines=card_lines, all_words=words,
                               stats=stats, charts=charts, sfx=sfx, line_charts=line_charts, quotes=quotes,
                               progress=getattr(a, "progress", False), maps=maps, timelines=timelines, kinetic_lines=kinetic,
-                              title_style=getattr(a, "title_style", "track"),
+                              title_style=getattr(a, "title_style", "track"), talk=talk,
+                              titles=[] if talk_on else [(chapters[n], line_spans(clips)[n][0], min(line_spans(clips)[n][1], line_spans(clips)[n][0] + 3.4))
+                                                         for n in sorted(chapters) if n in line_spans(clips)],
                               scene_marks=[t for i, t in enumerate(positions(clips))
                                            if i and clips[i - 1].line != clips[i].line and clips[i - 1].line in breaks])
+        genre.EXTRAS = {}
         thumb_from = base
     else:
         thumb_from = None
@@ -438,6 +494,47 @@ def cmd_study(a: argparse.Namespace) -> None:
         print(describe(style) + "\n")
 
 
+def by_place(shots, places: list[str]):
+    """A travel reel visits its places one after another: shots of clips with
+    no place come first (the opening), then each place's shots in the order
+    the places were given. Shot lengths stay whole beats, so every cut still
+    lands on the beat."""
+    keys = [p.partition("=")[0].strip().lower() for p in places]
+
+    def rank(s) -> int:
+        n = Path(s.clip).name.lower()
+        for i, k in enumerate(keys):
+            if k in (n, Path(n).stem):
+                return i + 1
+        return 0
+
+    return sorted(shots, key=rank)  # stable: the musical order inside each group stays
+
+
+def montage_extras(a, shots) -> dict:
+    """Arrival titles (--place CLIP=TEXT, shown when that clip first comes on),
+    the camcorder date and the cinema bars, for a montage."""
+    ex: dict = {}
+    if getattr(a, "letterbox", None):
+        ex["letterbox"] = float(a.letterbox)
+    if getattr(a, "datestamp", None):
+        ex["datestamp"] = a.datestamp
+    pos = [sum(x.length for x in shots[:k]) for k in range(len(shots))]
+    total = sum(x.length for x in shots)
+    arrivals = []
+    for it in getattr(a, "place", None) or []:
+        clip, _, text = it.partition("=")
+        key = clip.strip().lower()
+        hit = next((p for p, s in zip(pos, shots) if key in (Path(s.clip).name.lower(), Path(s.clip).stem.lower())), None)
+        if hit is None or not text.strip():
+            raise SystemExit(f"--place {it!r}: use CLIP=Place|Country|coordinates, with CLIP a clip's file name in the montage")
+        start = max(hit + 0.05, 3.1 if a.title else 0.0)  # never on top of the opening title
+        arrivals.append((text.strip(), start, min(total - 0.3, start + 2.8)))
+    if arrivals:
+        ex["arrivals"] = arrivals
+    return ex
+
+
 def cmd_montage(a: argparse.Namespace) -> None:
     from . import montage as mt
 
@@ -468,6 +565,15 @@ def cmd_montage(a: argparse.Namespace) -> None:
         tempo = 60 / (beats[1] - beats[0]) if len(beats) > 1 else 0
         print(f"   {tempo:.0f} beats a minute, {len(beats)} beats; quiet parts {sum(e < 0.4 for e in energy)}, loud {sum(e >= 0.75 for e in energy)}")
         shots = mt.plan(infos, beats, energy, down, total, seed=a.seed)
+        if getattr(a, "place", None):
+            shots = by_place(shots, a.place)
+            print(f"   shots grouped by place, in the order given: {', '.join(p.partition('=')[2].split('|')[0] for p in a.place)}")
+    from . import genre
+
+    for k in ("place", "datestamp", "letterbox"):
+        if getattr(a, k, None) in (None, []) and settings.get(k) not in (None, []):
+            setattr(a, k, settings[k])
+    genre.EXTRAS = montage_extras(a, shots)
     print(f"3/3 cutting {len(shots)} shots")
     mt.render(shots, music, out, ASPECTS[a.aspect], look=a.look, title=a.title, accent=a.accent,
               title_style=a.title_style or sty.get("title_style", "stamp"))
@@ -489,7 +595,9 @@ def cmd_montage(a: argparse.Namespace) -> None:
     plan_path = out.with_suffix(".montage.json")
     mt.save_plan(plan_path, shots, {"music": str(music.resolve()), "out": str(out.resolve()), "aspect": a.aspect,
                                     "look": a.look, "title": a.title, "accent": a.accent,
-                                    "title_style": a.title_style or sty.get("title_style", "stamp")})
+                                    "title_style": a.title_style or sty.get("title_style", "stamp"),
+                                    "place": a.place or [], "datestamp": a.datestamp, "letterbox": a.letterbox})
+    genre.EXTRAS = {}
     for k, s in enumerate(shots):
         print(f"   {k + 1:>2} {Path(s.clip).name[:22]:22} {s.start:6.2f}s  {s.length:4.2f}s on screen  {s.why}")
     pos = [sum(x.length for x in shots[:k]) for k in range(len(shots))]
@@ -557,7 +665,7 @@ def cmd_make(a: argparse.Namespace) -> None:
     else:
         sb = story.load(src)
     style = a.style or sb.get("style")
-    sb = {**pack(style, "aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background", "design"), **sb}
+    sb = {**pack(style, "aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background", "design", "letterbox", "lower_third_style"), **sb}
     aspect = a.aspect or sb.get("aspect", "16:9")
     if aspect not in ASPECTS:
         raise SystemExit(f"aspect {aspect!r}: choose from {', '.join(sorted(ASPECTS))}")
@@ -966,6 +1074,14 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--map", action="append", metavar="LINE=IMAGE|x,y Label; ...", help="lay a map (any image) over a line; pins drop in order and a route joins them; x and y from 0 to 1, e.g. --map \"3=city.png|0.3,0.6 Old port; 0.7,0.4 Market\"")
     c.add_argument("--timeline", action="append", metavar="LINE=WHEN what, ...|TITLE", help="a timeline that draws itself, e.g. --timeline \"2=1990 First stall, 2005 Market opens, 2024 500 stalls|How it grew\"")
     c.add_argument("--kinetic", action="append", metavar="LINE[=word, word]", help="the line as big kinetic type, words slamming in as said; listed words (or long ones) big and in accent")
+    c.add_argument("--letterbox", nargs="?", const="2.39", metavar="RATIO", help="cinema bars on a wide frame (2.39 by default, or e.g. 2.0)")
+    c.add_argument("--place", action="append", metavar="LINE=TEXT", help="a place-and-time stamp typed out low on the left as the line starts, e.g. --place \"2=Juniper Street, 3:12 AM\"")
+    c.add_argument("--datestamp", metavar="TEXT", help="a camcorder date in the corner, e.g. --datestamp \"NOV 21 2026\"")
+    c.add_argument("--lower-third-style", choices=["bar", "doc"], help="name tags: bar (accent bar, bold) or doc (hairline, serif name, spaced role)")
+    c.add_argument("--talk", action="store_true", help="produced-show layout: some lines open up into a designed set, the speaker in a window beside the line's words or graphic (stacked in tall frames)")
+    c.add_argument("--talk-set", choices=["dark", "paper"], help="the talk layout's set: dark (ink, default) or paper (light grey editorial paper, ink type)")
+    c.add_argument("--layout", action="append", metavar="LINE=full|side", help="overrule the talk layout of one line, e.g. --layout 3=side (turns --talk on)")
+    c.add_argument("--chapter", action="append", metavar="LINE=TITLE", help="a chapter starts at this line: its name and number sit on the talk set's header, e.g. --chapter \"3=How it works\"")
     c.add_argument("--progress", action="store_true", help="a thin bar along the bottom that fills as the video plays, notched at each new scene")
     c.add_argument("--push-in", action="append", metavar="LINE", help="a slow camera push-in across this line (repeatable); highlighted lines get one automatically")
     c.add_argument("--no-push-in", action="store_true", help="no slow push-ins at all")
@@ -1013,6 +1129,9 @@ def main(argv: list[str] | None = None) -> None:
     mo.add_argument("--length", type=float, help="seconds (default: the whole song)")
     mo.add_argument("--look", choices=sorted(LOOKS), help="default punchy")
     mo.add_argument("--title", help="opening title")
+    mo.add_argument("--place", action="append", metavar="CLIP=PLACE|COUNTRY|COORDS", help="an arrival title when this clip first comes on, e.g. --place \"lisbon.mp4=Lisbon|Portugal|38.72 N, 9.14 W\" (repeatable)")
+    mo.add_argument("--datestamp", metavar="TEXT", help="a camcorder date in the corner, e.g. --datestamp \"NOV 21 2026\"")
+    mo.add_argument("--letterbox", nargs="?", const="2.39", metavar="RATIO", help="cinema bars on a wide frame")
     mo.add_argument("--accent", help="#RRGGBB for the title bar")
     mo.add_argument("--title-style", choices=list(TITLE_STYLES), help="how the title animates in (default stamp)")
     mo.add_argument("--style", choices=list(PRESETS), help="a style pack: sets aspect, look, title animation and colour (flags still win)")

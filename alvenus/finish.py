@@ -56,7 +56,7 @@ def finish(
     lower_thirds=(), card_lines=(), all_words=None, stats=(), charts=(), sfx: list | None = None,
     line_charts=(), quotes=(), progress: bool = False, scene_marks=(),
     maps=(), timelines=(), kinetic_lines=(), titles=(), split_labels=(), title_style: str = "track",
-    more_events=(), camera=(),
+    more_events=(), camera=(), talk: dict | None = None,
 ) -> list[str]:
     """srt: classic one-line captions; words: timed words for animated captions;
     sfx: None for no sound effects, else [(time, kind)] for the cut's own
@@ -116,6 +116,41 @@ def finish(
     if grade_:
         parts.append(f"[{v}]{grade_}[graded]")
         v = "graded"
+    talk_lines: set[int] = set()
+    if talk:  # the produced-show layout: some lines open up into a set, speaker beside words or graphic
+        from . import talk as talk_
+
+        def graphic_rows(n: int, gw: int, gh: int) -> list[str]:
+            from .graphics import chart_events, line_chart_events, quote_events, stat_events, timeline_events
+
+            rows: list[str] = []
+            for xs, fn in ((stats, stat_events), (charts, chart_events), (line_charts, line_chart_events),
+                           (quotes, quote_events), (timelines, timeline_events)):
+                for x in xs:
+                    if x.line == n:
+                        rows += fn(x, *spans[n], gw, gh, accent)
+            return rows
+
+        targs, tparts, tnotes = talk_.build(base, out, w, h, fps, spans, talk["kinds"], accent, all_words, graphic_rows,
+                                            talk.get("emphasis", {}), talk.get("chapters", {}), talk.get("label", ""),
+                                            talk.get("breaks", set()), talk.get("set", "dark"))
+        if tparts:
+            first = n_in
+            args += targs
+            n_in = first + targs.count("-i")
+            fill = lambda m: str(first + int(m.group(1)))
+            import re as _re
+
+            for ln in tparts:
+                parts.append(_re.sub(r"\{FIRST\+(\d+)\}", fill, ln).replace("[IN]", f"[{v}]"))
+            v = "talk"
+            talk_lines = {n for n, k in talk["kinds"].items() if k != "full" and n in spans}
+            stats, charts, line_charts, quotes, timelines = ([x for x in xs if x.line not in talk_lines]
+                                                              for xs in (stats, charts, line_charts, quotes, timelines))
+            kinetic_lines = [(n, e) for n, e in kinetic_lines if n not in talk_lines]
+            if sfx is not None:
+                sfx = list(sfx) + [(spans[n][0], "pop") for n in talk_lines]
+        notes += tnotes
     if card:
         # The end card sits on the last frame, held, blurred and darkened.
         parts.append(
@@ -124,10 +159,15 @@ def finish(
             f"eq=brightness=-0.18:saturation=0.7:enable='gte(t,{cut_len:.3f})'[pad]"
         )
         v = "pad"
-    if srt is not None:
+    from .genre import matte
+
+    late_srt = srt is not None and matte(w, h) > 0  # captions in the cinema bar go on after the bars
+    if srt is not None and not late_srt:
         parts.append(f"[{v}]{subtitle_filter(srt, w, h)}[cap]")
         v = "cap"
-    if words or title or end_card or lower_thirds or card_lines or stats or charts or line_charts or quotes or progress or maps or timelines or kinetic_lines or titles or split_labels or more_events:
+    from . import genre
+
+    if genre.EXTRAS or words or title or end_card or lower_thirds or card_lines or stats or charts or line_charts or quotes or progress or maps or timelines or kinetic_lines or titles or split_labels or more_events:
         from .graphics import (chart_events, kinetic_events, line_chart_events, map_events, progress_events, quote_events,
                                stat_events, timeline_events)
 
@@ -174,9 +214,12 @@ def finish(
         cards = [([x for x in all_words if x.line == n], *spans[n], n) for n in card_lines if n in spans]
         notes += [f"lower third for line {lt.line + 1} skipped: that line is not in the cut" for lt in lower_thirds if lt.line not in spans]
         ass = out.with_suffix(".look.ass")
-        write_ass(ass, w, h, accent, words, title, end_card, cut_len, card, lts, cards, extra, skip, title_style=title_style)
+        write_ass(ass, w, h, accent, words, title, end_card, cut_len, card, lts, cards, extra, skip | talk_lines, title_style=title_style)
         parts.append(f"[{v}]{ass_filter(ass)}[tt]")
         v = "tt"
+    if late_srt:
+        parts.append(f"[{v}]{subtitle_filter(srt, w, h)}[cap]")
+        v = "cap"
     if camera:  # a slow drifting camera over graphic scenes, words and all, as if filmed
         # one continuous path (no jump between two graphic scenes in a row); it
         # eases in and out where a stretch of graphic scenes meets real footage

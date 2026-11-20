@@ -142,6 +142,42 @@ bold), `stamp` (punchy).
 - `--kinetic "LINE=word, word"` turns the line into big kinetic type, the listed
   words larger and in the accent colour. For the line people should remember.
 
+### A produced talking head (`--talk`, preset `talk-studio`)
+
+For a person talking to camera that should feel like a produced show, not a
+webcam recording, add `--talk`. Some lines open up into a designed set: the
+speaker moves into a framed window on one side, and the other side holds the
+line's words, arriving as they are said (key words in a serif italic, in the
+accent colour), or the line's graphic (`--stat`, `--chart`, `--line-chart`,
+`--quote`, `--timeline`). The face never leaves the screen, so a number no
+longer interrupts the person. 9:16 and 4:5 stack the window over the words.
+
+Venus directs it: graphics and marked lines (`--highlight`, `--kinetic`)
+open up; the hook and the last line stay on the face; a long run of the face
+(about 5 s) gets a words panel to reset attention. It writes `cut.layout.md`
+with the reason for every line. Overrule one with `--layout 3=side` or
+`--layout 3=full`; `--chapter "3=How it works"` names a chapter on the set's
+header (with a running "02 / 03"). Use it when the story has parts. Keep the
+hook and the payoff full frame unless the payoff *is* a number.
+
+### Documentary and travel
+
+- **Documentary** (preset `documentary`): cinema bars (`--letterbox`, 2.39 by
+  default, captions sit in the bar like cinema subtitles), a muted filmic grade
+  (`--look doc`), serif name tags (`--lower-third-style doc`, use with
+  `--lower-third`), chapter titles (`--title-style chapter`, text
+  `"Part one|The night shift"`), and place-and-time stamps typed out as a line
+  starts (`--place "2=Juniper Street, 3:12 AM"`). In a storyboard: `"letterbox"`,
+  `"lower_third_style"`, and a scene's `"place"`.
+- **Travel** (preset `travel-reel`, best with `montage`): a warm sunny grade
+  (`--look travel`), arrival titles when a place first appears
+  (`montage --place "lisbon.mp4=Lisbon|Portugal|38.72 N, 9.14 W"`: the place in
+  huge condensed capitals, the country written by hand across it, the
+  coordinates typed below; in a storyboard a scene's `"arrive"`), and a
+  camcorder date in the corner (`--datestamp "NOV 21 2026"`). Use
+  `--title-style place` for an opening title in the same family. Only put real
+  places and dates the creator gave you.
+
 ## 3. Check the setup (first time only)
 
 ```sh

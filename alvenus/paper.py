@@ -735,7 +735,7 @@ def scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: in
                 ev, _ = scene_events(sc, k, 0.0, L, w, h, total, only=layer)
                 if ev:
                     a = tmp / f"{layer}.ass"
-                    write_ass(a, w, h, accent, extra_rows=ev, cut_len=L)
+                    write_ass(a, w, h, accent, extra_rows=ev, cut_len=L, extras=False)
                     g.append(f"[{last}]{ass_filter(a)}[w{layer}]")
                     last = f"w{layer}"
         g += ff_tools(tools_on(sc, "output"), last, "bo", u, "to")
@@ -1164,7 +1164,7 @@ def still(sc: dict, w: int, h: int, d: float, t: float, out: Path) -> None:
         if not events:
             return
         frame.convert("RGB").save(tmp / "f.png")
-        write_ass(tmp / "f.ass", w, h, accent, extra_rows=events, cut_len=d)
+        write_ass(tmp / "f.ass", w, h, accent, extra_rows=events, cut_len=d, extras=False)
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(tmp / "f.png"), "-vf",
                         f"setpts=PTS-STARTPTS+{t:.3f}/TB,{ass_filter(tmp / 'f.ass')}", "-frames:v", "1", str(tmp / "g.png")],
                        check=True, capture_output=True)

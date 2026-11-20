@@ -67,6 +67,30 @@ PRESETS: dict[str, dict] = {
         "background": "dark", "title_style": "block", "accent": "#F2C230", "design": "paper",
         "learned_from": "reference board, pins 14, 18, 19, 23, 26, 42, 53, 55, 58, 63",
     },
+    "talk-studio": {
+        "about": "Talking head as a produced show: dark designed set, the speaker in a window beside the line's words or graphic on chosen lines, full frame for the hook and payoff, word-pop captions.",
+        "aspect": "16:9", "captions": True, "caption_style": "pop", "max_pause": 0.45, "beat": 0.18,
+        "scene_beat": 0.6, "look": "natural", "transition": "cut", "music_lufs": -25.0,
+        "background": "dark", "title_style": "track", "accent": "#7FA7E0", "talk": True,
+    },
+    "talk-paper": {
+        "about": "Talking head as a printed page: light grey editorial paper with a fine grid, the speaker in a window beside the words in ink and serif italic, one accent colour.",
+        "aspect": "16:9", "captions": True, "caption_style": "pop", "max_pause": 0.45, "beat": 0.18,
+        "scene_beat": 0.6, "look": "natural", "transition": "cut", "music_lufs": -25.0,
+        "background": "dark", "title_style": "track", "accent": "#2B4A78", "talk": True, "talk_set": "paper",
+    },
+    "documentary": {
+        "about": "Documentary with interviews: wide cinema bars, muted filmic grade, serif name tags and chapter titles, place-and-time stamps, slow dips between scenes.",
+        "aspect": "16:9", "captions": True, "caption_style": "classic", "max_pause": 1.0, "beat": 0.45,
+        "scene_beat": 1.4, "look": "doc", "voice": "clean", "transition": "dip", "transition_seconds": 0.9, "music_lufs": -25.0,
+        "background": "dark", "title_style": "chapter", "accent": "#C9A86A", "letterbox": "2.39", "lower_third_style": "doc",
+    },
+    "travel-reel": {
+        "about": "Travel reel: vertical, warm sunny grade, cut to the beat, arrival titles in huge condensed capitals with the country written by hand, light leaks, camcorder date.",
+        "aspect": "9:16", "captions": True, "caption_style": "pop", "max_pause": 0.35, "beat": 0.12,
+        "scene_beat": 0.45, "look": "travel", "transition": "leak", "transition_seconds": 0.6, "music_lufs": -18.0,
+        "background": "aurora", "title_style": "place", "accent": "#FFB347",
+    },
 }
 
 

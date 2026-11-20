@@ -426,6 +426,19 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     from . import graphics
 
     graphics.PANELS = False  # the scene's own background shows behind charts, numbers and quotes
+    from . import genre
+
+    genre.EXTRAS = {k: sb[k] for k in ("letterbox", "datestamp", "lower_third_style") if sb.get(k)}
+    if genre.EXTRAS.get("letterbox") in (True, "true", "on"):
+        genre.EXTRAS["letterbox"] = 2.39
+    elif "letterbox" in genre.EXTRAS:
+        genre.EXTRAS["letterbox"] = float(genre.EXTRAS["letterbox"])
+    places = [(str(sc["place"]), spans[i][0] + 0.2, max(spans[i][1], spans[i][0] + 3.5)) for i, sc in enumerate(scenes) if sc.get("place")]
+    arrivals = [(str(sc["arrive"]), spans[i][0] + 0.05, min(spans[i][1] + 0.6, spans[i][0] + 2.8)) for i, sc in enumerate(scenes) if sc.get("arrive")]
+    if places:
+        genre.EXTRAS["places"] = places
+    if arrivals:
+        genre.EXTRAS["arrivals"] = arrivals
     try:
         notes += finish(base, out, size, fps, spans, music=Path(sb["music"]) if sb.get("music") else None,
                         music_lufs=float(sb.get("music_lufs", -16.0 if not sb.get("voiceover") else -22.0)),
@@ -437,6 +450,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                         split_labels=[(spans[i], side, lab) for i, side, lab in lower])
     finally:
         graphics.PANELS = True
+        genre.EXTRAS = {}
     base.unlink()
     return notes
 

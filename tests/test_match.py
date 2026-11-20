@@ -946,5 +946,84 @@ class Graph(unittest.TestCase):
         self.assertNotEqual(_scene_key(sc, 3, 640, 360, 30), _scene_key({**sc, "caption": "two"}, 3, 640, 360, 30))
 
 
+class Genres(unittest.TestCase):
+    """Talking head layouts, documentary and travel touches."""
+
+    def test_the_director_opens_graphics_and_keeps_hook_and_payoff_on_the_face(self):
+        from alvenus.talk import direct
+        spans = {i: (i * 3.0, i * 3.0 + 3.0) for i in range(8)}
+        kinds = direct(spans, graphic={4}, wordish={2}, full=set(), overrides={})
+        self.assertEqual(kinds[0], "full")
+        self.assertEqual(kinds[7], "full")
+        self.assertEqual(kinds[4], "graphic")
+        self.assertEqual(kinds[2], "words")
+        self.assertEqual(direct(spans, {4}, set(), set(), {4: "full", 0: "side"})[4], "full")
+        self.assertEqual(direct(spans, set(), set(), set(), {0: "side"})[0], "words")
+
+    def test_layouts_and_chapters_are_checked(self):
+        from alvenus.talk import parse_chapters, parse_layouts
+        self.assertEqual(parse_layouts(["3=side"], 5), {2: "side"})
+        with self.assertRaises(SystemExit):
+            parse_layouts(["3=left"], 5)
+        self.assertEqual(parse_chapters(["1=Intro"], 5), {0: "Intro"})
+
+    def test_the_set_geometry_fits_the_frame_and_is_even(self):
+        from alvenus.talk import geometry
+        for w, h in ((1920, 1080), (1080, 1920), (1080, 1350)):
+            for flip in (False, True):
+                (fx, fy, fw, fh), (px, py, pw, ph), side = geometry(w, h, flip)
+                self.assertEqual(side, w / h >= 1.2)
+                for v in (fx, fy, fw, fh, px, py, pw, ph):
+                    self.assertEqual(v % 2, 0)
+                self.assertLessEqual(max(fx + fw, px + pw), w)
+                self.assertLessEqual(max(fy + fh, py + ph), h)
+
+    def test_panel_words_keep_the_key_word_in_serif(self):
+        from alvenus.talk import key_words, panel_words
+        from alvenus.wordtime import Word
+        ws = [Word(t, i * 0.4, i * 0.4 + 0.3, 3) for i, t in enumerate("they slow to a crawl.".split())]
+        self.assertEqual(key_words(ws, set()), {"crawl"})
+        rows = panel_words(ws, 0.0, 3.0, 800, 700, "#7FA7E0", set())
+        self.assertEqual(len(rows), 5)
+        self.assertIn("Instrument Serif", rows[-1])
+
+    def test_letterbox_bars_and_the_panel_inside_them(self):
+        from alvenus import genre, graphics
+        genre.EXTRAS = {"letterbox": 2.39}
+        try:
+            self.assertEqual(genre.matte(1920, 1080), 138)
+            self.assertEqual(genre.matte(1080, 1920), 0)  # no bars on a tall frame
+            self.assertIn("pos(0,138)", graphics._panel(0, 1, 1920, 1080))
+            self.assertEqual(sum(r.startswith("Dialogue: 0,") for r in genre.events(1920, 1080, 10, "#C9A86A")), 2)
+        finally:
+            genre.EXTRAS = {}
+        self.assertEqual(genre.events(1920, 1080, 10, "#C9A86A"), [])
+
+    def test_new_title_styles(self):
+        from alvenus.style import TITLE_STYLES, title_events
+        for kind, text in (("chapter", "Part one|The night shift"), ("place", "Lisbon|Portugal|38.72 N, 9.14 W")):
+            self.assertIn(kind, TITLE_STYLES)
+            rows = title_events(text, 1080, 1920, "#FFB347", 0.2, 3.0, centre=True, kind=kind)
+            self.assertGreaterEqual(len(rows), 3)
+        self.assertIn("LISBON", "".join(title_events("Lisbon", 1920, 1080, "#FFB347", 0, 2, True, "place")))
+
+    def test_doc_name_tags_follow_the_setting(self):
+        from alvenus import genre
+        from alvenus.graphics import LowerThird, lower_third_events
+        genre.EXTRAS = {"lower_third_style": "doc"}
+        try:
+            rows = lower_third_events(LowerThird(0, "Asha Rao", "Engineer"), 0.0, 1920, 1080, "#C9A86A")
+        finally:
+            genre.EXTRAS = {}
+        self.assertTrue(any("Libre Baskerville" in r for r in rows))
+        self.assertTrue(any("ENGINEER" in r for r in rows))
+
+    def test_presets_exist_and_carry_their_touches(self):
+        from alvenus.presets import defaults
+        self.assertTrue(defaults("talk-studio")["talk"])
+        self.assertEqual(defaults("documentary")["lower_third_style"], "doc")
+        self.assertEqual(defaults("travel-reel")["title_style"], "place")
+
+
 if __name__ == "__main__":
     unittest.main()

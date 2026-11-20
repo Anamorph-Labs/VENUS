@@ -624,7 +624,7 @@ def _line(params: dict) -> str:
     return "  ".join(f"{k}={_short(v)}" for k, v in params.items())
 
 
-PACK_KEYS = ("aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background", "design")
+PACK_KEYS = ("aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background", "design", "letterbox", "lower_third_style")
 
 
 def effective(sb: dict) -> dict:

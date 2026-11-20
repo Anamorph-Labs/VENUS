@@ -15,7 +15,7 @@ _SIMPLE = {
     "model": "model", "max_pause": "max_pause", "keep_pauses": "keep_pauses",
     "beat": "beat", "scene_beat": "scene_beat", "music": "music", "music_lufs": "music_lufs",
     "title": "title", "end_card": "end_card", "look": "look", "caption_style": "caption_style", "accent": "accent",
-    "transition": "transition", "title_style": "title_style", "transition_seconds": "transition_seconds", "preset": "preset", "reframe": "reframe", "broll_dir": "broll_dir", "voice": "voice", "progress": "progress", "noise_db": "noise_db", "min_silence": "min_silence",
+    "transition": "transition", "title_style": "title_style", "transition_seconds": "transition_seconds", "preset": "preset", "reframe": "reframe", "broll_dir": "broll_dir", "voice": "voice", "progress": "progress", "talk": "talk", "talk_set": "talk_set", "letterbox": "letterbox", "datestamp": "datestamp", "lower_third_style": "lower_third_style", "noise_db": "noise_db", "min_silence": "min_silence",
 }
 
 HELP = (
@@ -67,6 +67,9 @@ def load(path: Path) -> dict:
     d["quote"] = [f"{x['line']}={x.get('who', '')}" for x in plan.get("quotes") or []]
     d["chart"] = [f"{x['line']}=" + ", ".join(f"{b} {v:g}" for b, v in x["bars"]) + (f"|{x['title']}" if x.get("title") else "")
                   for x in plan.get("charts") or []]
+    d["layout"] = [f"{k}={v}" for k, v in (plan.get("layouts") or {}).items()]
+    d["place"] = [f"{x['line']}={x['text']}" for x in plan.get("places") or []]
+    d["chapter"] = [f"{x['line']}={x['title']}" for x in plan.get("chapters") or []]
     d["broll"] = []
     for b in plan.get("broll") or []:
         f = b["file"] if Path(b["file"]).is_absolute() else str((base / b["file"]).resolve())
@@ -123,6 +126,12 @@ def write(path: Path, a, choices, cutaways) -> None:
                         for e in (_chart_entry(x) for x in getattr(a, "line_chart", None) or [])],
         "quotes": [{"line": int(x.split("=")[0]), "who": x.partition("=")[2]} for x in getattr(a, "quote", None) or []],
         "progress": bool(getattr(a, "progress", False)),
+        "talk": bool(getattr(a, "talk", False)), "talk_set": getattr(a, "talk_set", None),
+        "letterbox": getattr(a, "letterbox", None), "datestamp": getattr(a, "datestamp", None),
+        "lower_third_style": getattr(a, "lower_third_style", None),
+        "places": [{"line": int(x.partition("=")[0]), "text": x.partition("=")[2]} for x in getattr(a, "place", None) or []],
+        "layouts": {x.partition("=")[0]: x.partition("=")[2] for x in getattr(a, "layout", None) or []},
+        "chapters": [{"line": int(x.partition("=")[0]), "title": x.partition("=")[2]} for x in getattr(a, "chapter", None) or []],
         "maps": [_map_entry(x) for x in getattr(a, "map", None) or []],
         "timelines": [{"line": t.line + 1, "items": [list(i) for i in t.items], "title": t.title}
                       for t in _timelines(getattr(a, "timeline", None) or [])],
