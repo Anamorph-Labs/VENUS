@@ -171,7 +171,7 @@ lock the parts you like so nothing touches them, share settings between scenes
 with style nodes, and rebuild only what changed. `alvenus nodes view FILE` draws
 the node map as a page, with a frame of every scene.
 
-`alvenus studio video.nodes.json` opens **Venus Studio** in your browser: a node
+`alvenus studio video.nodes.json` opens **Venus** (by Anamorph Labs) in your browser: a node
 editor laid out like a compositing app, with a live frame of the scene and its
 node graph: the paper along the bottom, each layer (shape, picture, words, marks)
 dropping into a Merge from its own branch, and tool nodes (blur, glow, grade,

@@ -1,4 +1,4 @@
-"""Venus Studio: a node editor for a video, in the browser, on this computer.
+"""Venus (the editor, by Anamorph Labs): a node editor for a video, in the browser, on this computer.
 
 `alvenus studio video.nodes.json` opens a page laid out like a colour or
 compositing page in a finishing app: a viewer at the top, the scenes along
@@ -321,7 +321,7 @@ def handler(st: Studio):
                     return self._send(200, page.encode(), "text/html; charset=utf-8")
                 if u.path.startswith("/fonts/"):  # the interface's own type, served from the package (nothing is fetched)
                     f = Path(__file__).with_name("studio_fonts") / Path(u.path).name
-                    kind = {".woff2": "font/woff2", ".png": "image/png"}.get(f.suffix)  # type and the logo
+                    kind = {".woff2": "font/woff2", ".png": "image/png", ".svg": "image/svg+xml", ".ico": "image/x-icon"}.get(f.suffix)  # type, logo and tab icon
                     if kind and f.exists():
                         return self._send(200, f.read_bytes(), kind)
                 if u.path == "/api/state":
@@ -424,7 +424,7 @@ def serve(path: Path, port: int = 8765, open_browser: bool = True) -> None:
     else:
         raise SystemExit("no free port for Studio")
     url = f"http://127.0.0.1:{p}/"
-    print(f"Venus Studio is open at {url} (press Ctrl+C to close it)")
+    print(f"Venus is open at {url} (press Ctrl+C to close it)")
     print(f"Your AI can work on the same file: alvenus nodes show {path}; descriptions you write wait in: alvenus nodes listen {path}")
     if open_browser:
         import webbrowser

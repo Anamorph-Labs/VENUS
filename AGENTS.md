@@ -382,7 +382,7 @@ touches, and nothing else moves.
    with a frame of each scene from the last build, locks, and what changed. Send
    it to the creator so they can point at a node ("scene4.words feels slow").
 
-### Venus Studio: the creator edits, you help (`alvenus studio`)
+### The Venus editor: the creator edits, you help (`alvenus studio`)
 
 `alvenus studio FILE.nodes.json` opens a node editor in the creator's browser, on
 their computer: a viewer with a live frame of the selected scene, the scenes

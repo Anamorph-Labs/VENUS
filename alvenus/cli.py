@@ -1064,7 +1064,7 @@ def main(argv: list[str] | None = None) -> None:
 
     nd.set_defaults(func=run_nodes)
 
-    so = sub.add_parser("studio", help="open Venus Studio: a node editor for a node file, in your browser, on this computer")
+    so = sub.add_parser("studio", help="open Venus in your browser: a node editor for a node file, in your browser, on this computer")
     so.add_argument("file", help="a node file (make one with: alvenus nodes init storyboard.json)")
     so.add_argument("--port", type=int, default=8765)
     so.add_argument("--no-open", action="store_true", help="don't open the browser")
