@@ -2,7 +2,7 @@
 
 import unittest
 
-from alvenus.match import Take, assign, choose, join_paused, words
+from alvenus.match import Take, as_said, assign, choose, edge_word_heard, join_paused, words
 from alvenus.cli import apply_picks, find_room_tone, scene_breaks
 from alvenus.cut import Clip, hide_jump_cuts, take_clips
 from alvenus.finish import line_spans
@@ -599,6 +599,31 @@ class Runs6to9(unittest.TestCase):
         if not path.exists():
             self.skipTest("footage-search model not downloaded")
         self.assertEqual(_Tokenizer(path).encode("a photo of a cat"), [49406, 320, 1125, 539, 320, 2368, 49407])
+
+
+class PhoneFootage(unittest.TestCase):
+    def test_captions_follow_what_was_said(self):
+        self.assertEqual(as_said("So I walked to the café down the street.", "I walked to the cafe down the street."),
+                         "I walked to the café down the street.")
+        self.assertEqual(as_said("And that's where everything changed.", "and that's where everything's changed."),
+                         "And that's where everything changed.")
+        self.assertEqual(as_said("We went home.", "We, um, finally went home."), "We finally went home.")
+        self.assertEqual(as_said("It costs $20 a month.", "It costs twenty dollars a month."), "It costs $20 a month.")
+
+    def test_speech_at_file_edge_is_fine_when_the_word_is_whole(self):
+        script = ["And that's where everything changed."]
+        whole = Take(1, 0.0, 1.8, "and that's where everything's changed.", -0.2, line=0)
+        lost = Take(2, 0.0, 1.6, "that's where everything changed.", -0.2, line=0)
+        self.assertTrue(edge_word_heard(whole, script, first=True))
+        self.assertTrue(edge_word_heard(whole, script, first=False))
+        self.assertFalse(edge_word_heard(lost, script, first=True))
+
+    def test_no_long_fade_on_a_clip_that_opens_its_file(self):
+        from alvenus.cut import _clip_filters
+        _, af = _clip_filters(Clip(0, 0.0, 1.8, 0), None, 1080, 1920, 25, False)
+        self.assertIn("afade=t=in:d=0.002", af)
+        _, af = _clip_filters(Clip(0, 0.5, 1.8, 0), None, 1080, 1920, 25, False)
+        self.assertIn("afade=t=in:d=0.03", af)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from . import asr
 from .cut import TRANSITIONS, Clip, hide_jump_cuts, positions, push_in, render, take_clips, total_length, write_srt
-from .match import Take, assign, choose, join_paused
+from .match import Take, as_said, assign, choose, edge_word_heard, join_paused
 from .review import notes as review_notes
 from .delivery import judge, measure
 from .finish import auto_broll, finish, line_spans, parse_broll
@@ -202,9 +202,13 @@ def cmd_cut(a: argparse.Namespace) -> None:
         print(f"   {model.hits} of {model.hits + model.misses} pieces already heard in an earlier run; reused")
     print("3/5 matching takes to script lines")
     takes = join_paused(takes, script)
-    for t in takes:
-        t.clipped = t.start < EDGE or t.end > lengths[t.source] - EDGE
     assign(takes, script)
+    for t in takes:
+        # Sound running into the very start or end of a file only matters when
+        # a word there was lost; a take that starts the instant recording does
+        # is fine as long as its first word is all there.
+        t.clipped = (t.start < EDGE and not edge_word_heard(t, script, first=True)) or \
+                    (t.end > lengths[t.source] - EDGE and not edge_word_heard(t, script, first=False))
     restarts = [t for t in takes if t.line is not None and has_restart(t, script[t.line])]
     if restarts:
         print(f"   {len(restarts)} take(s) restart mid-line; finding the last clean attempt")
@@ -298,7 +302,11 @@ def cmd_cut(a: argparse.Namespace) -> None:
 
     print("5/5 cutting")
     srt = out.with_suffix(".srt")
-    write_srt(srt, clips, script)
+    # Captions show what was actually said in each chosen take, not the script.
+    spoken = list(script)
+    for c in picked:
+        spoken[c.line] = as_said(script[c.line], c.take.text)
+    write_srt(srt, clips, spoken)
     vids = [s for s in sources if has_video(s)]
     fps = frame_rate(vids[0]) if vids else 30.0
     finish_notes: list[str] = []
@@ -321,7 +329,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
                     loaded.clear()
                     loaded[k] = load_audio(sources[k], SR)
                 return loaded[k]
-            words = timed_words(clips, script, audio_of, SR)
+            words = timed_words(clips, spoken, audio_of, SR)
             mark_words(words, highlights)
         finish_notes = finish(base, out, ASPECTS[a.aspect], fps, line_spans(clips), cutaways, music, a.music_lufs,
                               a.title, a.end_card, srt=srt if a.captions and not pop else None,

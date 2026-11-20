@@ -203,6 +203,11 @@ def subtitle_filter(srt: Path, w: int, h: int) -> str:
 def _clip_filters(c: Clip, sw_sh, w: int, h: int, fps: float, video: bool) -> tuple[str, str]:
     """Video and audio filters for one clip, read from a file already cut to it."""
     fade_in, fade_out = 0.03, 0.06  # long enough to never click, short enough to keep every word
+    if c.start < 0.02:
+        # The clip opens on the first instant of its file: on a phone, talking
+        # often starts before recording does, and even 30 ms of fade there
+        # swallows a short first word ("and"). Just enough to avoid a click.
+        fade_in = 0.002
     d = c.end - c.start
     hold = f",apad=pad_dur={c.hold:.3f}" if c.hold else ""
     # apad first: a clip that runs to the very end of its file may have a

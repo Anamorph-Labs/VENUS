@@ -272,3 +272,63 @@ def choose(takes: list[Take], script: list[str]) -> list[Choice]:
                 why = "equally good; picked the later take"
         choices.append(Choice(i, best, why, cands))
     return choices
+
+
+def as_said(line: str, heard: str) -> str:
+    """The script line as it was actually spoken in the chosen take, for the
+    captions: script words the speaker left out are dropped, words they added
+    are put in, and every word they did say keeps the script's spelling and
+    punctuation (speech-to-text guesses at spelling; the script doesn't)."""
+    tokens = line.split()
+    flat: list[tuple[int, str]] = [(i, w) for i, tok in enumerate(tokens) for w in words(tok)]
+    said = [w for w in words(heard) if not is_filler(w)]
+    if not flat or not said:
+        return line
+    sm = SequenceMatcher(None, [w for _, w in flat], said, autojunk=False)
+    keep: set[int] = set()
+    added: dict[int, list[str]] = {}  # token index -> heard words to put before it
+    for op, a0, a1, b0, b1 in sm.get_opcodes():
+        if op == "equal" or op == "replace":
+            keep.update(flat[k][0] for k in range(a0, a1))
+            if op == "replace" and b1 - b0 > a1 - a0:
+                # More was said than written here: add the extra heard words.
+                extra = said[b0 + (a1 - a0):b1]
+                at = flat[a1][0] if a1 < len(flat) else len(tokens)
+                added.setdefault(at, []).extend(extra)
+        elif op == "insert":
+            at = flat[a0][0] if a0 < len(flat) else len(tokens)
+            added.setdefault(at, []).extend(said[b0:b1])
+    # A token with no spoken words (a dash, an emoji) stays with its neighbours.
+    spoken = {i for i, _ in flat}
+    keep |= {i for i in range(len(tokens)) if i not in spoken}
+    if not any(i in keep for i in spoken):
+        return line
+    out: list[str] = []
+    def numeric(i: int) -> bool:
+        return 0 <= i < len(tokens) and any(ch.isdigit() or ch in "$£€₹%" for ch in tokens[i])
+
+    for i, tok in enumerate(tokens + [""]):
+        if not (numeric(i - 1) or numeric(i)):  # "$20" is read out as "twenty dollars": nothing to add
+            out += added.get(i, [])
+        if i < len(tokens) and i in keep:
+            out.append(tok)
+    text = " ".join(out)
+    first = next((t for t in tokens if any(ch.isalpha() for ch in t)), "")
+    if text and first[:1].isupper():
+        text = text[0].upper() + text[1:]
+    if tokens and tokens[-1][-1:] in ".!?" and text[-1:] not in ".!?":
+        text = text.rstrip(",;:") + tokens[-1][-1]
+    return text
+
+
+def edge_word_heard(t: Take, script: list[str], first: bool) -> bool:
+    """Whether the take's first (or last) script word was heard whole, so a
+    take that runs right up to the edge of its file lost nothing there."""
+    if t.line is None:
+        return False
+    line = [w for w in words(script[t.line]) if not is_filler(w)]
+    said = [w for w in words(t.text) if not is_filler(w)]
+    if not line or not said:
+        return False
+    a, b = (line[0], said[0]) if first else (line[-1], said[-1])
+    return a == b or SequenceMatcher(None, a, b).ratio() >= 0.75
