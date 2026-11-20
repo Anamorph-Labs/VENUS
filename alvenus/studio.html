@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Venus Studio</title>
+<style>
+@font-face{font-family:"Hanken Grotesk";src:url(/fonts/HankenGrotesk-normal.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-normal.woff2) format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
+@font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-italic.woff2) format("woff2");font-weight:200 800;font-style:italic;font-display:swap}
+/* the brand palette: mostly ivory, then panels, ink for text, deep blue rare so it always means something */
+:root{--bg:#F6F2EA;--panel:#FFFEFB;--panel2:#F5F1EA;--ink:#22201D;--soft:#5E5850;--faint:#8C8378;--line:#E8E4DD;--hair:rgba(34,32,29,.10);
+--wire:#8C8378;--accent:#2B4A78;--onaccent:#F6F2EA;--soft-accent:#9DB7D9;--ai:#9DB7D9;--sel:#2B4A78;--off:#C9C1B5;--ok:#22201D;--bad:#22201D;
+--node:#FFFEFB;--nodeHead:#F5F1EA;--input:#FFFFFF;--view:#ECE6DB;--shadow:0 10px 30px rgba(34,32,29,.05);--chipbg:#F5F1EA;
+--l-shape:#C9C1B5;--l-picture:#9DB7D9;--l-words:#22201D;--l-marks:#8C8378;--l-graphic:#5E5850;--trunk:#5E5850}
+:root[data-theme="dark"]{--bg:#22201D;--panel:#2A2825;--panel2:#33302C;--ink:#F6F2EA;--soft:#C9C1B5;--faint:#8C8378;--line:#3B3833;--hair:rgba(246,242,234,.10);
+--wire:#8C8378;--accent:#9DB7D9;--onaccent:#22201D;--soft-accent:#9DB7D9;--ai:#9DB7D9;--sel:#F6F2EA;--off:#5E5850;--ok:#F6F2EA;--bad:#F6F2EA;
+--node:#2A2825;--nodeHead:#33302C;--input:#22201D;--view:#1B1A18;--shadow:0 10px 30px rgba(0,0,0,.18);--chipbg:#33302C;
+--l-shape:#8C8378;--l-picture:#9DB7D9;--l-words:#F6F2EA;--l-marks:#C9C1B5;--l-graphic:#C9C1B5;--trunk:#C9C1B5}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 "Hanken Grotesk","Noto Sans",ui-sans-serif,system-ui,sans-serif;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--hair);border-radius:999px;padding:5px 14px;cursor:pointer}
+button:hover{border-color:var(--faint)}
+button:disabled{opacity:.4;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--onaccent);font-weight:600}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:52px minmax(0,1fr);height:100vh}
+header{grid-column:1/3;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font:400 21px/1 Newsreader,Georgia,serif;margin:0 12px 0 4px;letter-spacing:-.005em}
+header .file{color:var(--soft);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{color:var(--soft);font-size:12px;white-space:nowrap}
+.left{display:grid;grid-template-rows:minmax(170px,36%) minmax(240px,1fr) 118px;min-width:0;min-height:0}
+.viewer{position:relative;background:var(--view);display:flex;flex-direction:column;min-height:0;border-bottom:1px solid var(--line)}
+.screen{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.screen video{max-width:100%;max-height:100%;display:block}
+.frame{position:relative;flex:0 0 auto}
+.frame img{width:100%;height:100%;display:block}
+.frame img.a{position:absolute;inset:0;width:100%;height:100%}
+.busy{position:absolute;right:12px;top:12px;font-size:12px;color:var(--soft);background:var(--panel);box-shadow:var(--shadow);padding:4px 12px;border-radius:99px;display:none}
+.busy.on{display:block}
+.vbar{display:flex;gap:8px;align-items:center;padding:6px 10px;background:var(--panel);border-top:1px solid var(--line);flex-wrap:wrap}
+.vbar input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
+.vbar .lab{color:var(--soft);font-size:12px;white-space:nowrap}
+.wipe{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);pointer-events:none}
+.canvas{position:relative;overflow:hidden;background:radial-gradient(ellipse 70% 60% at 15% 0%,color-mix(in srgb,var(--panel) 60%,transparent),transparent 70%),var(--bg);min-height:0;touch-action:none;cursor:default}
+.canvas.panning{cursor:grabbing}
+.grid{position:absolute;inset:0;background-image:radial-gradient(var(--hair) 1px,transparent 1px);background-size:18px 18px;pointer-events:none}
+#world{position:absolute;left:0;top:0;transform-origin:0 0}
+#wires{position:absolute;left:0;top:0;overflow:visible;width:1px;height:1px}
+#wires path.hit{stroke:transparent;stroke-width:16;fill:none;pointer-events:stroke;cursor:help}
+#wires path.hit.ins{cursor:copy}
+.wtip{position:fixed;z-index:25;pointer-events:none;background:var(--panel);border:1px solid var(--hair);border-radius:16px;box-shadow:0 10px 30px rgba(34,32,29,.12);
+padding:7px 13px;font-size:12px;max-width:300px;display:none;line-height:1.4}
+.wtip.on{display:block}
+.wtip i{display:block;color:var(--faint);font-style:normal;font-size:11px;margin-top:2px}
+.tips{position:absolute;left:50%;top:52px;transform:translateX(-50%);z-index:8;width:min(440px,calc(100% - 32px));background:var(--panel);border:1px solid var(--hair);
+border-radius:24px;box-shadow:0 10px 30px rgba(34,32,29,.05);padding:18px 22px 16px}
+.tips h4{font:400 22px/1.2 Newsreader,Georgia,serif;margin:0 0 10px}
+.tips h4 em{font-style:italic}
+.tips ol{margin:0 0 14px;padding-left:20px;color:var(--soft);font-size:13px}
+.tips li{margin-bottom:6px}
+.tips li b{color:var(--ink);font-weight:600}
+#wires path.hit:hover+path,#wires path.hot{stroke:var(--accent)!important}
+.cv-title{position:absolute;left:0;top:0;right:0;padding:8px 12px;color:var(--soft);font-size:12px;z-index:5;display:flex;gap:8px;align-items:center;pointer-events:none}
+.cv-title>*{pointer-events:auto}
+.cv-title .sp{flex:1;pointer-events:none}
+.cv-title button{padding:2px 9px;font-size:12px}
+.zoom{min-width:44px;text-align:center;color:var(--faint)}
+.cv-ask{position:absolute;left:12px;bottom:10px;right:190px;z-index:5;display:flex;gap:6px}
+.cv-ask input{flex:1;background:var(--panel);border:1px solid var(--hair);border-radius:999px;padding:9px 16px;box-shadow:var(--shadow)}
+.cv-ask input::placeholder{color:var(--faint)}
+#mini{position:absolute;right:10px;bottom:10px;width:168px;height:104px;background:var(--panel);border:1px solid var(--hair);border-radius:16px;z-index:5;cursor:pointer;box-shadow:var(--shadow)}
+.node{position:absolute;width:176px;background:var(--node);border:1px solid var(--hair);border-radius:16px;box-shadow:var(--shadow);user-select:none;z-index:2}
+.node .hd{display:flex;align-items:center;gap:6px;padding:7px 10px 2px;border-radius:15px 15px 0 0;cursor:grab;font-weight:600;font-size:12.5px}
+.node .hd::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--lc,var(--wire));flex:0 0 auto}
+.node .wd{padding:0 10px 4px;font-size:11px;color:var(--faint);line-height:1.3}
+.node .hd .n{color:var(--faint);font-weight:500;font-size:11px}
+.node .hd .sp{flex:1}
+.node .bd{padding:2px 10px 6px;font-size:11.5px;color:var(--soft);min-height:0}
+.node .bd div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.node .bd b{color:var(--ink);font-weight:500}
+.node .ds{padding:0 8px 8px}
+.node .ds input{width:100%;background:var(--input);border:1px solid var(--hair);border-radius:999px;padding:4px 10px;font-size:11.5px}
+.node .ds input::placeholder{color:var(--faint)}
+.node .ask{font:italic 11.5px/1.3 Newsreader,Georgia,serif;padding:0 10px 6px;color:var(--soft)}
+.node .ask.done{color:var(--accent)}
+.node.sel{border-color:var(--sel);box-shadow:0 0 0 1.5px var(--sel),var(--shadow)}
+.node.ai{border-color:var(--ai);box-shadow:0 0 0 3px color-mix(in srgb,var(--ai) 55%,transparent),var(--shadow)}
+.node.off{opacity:.55}
+.node.off .hd{text-decoration:line-through}
+.node.empty .bd{font-style:italic}
+.node.style{border-style:dashed}
+.node.merge{width:136px;border-radius:999px}
+.node.merge .hd{border-radius:999px 999px 0 0;justify-content:center;padding-top:6px}
+.node.merge .bd{text-align:center;min-height:0;padding:0 10px 7px;border-radius:0 0 22px 22px;font-size:11px}
+.node.join{width:22px;height:22px;border-radius:50%;padding:0;background:var(--panel);border:2.5px solid var(--lc,var(--wire));box-shadow:none;cursor:pointer}
+.node.join.sel{box-shadow:0 0 0 3px var(--sel)}
+.node.join .hd,.node.join .bd,.node.join .wd,.node.join .port{display:none}
+.node.join.drop{transform:scale(1.5)}
+.node.merge.drop{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 35%,transparent)}
+.node.tool{width:156px;background:var(--panel2)}
+.node.out,.node.paper{background:var(--panel2)}
+.pw{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--soft);padding:0;display:grid;place-items:center;font-size:9px;line-height:1;background:transparent}
+.pw.on{background:var(--ink);border-color:var(--ink)}
+.lk{font-size:9.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--faint);font-weight:600}
+.port{position:absolute;width:11px;height:11px;border-radius:50%;background:var(--pc,var(--wire));border:2px solid var(--bg);z-index:3}
+.port.i{left:-7px;top:14px}.port.o{right:-7px;top:14px}
+.port.t{top:-7px;left:calc(50% - 5px)}.port.b{bottom:-7px;left:calc(50% - 5px)}
+.port[data-layer]{cursor:crosshair;width:14px;height:14px;bottom:-8px;left:calc(50% - 7px)}
+.port[data-layer]:hover{transform:scale(1.35)}
+.menu{position:fixed;z-index:30;background:var(--panel);border:1px solid var(--hair);border-radius:16px;box-shadow:0 10px 30px rgba(34,32,29,.12);padding:8px;min-width:240px;font-size:12.5px}
+.menu .mh{color:var(--faint);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;padding:6px 8px}
+.menu .mr{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px}
+.menu .mr b{width:62px;font-weight:600}
+.menu .mr button{padding:1px 8px;font-size:11.5px}
+.menu .mi{display:block;width:100%;text-align:left;border:0;background:none;padding:5px 8px;border-radius:6px}
+.menu .mi:hover{background:var(--panel2)}
+.hint{color:var(--faint);font-size:11px}
+.strip{display:flex;gap:8px;overflow-x:auto;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line);align-items:stretch}
+.clip{flex:0 0 auto;width:150px;border:1px solid var(--hair);border-radius:16px;background:var(--panel);cursor:pointer;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.clip img{width:100%;height:60px;object-fit:contain;display:block;background:var(--view)}
+.clip .t{padding:3px 6px;font-size:11px;display:flex;gap:4px;align-items:center;white-space:nowrap;overflow:hidden}
+.clip .t span{color:var(--soft)}
+.clip.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.clip.ai{box-shadow:inset 0 0 0 2px var(--ai)}
+.clip.drop{border-left:3px solid var(--accent)}
+.clip .tr{position:absolute;left:6px;top:6px;font-size:10px;background:var(--panel);color:var(--soft);padding:1px 8px;border-radius:99px}
+aside{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;min-height:0;padding:12px 14px 30px}
+aside h2{font:400 22px/1.15 Newsreader,Georgia,serif;margin:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+aside h2 .lkd{font:600 10px "Hanken Grotesk",sans-serif;text-transform:uppercase;letter-spacing:.14em;color:var(--faint)}
+aside .what{color:var(--soft);font-size:12.5px;margin:4px 0 14px}
+.row{margin:0 0 12px}
+.row label{display:flex;justify-content:space-between;gap:6px;font-size:12px;margin-bottom:4px}
+.row label span{color:var(--soft)}
+.row label .rs{background:none;border:0;padding:0;color:var(--faint);font-size:11px;text-decoration:underline;cursor:pointer}
+.row .why{color:var(--faint);font-size:11px;margin-top:2px}
+.row input[type=text],.row select,.row input[type=number],aside input[type=text]{width:100%;background:var(--input);border:1px solid var(--hair);border-radius:999px;padding:5px 12px}
+.row textarea{width:100%;background:var(--input);border:1px solid var(--hair);border-radius:16px;padding:8px 12px}
+.row textarea{min-height:56px;resize:vertical}
+.row .rng{display:flex;gap:8px;align-items:center}
+.row .rng input[type=range]{flex:1;accent-color:var(--accent)}
+.row .rng input[type=number]{width:70px}
+.row .col{display:flex;gap:8px;align-items:center}
+.row .col input[type=color]{width:42px;height:28px;border:1px solid var(--line);border-radius:6px;background:none;padding:2px}
+.sec{border-top:1px solid var(--line);margin:14px -14px 12px;padding:10px 14px 0}
+.sec h3{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--faint);margin:0 0 10px;font-weight:600}
+.describe textarea{width:100%;min-height:62px;background:var(--input);border:1px solid var(--hair);border-radius:16px;padding:8px 12px}
+.askbox{background:var(--panel2);border-radius:16px;padding:10px 12px;margin-top:10px;font-size:12px}
+.askbox .q{font:italic 14px/1.35 Newsreader,Georgia,serif}
+.askbox .st{font-size:11px;text-transform:uppercase;letter-spacing:.14em;font-weight:600;color:var(--faint)}
+.askbox .st.done{color:var(--accent)}
+.askbox .ans{font:15px/1.4 Newsreader,Georgia,serif;color:var(--accent);margin-top:2px}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.err{color:var(--bad);font-size:12px;margin:6px 0}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--hair);padding:9px 18px;border-radius:999px;
+box-shadow:var(--shadow);z-index:20;display:none;max-width:80vw}
+.toast.on{display:block}
+.toast.bad{border-color:var(--bad)}
+.toast.ai{border-color:var(--ai)}
+.chip{font-size:10.5px;padding:1px 7px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);color:var(--soft)}
+.chip.ai{color:var(--accent);border-color:var(--soft-accent);background:var(--panel)}
+kbd{font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--soft)}
+header button,header h1{white-space:nowrap}
+#pv:not([src]){visibility:hidden}
+@media (max-width:1180px){.cv-title .hint{display:none}}
+@media (max-width:1100px){.status{display:none}}
+@media (max-width:900px){.app{grid-template-columns:1fr;grid-template-rows:44px minmax(0,1fr) 40vh}aside{grid-column:1;border-left:0;border-top:1px solid var(--line)}}
+</style></head><body>
+<div class="app">
+<header><h1>Venus Studio</h1><span class="file" id="file"></span>
+<span class="chip ai" id="aichip" style="display:none" title="nodes your AI changed in the last few minutes"></span>
+<span class="status" id="status"></span>
+<button id="undo" title="Undo (Ctrl+Z)">Undo</button><button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+<button id="vset">Video settings</button><button id="sound">Sound</button>
+<button id="theme" title="light or dark">Theme</button>
+<button class="primary" id="render">Render video</button></header>
+<div class="left">
+<div class="viewer"><div class="screen" id="screen"><div class="frame" id="frame"><img id="pv" alt="preview of the selected scene"><img class="a" id="pa" alt="" style="display:none"><div class="wipe" id="wl" style="display:none"></div></div>
+<video id="vid" controls playsinline style="display:none"></video><div class="busy" id="busy">drawing…</div></div>
+<div class="vbar"><button id="play">▶ Play scene</button><span class="lab">moment</span><input type="range" id="scrub" min="0.05" max="0.98" step="0.01" value="0.75" aria-label="moment in the scene">
+<button id="holdA" title="keep this frame as A, to compare with your next changes">Hold as A</button>
+<span class="lab" id="wipelab" style="display:none">A | now</span><input type="range" id="wipe" min="0" max="100" value="50" style="display:none;max-width:140px" aria-label="before and after wipe">
+<button id="full" style="display:none">Show full video</button></div></div>
+<div class="canvas" id="canvas"><div class="grid" id="grid"></div>
+<div class="cv-title"><span id="cvt"></span><span class="sp"></span><span class="hint">hover a line to see what it carries · right-click to add a tool</span>
+<button id="mode" title="switch between the simple view and every node"></button><button id="tipsbtn" title="how this works">Tips</button>
+<button id="addn" title="add a tool node (or right-click the canvas or a wire)">+ Node</button><button id="tidy" title="put every node back in its place">Tidy</button><button id="fit" title="fit the graph (F)">Fit</button><span class="zoom" id="zoom">100%</span></div>
+<div id="world"><svg id="wires"></svg><div id="nodes"></div></div>
+<div class="cv-ask"><input id="gask" placeholder="Describe a change to this scene: “soft glow on the words”, “words behind the picture”, “blur the paper”…" aria-label="describe a change to this scene"></div>
+<canvas id="mini" width="336" height="208" title="map of the graph: click to go there"></canvas>
+<div class="tips" id="tips" style="display:none"><h4>How the <em>scene</em> is built</h4><ol>
+<li><b>Each box is one part of the scene</b>: the paper, the photo, the words. Click one to change it on the right.</li>
+<li><b>Lines show what goes where.</b> Hover a line to read what it carries. Right-click it to add a tool, such as a blur or a glow.</li>
+<li><b>Or describe it in your words</b> in the box at the bottom: “soft glow on the words”, “blur the paper”.</li></ol>
+<button class="primary" id="tipsok">Got it</button></div></div>
+<div class="strip" id="strip"></div>
+</div>
+<aside id="insp"></aside>
+</div>
+<div class="toast" id="toast"></div><div class="wtip" id="wtip"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const short = v => { if (v == null) return ''; let s = typeof v === 'string' ? v : JSON.stringify(v);
+  if (typeof v === 'string' && /[\/\\]/.test(v) && /\.\w+$/.test(v)) s = v.split(/[\/\\]/).pop(); return s.length > 34 ? s.slice(0, 32) + '…' : s; };
+let S = null, SC = null, sel = {scene: null, node: null}, version = -1, holdA = null, pvToken = 0;
+const NAMES = {in: 'Comes in', picture: 'Photo', look: 'Look', shape: 'Colour shape', graphic: 'Graphic', words: 'Words', marks: 'Marks'};
+const DOES = {in: 'How this scene arrives', picture: 'The photo and where it sits', look: 'How the photo is printed', shape: 'The colour shape behind the photo',
+  graphic: 'The number, chart or list', words: 'The words and how they arrive', marks: 'Arrows, rings and notes'};
+const TOOL_NAME = {blur: 'Blur', glow: 'Glow', grade: 'Colour', vignette: 'Dark edges'};
+const TOOL_DOES = {blur: 'Softens what comes in', glow: 'A soft light around it', grade: 'Brightness, contrast and colour', vignette: 'Darker edges, to close in'};
+const TYPE_NAME = {title: 'Title', text: 'Words', clip: 'Clip', image: 'Photo', stat: 'Number', chart: 'Chart', line_chart: 'Line chart', timeline: 'Timeline',
+  list: 'List', compare: 'Comparison', map: 'Map', split: 'Side by side', quote: 'Quote'};
+const LABEL = {size: 'Size', caption: 'Words', text: 'Words', file: 'Photo', from: 'Starts at', shape: 'Shape', shape_colour: 'Shape colour', angle: 'Tilt', photo: 'Print',
+  darken: 'Darken', push: 'Slow push in', label: 'Label', speed: 'Speed', delay: 'Wait', align: 'Align', caps: 'Capitals', big_words: 'Big words', subtitle: 'Subtitle',
+  who: 'Who said it', callout: 'Pointer', note: 'Note', colour: 'Colour', show: 'Show', seconds: 'Length', dark: 'Dark page', background: 'Background',
+  transition: 'Transition', amount: 'Amount', bright: 'Brightness', contrast: 'Contrast', saturation: 'Colour', warmth: 'Warmth', type: 'Kind', camera: 'Camera move',
+  layers: 'Stack', accent: 'Accent', look: 'Look', aspect: 'Shape', music: 'Music', voiceover: 'Voice', style: 'Style'};
+const PART_LABEL = {words: 'Words', picture: 'Photo', mark: 'Marks', graphic: 'Graphic', in: 'Comes in'};
+const labelOf = q => { if (q.includes('.')) { const [a, b] = q.split('.'); return (PART_LABEL[a] || a) + ' · ' + (LABEL[b] || b).toLowerCase(); }
+  return LABEL[q] || (q[0].toUpperCase() + q.slice(1)).replace(/_/g, ' '); };
+const plain = v => typeof v === 'string' && !/[\/\\]/.test(v) ? v.replace(/==|\*/g, '').replace(/(^|\s)_(\S)/g, '$1$2').replace(/(\S)_(\s|$)/g, '$1$2') : v;
+const cap = t => t ? t[0].toUpperCase() + t.slice(1) : t;
+const sceneName = sid => 'Scene ' + (sceneIdx(sid) + 1);
+const typeName = t => TYPE_NAME[t] || t;
+let simple = true; try { simple = localStorage.getItem('venus-simple') !== '0'; } catch (e) {}
+try { const t = localStorage.getItem('venus-theme2'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function toast(msg, kind = '') { const t = $('#toast'); t.textContent = msg; t.className = 'toast on ' + kind; clearTimeout(t._h); t._h = setTimeout(() => t.className = 'toast', kind === 'bad' ? 6000 : 3200); }
+const node = id => S.doc.nodes.find(n => n.id === id);
+const sceneIdx = id => S.scenes.findIndex(s => s.id === id);
+
+// ---------------------------------------------------------------- stages of a scene
+function stagesOf(sid) {
+  const sn = node(sid), type = sn.params.type, out = [];
+  const hasPic = !!(node(sid + '.picture')?.params?.file) || ['clip', 'image'].includes(type);
+  const graphic = ['stat', 'chart', 'line_chart', 'timeline', 'list', 'compare', 'map', 'split'].includes(type);
+  if (sceneIdx(sid) > 0) out.push('in');
+  if (hasPic || ['title', 'text', 'quote', 'stat'].includes(type)) out.push('picture');
+  if (hasPic) out.push('look', 'shape');
+  if (graphic) out.push('graphic');
+  if (!['split', 'map', 'chart', 'line_chart', 'timeline'].includes(type) || node(sid + '.words')) out.push('words');
+  if (hasPic) out.push('marks');
+  return out;
+}
+const partOf = st => SC.stages.find(x => x[0] === st)[1];
+const paramsOf = st => SC.stages.find(x => x[0] === st)[2];
+function stageParams(sid, st) {
+  const p = node(sid + '.' + partOf(st))?.params || {}, keep = paramsOf(st);
+  return Object.fromEntries(Object.entries(p).filter(([k]) => keep.includes(k)));
+}
+const stageOff = (sid, st) => (node(sid + '.' + partOf(st))?.off || []).includes(st);
+const stageLocked = (sid, st) => !!(node(sid)?.locked || node(sid + '.' + partOf(st))?.locked);
+const aiTouched = id => S.byAI.includes(id);
+const designed = sid => !!S.design && ['title', 'text', 'clip', 'image'].includes(node(sid).params.type);
+const LAYER_NAME = {shape: 'Colour shape', picture: 'Photo', words: 'Words', marks: 'Marks', graphic: 'Graphic'};
+const LAYER_COL = {shape: 'var(--l-shape)', picture: 'var(--l-picture)', words: 'var(--l-words)', marks: 'var(--l-marks)', graphic: 'var(--l-graphic)'};
+const BRANCH_NAME = {background: 'Paper', picture: 'Photo', words: 'Words', marks: 'Marks', output: 'Everything'};
+const andList = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '';
+const theName = n => /^(the|style) /i.test(n) ? n : 'the ' + n;
+const goes = l => ['words', 'marks'].includes(l) ? 'go' : 'goes';
+const onWhat = b => b === 'output' ? 'everything stacked so far' : 'the ' + BRANCH_NAME[b].toLowerCase();
+const stageName = (sid, st) => st === 'picture' && !(node(sid + '.picture')?.params?.file) && !['clip', 'image'].includes(node(sid).params.type) ? 'Picture' : NAMES[st];
+
+// ---------------------------------------------------------------- the graph of a scene
+// The paper runs down the middle (the trunk); each layer comes in from the
+// left along its own branch (source, then its tools) and is merged on top, in
+// order; the merged picture goes through the output tools and out.
+function graphOf(sid) {
+  const sc = S.scenes[sceneIdx(sid)], g = sc.graph, st = stagesOf(sid), dz = designed(sid);
+  const has = {shape: dz && st.includes('shape'), picture: st.includes('picture'), words: st.includes('words'), marks: st.includes('marks'), graphic: st.includes('graphic')};
+  let order = dz ? g.layers.filter(l => has[l]) : ['picture', 'graphic', 'words', 'marks'].filter(l => has[l]);
+  const tl = ids => ids.map(id => 'tool:' + id);
+  const br = {
+    shape: ['st:shape'],
+    picture: ['st:picture'].concat(st.includes('look') && !simple ? ['st:look'] : [], tl(g.branches.picture || [])),
+    words: ['st:words'].concat(dz ? tl(g.branches.words || []) : []),
+    marks: ['st:marks'].concat(dz ? tl(g.branches.marks || []) : []),
+    graphic: ['st:graphic'],
+  };
+  const inn = st.includes('in') && !simple ? ['st:in'] : [];
+  if (!dz) {  // not a designed page: one line, each step adds to the scene, every tool works on the whole picture
+    const steps = order.flatMap(l => br[l].filter(k => !k.startsWith('tool:')));
+    const tools = tl([...(g.background || []), ...(g.branches.picture || []), ...(g.output || [])]);
+    return {order, branches: {}, trunk: ['paper', ...steps, ...tools, ...inn, 'out'], dz};
+  }
+  const trunk = ['paper'].concat(tl(g.background), order.map(l => 'merge:' + l), tl(g.output), inn, ['out']);
+  return {order, branches: Object.fromEntries(order.map(l => [l, br[l]])), trunk, dz};
+}
+function layoutKey(sid) { return 'venus-graph-' + (simple ? 's-' : '') + S.file + '-' + sid; }
+function savedPos(sid) { try { return JSON.parse(localStorage.getItem(layoutKey(sid)) || '{}'); } catch (e) { return {}; } }
+function autoLayout(sid, G) {
+  // the trunk runs left to right along the bottom; each layer's branch drops into its Merge from above
+  const pos = {}, gapX = 196, gapY = 118;
+  const tallest = Math.max(1, ...Object.values(G.branches).map(b => b.length));
+  const TY = 30 + tallest * gapY + 10;
+  let x = 30;
+  G.trunk.forEach(k => {
+    if (k.startsWith('merge:')) {
+      const b = G.branches[k.slice(6)];
+      b.forEach((bk, j) => pos[bk] = {x: x, y: TY - (b.length - j) * gapY});
+      pos[k] = simple ? {x: x + 77, y: TY + 9} : {x: x + 22, y: TY + 4};
+      x += 200;
+    } else { pos[k] = {x, y: TY}; x += k.startsWith('tool:') ? 176 : gapX; }
+  });
+  (node(sid).use || []).forEach((u, i) => pos['style:' + u] = {x: x - gapX + 10 + i * 190, y: TY - tallest * gapY});
+  return pos;
+}
+let view = {}, G = null, P = {};
+function nodeCard(k, sid) {
+  // one card on the canvas, by its key
+  const lc = l => `style="--lc:${LAYER_COL[l]}"`;
+  if (k === 'paper') {
+    const sp = node(sid).params, bits = {dark: sp.dark, background: sp.background};
+    const tb = G.trunk.filter(x => x.startsWith('tool:') && toolNode(x)?.params.on === 'background');
+    return `<div class="node paper ${sel.node === 'paper' ? 'sel' : ''}" data-k="paper"><span class="port o"></span>
+      <div class="hd" data-drag="paper">Paper<span class="sp"></span></div><div class="wd">${G.dz ? 'The page everything sits on' : 'The background of the scene'}</div><div class="bd">${summary(Object.fromEntries(Object.entries(bits).filter(([, v]) => v != null)), 'As designed')}</div>
+      <div class="ds"><input data-gdesc="background" placeholder="describe: blur the paper, darker…"></div></div>`;
+  }
+  if (k.startsWith('merge:')) {
+    const l = k.slice(6), i = G.order.indexOf(l);
+    if (simple) return `<div class="node merge join ${sel.node === k ? 'sel' : ''}" data-k="${k}" data-merge="${l}" ${lc(l)} data-tip="${esc(LAYER_NAME[l] + ' ' + goes(l) + ' on top of ' + (i ? 'the ' + andList(G.order.slice(0, i).map(x => LAYER_NAME[x].toLowerCase())) : 'the paper') + '|Click to change what sits on top')}"></div>`;
+    return `<div class="node merge ${sel.node === k ? 'sel' : ''}" data-k="${k}" data-merge="${l}" ${lc(l)}><span class="port i"></span><span class="port o"></span><span class="port t" style="--pc:${LAYER_COL[l]}"></span>
+      <div class="hd" data-drag="${k}">Stack</div><div class="bd">${LAYER_NAME[l]} ${i === 0 ? 'on the paper' : 'over ' + G.order.slice(0, i).map(x => LAYER_NAME[x].toLowerCase()).join(', ')}</div></div>`;
+  }
+  if (k.startsWith('tool:')) {
+    const id = k.slice(5), n = node(id), p = n.params, off = !!n.off, on = p.on, l = G.dz && ['picture', 'words', 'marks'].includes(on) ? on : null;
+    const sfx = id.split('.').slice(1).join('.').replace(p.tool, '');
+    const shown = Object.fromEntries(Object.entries(p).filter(([q]) => !['tool', 'on'].includes(q)));
+    const end = l && G.branches[l]?.slice(-1)[0] === k;
+    return `<div class="node tool ${sel.node === k ? 'sel' : ''} ${off ? 'off' : ''} ${aiTouched(id) ? 'ai' : ''}" data-k="${k}" ${l ? lc(l) : ''}>
+      ${l ? `<span class="port t" style="--pc:${LAYER_COL[l]}"></span><span class="port b" ${end && G.dz ? `data-layer="${l}"` : ''} style="--pc:${LAYER_COL[l]}"></span>` : '<span class="port i"></span><span class="port o"></span>'}
+      <div class="hd" data-drag="${k}">${esc(TOOL_NAME[p.tool] || p.tool)}${sfx ? `<span class="n">${esc(sfx)}</span>` : ''}<span class="sp"></span>
+      <button class="pw ${off ? '' : 'on'}" data-tpw="${esc(id)}" title="${off ? 'switched off: click to switch on' : 'on: click to switch off (D)'}"></button></div>
+      <div class="wd">${esc(TOOL_DOES[p.tool] || '')}${G.dz ? ' · on ' + esc(onWhat(on)) : ''}</div>
+      <div class="bd">${summary(shown, 'Usual amount')}</div>${askLine(n)}</div>`;
+  }
+  if (k.startsWith('style:')) {
+    const u = k.slice(6), s = node(u) || {params: {}};
+    return `<div class="node style ${sel.node === k ? 'sel' : ''} ${aiTouched(u) ? 'ai' : ''}" data-k="${esc(k)}"><span class="port b" style="--pc:var(--accent)"></span>
+      <div class="hd" data-drag="${esc(k)}">Style · ${esc(u)}<span class="sp"></span></div><div class="wd">A shared look for several scenes</div>
+      <div class="bd">${summary(s.params)}</div><div class="ds"><input data-desc="${esc(u)}" placeholder="describe this shared look…"></div></div>`;
+  }
+  if (k === 'out') {
+    const sn = node(sid), sp = Object.fromEntries(Object.entries(sn.params).filter(([q]) => !['type', 'layers'].includes(q)));
+    return `<div class="node out ${sel.node === 'out' ? 'sel' : ''} ${aiTouched(sid) ? 'ai' : ''}" data-k="out"><span class="port i"></span>
+      <div class="hd" data-drag="out">The scene<span class="sp"></span>${sn.locked ? '<span class="lk">locked</span>' : ''}</div><div class="wd">What you see: ${esc(typeName(sn.params.type).toLowerCase())}, ${S.scenes[sceneIdx(sid)].seconds} s</div>
+      <div class="bd">${summary(sp, 'As designed')}</div>${askLine(sn)}<div class="ds"><input data-desc="${sid}" placeholder="describe the whole scene…"></div></div>`;
+  }
+  const st = k.slice(3), part = partOf(st), pn = node(sid + '.' + part), p = stageParams(sid, st), off = stageOff(sid, st);
+  const can = SC.bypass.includes(st), lk = stageLocked(sid, st);
+  const l = st === 'look' ? 'picture' : st === 'in' ? null : st;
+  const end = l && G.branches[l]?.slice(-1)[0] === k, trunk = G.trunk.includes(k);
+  return `<div class="node ${sel.node === k ? 'sel' : ''} ${off ? 'off' : ''} ${aiTouched(sid + '.' + part) ? 'ai' : ''} ${Object.keys(p).length ? '' : 'empty'}" data-k="${k}" ${l ? lc(l) : ''}>
+    ${trunk ? '<span class="port i"></span><span class="port o"></span>' : `${G.branches[l]?.[0] === k ? '' : `<span class="port t" style="--pc:${LAYER_COL[l]}"></span>`}<span class="port b" ${end && G.dz ? `data-layer="${l}"` : ''} style="--pc:${LAYER_COL[l]}"></span>`}
+    <div class="hd" data-drag="${k}">${stageName(sid, st)}<span class="sp"></span>${lk ? '<span class="lk">locked</span>' : ''}
+    ${can ? `<button class="pw ${off ? '' : 'on'}" data-pw="${st}" title="${off ? 'switched off: click to switch on' : 'on: click to switch off (D)'}"></button>` : ''}</div>
+    <div class="wd">${esc(st === 'picture' && stageName(sid, st) === 'Picture' ? 'A photo behind it, if you add one' : DOES[st] || '')}</div><div class="bd">${summary(p, 'As designed')}</div>${askLine(pn, st)}
+    <div class="ds"><input data-desc="${sid}.${part}" data-stage="${st}" placeholder="describe: ${st === 'words' ? 'bigger, glow…' : st === 'shape' ? 'no shape, red…' : st === 'look' ? 'colour photo, darker…' : st === 'in' ? 'whip, slide…' : st === 'marks' ? 'hide label, teal…' : 'blur, tilt left…'}"></div></div>`;
+}
+const toolNode = k => node(k.slice(5));
+function summary(p, empty = 'As designed') {
+  const e = Object.entries(p);
+  return e.length ? e.slice(0, 2).map(([k, v]) => `<div>${esc(labelOf(k))} <b>${esc(short(plain(v)))}</b></div>`).join('') + (e.length > 2 ? `<div>+${e.length - 2} more</div>` : '') : `<div>${esc(empty)}</div>`;
+}
+function askLine(n, st) {
+  if (!n?.ask || (st && n.ask.stage && n.ask.stage !== st) || (st && !n.ask.stage && st !== stagesOf(sel.scene).find(x => partOf(x) === n.kind))) return '';
+  const a = n.ask, done = a.status === 'done';
+  return `<div class="ask ${done ? 'done' : ''}" title="${esc(a.text)}">${done ? '✓ your AI: ' + esc(short(a.answer || 'done')) : a.status === 'waiting' ? '● waiting for your AI' : '● Venus did it · your AI can refine'}</div>`;
+}
+function drawCanvas() {
+  const sid = sel.scene, box = $('#nodes');
+  if (!sid || !node(sid)) { box.innerHTML = ''; $('#wires').innerHTML = ''; return; }
+  G = graphOf(sid);
+  const auto = autoLayout(sid, G), saved = savedPos(sid), sn = node(sid), i = sceneIdx(sid);
+  P = {}; for (const k in auto) P[k] = saved[k] || auto[k];
+  $('#cvt').innerHTML = `<b style="color:var(--ink)">Scene ${i + 1}</b> · ${esc(typeName(sn.params.type))} · ${S.scenes[i].seconds} s` + (sn.locked ? ' · locked' : '');
+  $('#mode').textContent = simple ? 'Show all nodes' : 'Simple view';
+  const keys = Object.keys(P);
+  box.innerHTML = keys.map(k => nodeCard(k, sid).replace('<div class="node', `<div style="left:${P[k].x}px;top:${P[k].y}px" class="node`)).join('');
+  // stack each branch by the real height of its cards, then sit the trunk under the tallest
+  const hgt = k => el(k)?.offsetHeight || 90, gap = 34;
+  const need = Math.max((sn.use || []).length ? 170 : 0, ...Object.values(G.branches).map(b => b.reduce((a, k) => a + hgt(k) + gap, 0)));
+  const TY = 24 + need + 8;
+  for (const k of G.trunk) if (!saved[k]) { P[k].y = k.startsWith('merge:') ? TY + (simple ? 9 : 4) : TY; el(k).style.top = P[k].y + 'px'; }
+  for (const [l, b] of Object.entries(G.branches)) {
+    let y = P['merge:' + l].y - gap;
+    for (let j = b.length - 1; j >= 0; j--) { const k = b[j]; y -= hgt(k); if (!saved[k]) { P[k].y = y; el(k).style.top = y + 'px'; } y -= gap; }
+  }
+  (sn.use || []).forEach(u => { const k = 'style:' + u; if (!saved[k]) { P[k].y = 24; el(k).style.top = '24px'; } });
+  if (!view[sid]) requestAnimationFrame(() => fit()); else applyView();
+  requestAnimationFrame(drawWires);
+}
+function el(k) { return document.querySelector(`.node[data-k="${CSS.escape(k)}"]`); }
+function nameOf(k, sid) {
+  if (k === 'paper') return 'Paper'; if (k === 'out') return 'The scene';
+  if (k.startsWith('merge:')) return 'The stack'; if (k.startsWith('style:')) return 'Style ' + k.slice(6);
+  if (k.startsWith('tool:')) return TOOL_NAME[toolNode(k)?.params.tool] || 'Tool';
+  return k.startsWith('st:') ? stageName(sid, k.slice(3)) : k;
+}
+function box(k) { const e = el(k); return e ? {x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight} : null; }
+let wires = [];
+function drawWires() {
+  if (!G) return;
+  const sid = sel.scene; wires = [];
+  const add = (a, b, kind, extra = {}) => { const A = box(a), B = box(b); if (A && B) wires.push({a, b, A, B, kind, ...extra}); };
+  for (let j = 0; j + 1 < G.trunk.length; j++) {
+    const a = G.trunk[j], b = G.trunk[j + 1], t = b.startsWith('tool:') ? b : null;
+    const so = G.trunk.slice(0, j + 1).filter(x => x.startsWith('merge:')).map(x => LAYER_NAME[x.slice(6)].toLowerCase());
+    const steps = G.dz ? [] : G.trunk.slice(1, j + 1).filter(x => x.startsWith('st:')).map(x => stageName(sid, x.slice(3)).toLowerCase());
+    const has = so.concat(steps), tooled = G.trunk.slice(0, j + 1).filter(x => x.startsWith('tool:') && !toolNode(x)?.off).map(x => TOOL_NAME[toolNode(x).params.tool].toLowerCase());
+    const carry = (a === 'paper' || !has.length ? 'The paper' : 'The paper with the ' + andList(has) + ' on it') + (tooled.length ? ', after the ' + andList([...new Set(tooled)]) : '');
+    add(a, b, 'trunk', {branch: !G.dz || so.length ? 'output' : 'background', before: t ? t.slice(5) : null,
+      off: a.startsWith('tool:') && toolNode(a)?.off, tip: carry + ', on the way to ' + theName(nameOf(b, sid).toLowerCase())});
+  }
+  for (const [l, b] of Object.entries(G.branches)) {
+    const i = G.order.indexOf(l), below = i ? 'the ' + andList(G.order.slice(0, i).map(x => LAYER_NAME[x].toLowerCase())) : 'the paper';
+    b.forEach((k, j) => add(k, b[j + 1] || 'merge:' + l, j + 1 < b.length ? 'branch' : 'into', {layer: l, branch: l === 'shape' || l === 'graphic' ? null : l,
+      before: b[j + 1]?.startsWith('tool:') ? b[j + 1].slice(5) : null, off: k.startsWith('st:') ? stageOff(sid, k.slice(3)) : !!toolNode(k)?.off,
+      tip: j + 1 < b.length ? `The ${LAYER_NAME[l].toLowerCase()}, on the way to ${theName(nameOf(b[j + 1], sid).toLowerCase())}` : `The ${LAYER_NAME[l].toLowerCase()} ${goes(l)} on top of ${below}`}));
+  }
+  (node(sid).use || []).forEach(u => {
+    const targets = new Map();
+    for (const p of Object.keys(node(u)?.params || {})) {
+      const [part, name] = p.includes('.') ? p.split('.') : ['scene', p];
+      const st = part === 'scene' ? null : part === 'mark' ? 'marks' : (SC.stages.find(x => x[1] === part && x[2].includes(name)) || [part])[0];
+      const t = st && P['st:' + st] ? 'st:' + st : st === 'look' && P['st:picture'] ? 'st:picture' : 'out';
+      targets.set(t, (targets.get(t) || []).concat((LABEL[name] || name).toLowerCase()));
+    }
+    if (!targets.size) targets.set('out', []);
+    targets.forEach((ps, t) => add('style:' + u, t, 'style', {tip: `Style ${u} sets ${ps.length ? 'the ' + andList(ps) + ' of ' : ''}${theName(nameOf(t, sid).toLowerCase())}`}));
+  });
+  let out = '';
+  wires.forEach((w, n) => {
+    const {A, B} = w; let d;
+    const ym = R => R.h < 40 ? R.y + R.h / 2 : R.y + 20;
+    if (w.kind === 'trunk') { const x1 = A.x + A.w, y1 = ym(A), x2 = B.x, y2 = ym(B), m = Math.max(30, Math.abs(x2 - x1) / 2);
+      d = `M${x1} ${y1} C${x1 + m} ${y1} ${x2 - m} ${y2} ${x2} ${y2}`; }
+    else { const x1 = A.x + A.w / 2, y1 = A.y + A.h, x2 = B.x + B.w / 2, y2 = B.y, m = Math.max(30, Math.abs(y2 - y1) / 2);
+      d = `M${x1} ${y1} C${x1} ${y1 + m} ${x2} ${y2 - m} ${x2} ${y2}`; }
+    w.d = d;
+    const col = w.kind === 'style' ? 'var(--accent)' : w.layer ? LAYER_COL[w.layer] : 'var(--trunk)';
+    const dash = w.kind === 'style' ? 'stroke-dasharray="6 4"' : w.off ? 'stroke-dasharray="4 4"' : '';
+    const ins = w.kind !== 'style' && (w.branch || w.kind === 'trunk');
+    const tip = (w.tip || '') + (w.off ? ' (switched off, so it passes through unchanged)' : '') + (ins ? '|Right-click to add a tool here' : '');
+    const hit = `<path class="hit ${ins ? 'ins' : ''}" d="${d}" data-w="${n}" data-tip="${esc(tip)}"/>`;
+    out += hit + `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w.kind === 'trunk' ? 2.6 : 2}" ${dash} opacity="${w.kind === 'style' ? .8 : 1}"/>`;
+  });
+  $('#wires').innerHTML = out;
+  drawMini();
+}
+// ---------------------------------------------------------------- pan, zoom, map
+function V() { return view[sel.scene] || (view[sel.scene] = {x: 20, y: 20, z: 1}); }
+function applyView() {
+  const v = V(); $('#world').style.transform = `translate(${v.x}px,${v.y}px) scale(${v.z})`;
+  $('#grid').style.backgroundSize = `${18 * v.z}px ${18 * v.z}px`; $('#grid').style.backgroundPosition = `${v.x}px ${v.y}px`;
+  $('#zoom').textContent = Math.round(v.z * 100) + '%'; drawMini();
+}
+function bounds() {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  document.querySelectorAll('#nodes .node').forEach(e => { x0 = Math.min(x0, e.offsetLeft); y0 = Math.min(y0, e.offsetTop);
+    x1 = Math.max(x1, e.offsetLeft + e.offsetWidth); y1 = Math.max(y1, e.offsetTop + e.offsetHeight); });
+  return x0 > x1 ? {x0: 0, y0: 0, x1: 400, y1: 300} : {x0, y0, x1, y1};
+}
+function fit() {
+  const c = $('#canvas').getBoundingClientRect(), b = bounds(), pad = 50;
+  const z = Math.max(0.3, Math.min(1, (c.width - pad * 2 - 40) / (b.x1 - b.x0), (c.height - 150) / (b.y1 - b.y0)));
+  view[sel.scene] = {z, x: Math.max(16, (c.width - 190 - (b.x1 - b.x0) * z) / 2) - b.x0 * z, y: 40 - b.y0 * z + Math.max(0, (c.height - 150 - (b.y1 - b.y0) * z) / 2)};
+  applyView();
+}
+function zoomAt(mx, my, z) {
+  const v = V(); z = Math.max(0.25, Math.min(2, z));
+  const wx = (mx - v.x) / v.z, wy = (my - v.y) / v.z; v.x = mx - wx * z; v.y = my - wy * z; v.z = z; applyView();
+}
+function drawMini() {
+  const cv = $('#mini'), x = cv.getContext('2d'), b = bounds(), W = cv.width, H = cv.height, pad = 14;
+  const k = Math.min((W - pad * 2) / (b.x1 - b.x0), (H - pad * 2) / (b.y1 - b.y0));
+  const ox = pad - b.x0 * k + ((W - pad * 2) - (b.x1 - b.x0) * k) / 2, oy = pad - b.y0 * k + ((H - pad * 2) - (b.y1 - b.y0) * k) / 2;
+  const css = getComputedStyle(document.documentElement);
+  x.clearRect(0, 0, W, H);
+  x.strokeStyle = css.getPropertyValue('--wire'); x.lineWidth = 2;
+  wires.forEach(w => { x.beginPath(); x.moveTo(ox + (w.A.x + w.A.w / 2) * k, oy + (w.A.y + w.A.h / 2) * k); x.lineTo(ox + (w.B.x + w.B.w / 2) * k, oy + (w.B.y + w.B.h / 2) * k); x.stroke(); });
+  document.querySelectorAll('#nodes .node').forEach(e => {
+    x.fillStyle = e.classList.contains('sel') ? css.getPropertyValue('--accent') : e.classList.contains('ai') ? css.getPropertyValue('--ai') : css.getPropertyValue('--soft');
+    x.fillRect(ox + e.offsetLeft * k, oy + e.offsetTop * k, Math.max(3, e.offsetWidth * k), Math.max(3, e.offsetHeight * k));
+  });
+  const v = V(), c = $('#canvas').getBoundingClientRect();
+  x.strokeStyle = css.getPropertyValue('--ink'); x.lineWidth = 2;
+  x.strokeRect(ox + (-v.x / v.z) * k, oy + (-v.y / v.z) * k, c.width / v.z * k, c.height / v.z * k);
+  cv._map = {k, ox, oy};
+}
+function drawStrip() {
+  $('#strip').innerHTML = S.scenes.map((s, i) => {
+    const inn = node(s.id + '.in')?.params?.transition;
+    return `<div class="clip ${s.id === sel.scene ? 'sel' : ''} ${S.byAI.some(x => x === s.id || x.startsWith(s.id + '.')) ? 'ai' : ''}" draggable="true" data-scene="${esc(s.id)}" title="${esc(s.label)}">
+      <img loading="lazy" alt="" src="/api/preview?scene=${encodeURIComponent(s.id)}&at=0.75&k=${s.key}">
+      ${i ? `<span class="tr">${esc(inn || S.transition)}</span>` : ''}
+      <div class="t"><b>${i + 1}</b> ${esc(typeName(s.type))} <span>${s.seconds} s${node(s.id).locked ? ' · locked' : ''}</span></div></div>`;
+  }).join('') + `<div class="clip" style="width:auto;justify-content:center;padding:0 12px;cursor:default;color:var(--soft)">${S.scenes.length} scenes · drag to reorder</div>`;
+}
+function setPreview(force) {
+  if (!sel.scene) return;
+  const s = S.scenes[sceneIdx(sel.scene)], at = $('#scrub').value, tok = ++pvToken;
+  const url = `/api/preview?scene=${encodeURIComponent(s.id)}&at=${at}&k=${s.key}`;
+  const img = new Image(); $('#busy').classList.add('on'); $('#busy').textContent = 'drawing…';
+  img.onload = () => { if (tok !== pvToken) return; $('#pv').src = url; $('#busy').classList.remove('on'); };
+  img.onerror = async () => { if (tok !== pvToken) return; $('#busy').classList.remove('on');
+    try { await api(url); } catch (e) { toast('Preview: ' + e.message, 'bad'); } };
+  img.src = url;
+  $('#vid').style.display = 'none'; $('#frame').style.display = 'flex';
+}
+function fitFrame() {
+  if (!S) return; const [a, b] = S.aspect.split(':').map(Number), r = $('#screen').getBoundingClientRect();
+  const k = Math.min((r.width - 16) / a, (r.height - 16) / b); $('#frame').style.width = a * k + 'px'; $('#frame').style.height = b * k + 'px';
+}
+function showVideo(src) { const v = $('#vid'); v.src = src; v.style.display = 'block'; $('#frame').style.display = 'none'; v.play().catch(() => {}); }
+
+// ---------------------------------------------------------------- inspector
+function control(target, name, spec, value, locked, inherited) {
+  if (inherited) spec = {...spec, default: inherited.value, why: `now ${short(inherited.value)}, from style ${inherited.from}` + (spec.why ? ' · ' + spec.why : '')};
+  const id = 'c-' + target.replace(/\W/g, '_') + '-' + name.replace(/\W/g, '_');
+  const reset = value !== undefined && value !== null ? `<button class="rs" data-reset="${esc(target)}" data-p="${esc(name)}">reset</button>` : '';
+  const dis = locked ? 'disabled' : '';
+  const why = spec.why ? `<div class="why">${esc(spec.why)}</div>` : '';
+  let input = '';
+  const v = value ?? spec.default;
+  if (spec.type === 'number') {
+    input = `<div class="rng"><input type="range" ${dis} id="${id}" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${v ?? spec.min}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="num">
+      <input type="number" ${dis} min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${v ?? ''}" placeholder="auto" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="num" aria-label="${esc(name)}"></div>`;
+  } else if (spec.type === 'select') {
+    input = `<select ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str"><option value="">${v == null ? '(design default)' : '(reset)'}</option>${spec.options.map(o => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  } else if (spec.type === 'bool') {
+    input = `<select ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="bool"><option value="">(default${spec.default != null ? ': ' + (spec.default ? 'yes' : 'no') : ''})</option><option value="true" ${value === true ? 'selected' : ''}>yes</option><option value="false" ${value === false ? 'selected' : ''}>no</option></select>`;
+  } else if (spec.type === 'colour') {
+    const hex = /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#888888';
+    input = `<div class="col"><input type="color" ${dis} id="${id}" value="${hex}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">
+      <span>${esc(value || 'design default')}</span>${spec.accent ? `<button ${dis} data-set="${esc(target)}" data-p="${esc(name)}" data-v='"accent"'>use accent</button>` : ''}</div>`;
+  } else if (spec.type === 'list') {
+    input = `<input type="text" ${dis} id="${id}" value="${esc((value || []).join(', '))}" placeholder="word, another word" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="list">`;
+  } else if (spec.type === 'callout') {
+    const c = value || {};
+    input = `<div class="rng"><input type="number" ${dis} step="0.01" min="0" max="1" value="${c.x ?? ''}" placeholder="x 0-1" data-co="x" data-t="${esc(target)}" aria-label="across">
+      <input type="number" ${dis} step="0.01" min="0" max="1" value="${c.y ?? ''}" placeholder="y 0-1" data-co="y" data-t="${esc(target)}" aria-label="down">
+      <input type="text" ${dis} value="${esc(c.label ?? '')}" placeholder="label" data-co="label" data-t="${esc(target)}" aria-label="label"></div>`;
+  } else if (spec.type === 'json') {
+    input = `<textarea ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="json">${esc(value == null ? '' : JSON.stringify(value))}</textarea>`;
+  } else {
+    input = spec.long ? `<textarea ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">${esc(value ?? '')}</textarea>`
+      : `<input type="text" ${dis} id="${id}" value="${esc(value ?? '')}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">`;
+  }
+  return `<div class="row"><label for="${id}">${esc(labelOf(name))} ${reset}</label>${input}${why}</div>`;
+}
+function askBox(id, stage) {
+  const n = node(id), a = n?.ask;
+  let h = `<div class="sec describe"><h3>Describe it</h3><textarea id="dtext" placeholder="Say what you want, in your words: “warmer and slower”, “make this feel like the moment it breaks”"></textarea>
+    <div class="btns" style="margin-top:6px"><button class="primary" id="dgo" data-node="${esc(id)}" ${stage ? `data-stage="${stage}"` : ''}>Send</button><span class="why" style="color:var(--faint)">Simple asks happen now. Everything you write is kept here for your AI to read.</span></div>`;
+  if (a) {
+    h += `<div class="askbox"><div class="q">“${esc(a.text)}”</div>
+      ${a.applied?.length ? `<div style="margin-top:6px">Venus did: ${a.applied.map(esc).join('; ')}</div>` : ''}
+      ${a.left?.length ? `<div style="margin-top:2px">For your AI: ${a.left.map(esc).join('; ')}</div>` : ''}
+      <div class="st ${a.status}" style="margin-top:8px">${a.status === 'done' ? 'Your AI answered' : a.status === 'waiting' ? 'Waiting for your AI' : 'Done by Venus · your AI will look it over'}</div>
+      ${a.status === 'done' ? `<div class="ans">${esc(a.answer || 'Done')}</div>` : ''}</div>`;
+  }
+  return h + '</div>';
+}
+const TOOL_WHY = {'blur.amount': 'how soft', 'glow.amount': 'how strong the glow', 'vignette.amount': 'how dark the edges',
+  'grade.bright': 'lighter or darker', 'grade.contrast': '1 = as it is', 'grade.saturation': '0 = no colour, 1 = as it is', 'grade.warmth': 'cool (-) or warm (+)'};
+function branchHere(b) { if (G && !G.dz) return b === 'output'; if (b === 'background' || b === 'output') return true; return !!G?.branches[b]; }
+function toolButtons(on) {
+  const list = Object.keys(SC.tools).flatMap(t => SC.toolOn[t].filter(b => (on ? b === on : true) && branchHere(b)).map(b => [t, b]));
+  if (!list.length) return '';
+  return `<div class="sec"><h3>Add a tool${on ? ' here' : ''}</h3><div class="btns">${list.map(([t, b]) => `<button data-add="${t}" data-on="${b}" title="${esc(TOOL_DOES[t])}">${TOOL_NAME[t]}${on ? '' : ' · ' + BRANCH_NAME[b].toLowerCase()}</button>`).join('')}</div></div>`;
+}
+function drawInspector() {
+  const el = $('#insp'), k = sel.node, sid = sel.scene;
+  if (!k) { el.innerHTML = '<div class="what">Click a node to edit it.</div>'; return; }
+  let h = '';
+  if (k === 'settings' || k === 'sound') {
+    const n = node(k) || {params: {}};
+    h += `<h2>${k === 'settings' ? 'Video settings' : 'Sound'}</h2><div class="what">${esc(cap(SC.what[k]))}.</div>`;
+    for (const [p, spec] of Object.entries(SC.schema[k])) h += control(k, p, spec, n.params[p], n.locked);
+    h += askBox(k);
+  } else if (k.startsWith('style:')) {
+    const u = k.slice(6), n = node(u) || {params: {}};
+    h += `<h2>Style · ${esc(u)}</h2><div class="what">A shared look. Every scene wired to it follows it; a scene's own setting still wins.
+      Used by: ${S.doc.nodes.filter(s => (s.use || []).includes(u)).map(s => esc(s.id)).join(', ')}</div>`;
+    for (const [p, v] of Object.entries(n.params)) {
+      const [part, name] = p.includes('.') ? p.split('.') : ['scene', p];
+      const st = part === 'scene' ? 'scene' : (SC.stages.find(x => x[1] === part && x[2].includes(name)) || [part])[0];
+      const spec = (SC.schema[st] || SC.schema[part] || {})[name] || {type: 'json'};
+      h += control(u, p, spec, v, false);
+    }
+    const all = [['scene', 'seconds'], ['scene', 'dark']].concat(SC.stages.filter(s => s[0] !== 'graphic' && s[0] !== 'in').flatMap(s => s[2].filter(p => !['file', 'from', 'text', 'caption', 'subtitle', 'who', 'callout', 'note', 'label', 'big_words'].includes(p)).map(p => [s[1], p])));
+    h += `<div class="row"><label>add a setting</label><select id="addst" data-style="${esc(u)}"><option value="">choose…</option>${all.map(([pt, p]) => `<option value="${pt === 'scene' ? p : pt + '.' + p}">${pt === 'scene' ? p : pt + '.' + p}</option>`).join('')}</select></div>`;
+    h += `<div class="btns"><button data-unuse="${esc(u)}">Unwire from ${esc(sid)}</button></div>` + askBox(u);
+  } else if (k === 'paper') {
+    const n = node(sid);
+    h += `<h2>Paper</h2><div class="what">${G?.dz ? 'The page everything sits on. A tool added here (blur, colour, dark edges) changes the paper only.' : 'The background of the scene. In this kind of scene a tool changes the whole picture.'}</div>`;
+    for (const p of ['dark', 'background']) h += control(sid, p, SC.schema.scene[p], n.params[p], n.locked);
+    h += toolButtons(G?.dz ? 'background' : 'output') + askBox(sid);
+  } else if (k.startsWith('merge:')) {
+    const l = k.slice(6), i = G.order.indexOf(l);
+    h += `<h2>What sits on top</h2><div class="what">Here the ${LAYER_NAME[l].toLowerCase()} goes on top of what is already there. Change the order with the arrows${simple ? '' : ', or drag the dot under a branch onto another stack'}.</div>`;
+    h += `<div class="sec"><h3>Stack, bottom to top</h3>${G.order.map((x, j) => `<div class="rng" style="margin-bottom:4px"><span style="flex:1;${x === l ? 'font-weight:700' : ''}"><span style="color:${LAYER_COL[x]}">●</span> ${LAYER_NAME[x]}</span>
+      <button data-lay="${x}" data-dir="-1" ${j === 0 || !G.dz ? 'disabled' : ''} title="lower">▼</button><button data-lay="${x}" data-dir="1" ${j === G.order.length - 1 || !G.dz ? 'disabled' : ''} title="higher">▲</button></div>`).reverse().join('')}
+      ${G.dz ? '<div class="why">Top of the list is drawn last, over everything.</div>' : '<div class="why">This kind of scene keeps a fixed order.</div>'}
+      ${G.dz && node(sid).params.layers ? '<div class="btns" style="margin-top:6px"><button data-lay="reset">Usual order</button></div>' : ''}</div>`;
+    h += toolButtons(['picture', 'words', 'marks'].includes(l) ? l : null);
+  } else if (k.startsWith('tool:')) {
+    const id = k.slice(5), n = node(id), p = n.params, spec = SC.tools[p.tool], lk = !!node(sid)?.locked;
+    h += `<h2>${esc(TOOL_NAME[p.tool] || p.tool)} ${lk ? '<span class="lkd">locked</span>' : ''}</h2>
+      <div class="what">${esc(TOOL_DOES[p.tool] || '')}. It changes ${G.dz ? esc(onWhat(p.on)) : 'the whole picture'}.${n.off ? ' <b>Switched off.</b>' : ''}</div>`;
+    for (const [q, [lo, hi, def]] of Object.entries(spec)) h += control(id, q, {type: 'number', min: lo, max: hi, step: 0.01, default: def, why: TOOL_WHY[p.tool + '.' + q] || ''}, p[q], lk);
+    if (G.dz) h += `<div class="row"><label for="ton">Works on</label><select id="ton" data-tool="${esc(id)}" ${lk ? 'disabled' : ''}>${SC.toolOn[p.tool].filter(b => branchHere(b)).map(b => `<option value="${b}" ${b === p.on ? 'selected' : ''}>${BRANCH_NAME[b]}</option>`).join('')}</select></div>`;
+    h += `<div class="btns"><button data-tpw="${esc(id)}">${n.off ? 'Switch on' : 'Switch off'} (D)</button><button data-tcopy="${esc(id)}">Duplicate (Ctrl+D)</button><button data-trm="${esc(id)}">Delete (Del)</button></div>`;
+  } else if (k === 'out') {
+    const n = node(sid), i = sceneIdx(sid);
+    h += `<h2>Scene ${i + 1} ${n.locked ? '<span class="lkd">locked</span>' : ''}</h2><div class="what">${esc(typeName(n.params.type))}. Its length, page and shared styles.</div>`;
+    for (const [p, spec] of Object.entries(SC.schema.scene)) h += control(sid, p, spec, n.params[p], n.locked);
+    if (simple && stagesOf(sid).includes('in')) {
+      const ip = node(sid + '.in')?.params || {}, ilk = stageLocked(sid, 'in');
+      h += `<div class="sec"><h3>How it comes in</h3>` + paramsOf('in').filter(q => SC.schema.in?.[q]).map(q => control(sid + '.in', q, SC.schema.in[q], ip[q], ilk)).join('') + '</div>';
+    }
+    const styles = S.doc.nodes.filter(x => x.kind === 'style');
+    h += `<div class="sec"><h3>Shared styles</h3>${styles.map(s => `<label style="display:flex;gap:6px;margin-bottom:4px"><input type="checkbox" data-wire="${esc(s.id)}" ${(n.use || []).includes(s.id) ? 'checked' : ''}> ${esc(s.id)}</label>`).join('') || '<div class="why">None yet. A style is a look several scenes can share.</div>'}
+      <div class="rng" style="margin-top:6px"><input type="text" id="newstyle" placeholder="new style name"><button id="mkstyle">Create and wire</button></div></div>`;
+    h += `<div class="sec"><h3>Scene</h3><div class="btns"><button id="lk">${n.locked ? 'Unlock' : 'Lock'} scene</button>
+      <button id="ml" ${i === 0 ? 'disabled' : ''}>◀ Move</button><button id="mr" ${i === S.scenes.length - 1 ? 'disabled' : ''}>Move ▶</button>
+      <button id="cp">Copy</button><button id="rm">Remove</button></div></div>` + askBox(sid);
+  } else {
+    const st = k.slice(3), part = partOf(st), id = sid + '.' + part, n = node(id), lk = stageLocked(sid, st), off = stageOff(sid, st);
+    h += `<h2>${stageName(sid, st)} ${lk ? '<span class="lkd">locked</span>' : ''}</h2>
+      <div class="what">${esc(cap(SC.what[part] || ''))}${off ? ' · <b>switched off</b>' : ''}</div>`;
+    const spec = SC.schema[st] || {}, p = n?.params || {};
+    const styled = S.scenes[sceneIdx(sid)].styled || {};
+    for (const name of paramsOf(st)) if (spec[name]) {
+      const key = SC.partKeys[part]?.includes(name) ? name : part + '_' + name, inh = styled[key];
+      h += control(id, name, spec[name], p[name], lk, inh && p[name] == null ? inh : null);
+    }
+    if (simple && st === 'picture' && stagesOf(sid).includes('look')) {  // the Look node folds in here in the simple view
+      const ls = SC.schema.look || {}, loff = stageOff(sid, 'look');
+      h += `<div class="sec"><h3>Look${loff ? ' · switched off' : ''}</h3>`;
+      for (const name of paramsOf('look')) if (ls[name]) { const key = SC.partKeys.picture?.includes(name) ? name : 'picture_' + name, inh = styled[key];
+        h += control(id, name, ls[name], p[name], lk, inh && p[name] == null ? inh : null); }
+      h += `<div class="btns"><button data-pw="look">${loff ? 'Switch the look on' : 'Switch the look off'}</button></div></div>`;
+    }
+    h += `<div class="btns">${SC.bypass.includes(st) ? `<button data-pw="${st}">${off ? 'Switch on' : 'Switch off'} (D)</button>` : ''}
+      ${n ? `<button id="lkp" data-node="${esc(id)}">${n.locked ? 'Unlock' : 'Lock'} ${stageName(sid, st).toLowerCase()}</button>` : ''}</div>` + askBox(id, st);
+  }
+  el.innerHTML = h;
+}
+
+// ---------------------------------------------------------------- changes
+let pending = {}, timer = null;
+function queue(target, p, v) {
+  pending[target + '\u0000' + p] = v; clearTimeout(timer); timer = setTimeout(flush, 280);
+}
+async function flush() {
+  const changes = Object.entries(pending).map(([k, v]) => { const [t, p] = k.split('\u0000'); return [t + '.' + p, v]; });
+  pending = {}; if (!changes.length) return;
+  try { const r = await api('/api/set', {changes}); apply(r.state, true); }
+  catch (e) { toast(e.message, 'bad'); refresh(true); }
+}
+async function op(path, body, msg) {
+  try { const r = await api(path, body); apply(r.state, true); if (msg) toast(msg); return r; } catch (e) { toast(e.message, 'bad'); }
+}
+function apply(state, mine) {
+  const before = S; S = state; version = S.version;
+  if (!S.scenes.find(s => s.id === sel.scene)) sel.scene = S.scenes[0]?.id;
+  const gone = k => k && ((k.startsWith('tool:') && !node(k.slice(5))) || (k.startsWith('style:') && !(node(sel.scene)?.use || []).includes(k.slice(6))));
+  if (gone(sel.node)) sel.node = 'out';
+  $('#file').textContent = S.file + (S.design ? ' · ' + S.design : '') + ' · ' + S.aspect;
+  $('#undo').disabled = !S.canUndo; $('#redo').disabled = !S.canRedo;
+  const ai = S.byAI.length; $('#aichip').style.display = ai ? '' : 'none';
+  $('#aichip').textContent = `your AI changed ${ai} node${ai > 1 ? 's' : ''} · seen`;
+  const r = S.render, rs = r.state === 'running' ? `rendering… ${Math.round(Date.now() / 1000 - r.started)} s` : r.state === 'done' ? `rendered in ${r.seconds} s` : r.state === 'failed' ? 'render failed' : (S.built ? 'last render ' + S.built : 'not rendered yet');
+  $('#status').textContent = rs + (S.asks.length ? ` · ${S.asks.length} description${S.asks.length > 1 ? 's' : ''} for your AI` : '');
+  $('#full').style.display = r.state === 'done' ? '' : 'none';
+  $('#render').disabled = r.state === 'running';
+  if (!mine && before && before.version !== S.version && S.byAI.length) toast('Your AI changed: ' + S.byAI.slice(0, 4).map(friendly).join(', '), 'ai');
+  const keepFocus = document.activeElement && $('#insp').contains(document.activeElement) && mine;
+  fitFrame(); drawStrip(); drawCanvas(); if (!keepFocus) drawInspector();
+  const cur = before && before.scenes.find(s => s.id === sel.scene), now = S.scenes.find(s => s.id === sel.scene);
+  if (!cur || !now || cur.key !== now.key || !$('#pv').src) setPreview();
+}
+function friendly(id) {
+  const [sid, part] = id.split('.'); if (!node(sid) || node(sid).kind !== 'scene') return id;
+  const t = node(id); if (t?.kind === 'tool') return sceneName(sid) + ' ' + (TOOL_NAME[t.params.tool] || 'tool').toLowerCase();
+  return sceneName(sid) + (part ? ' ' + ({in: 'transition', picture: 'photo', mark: 'marks'}[part] || part) : '');
+}
+async function refresh(force) {
+  try { const st = await api('/api/state'); if (force || st.version !== version || JSON.stringify(st.render) !== JSON.stringify(S?.render)) apply(st, false); } catch (e) { $('#status').textContent = 'Studio is not running'; }
+}
+function select(scene, nodeKey) { sel.scene = scene; sel.node = nodeKey || sel.node || 'out'; drawStrip(); drawCanvas(); drawInspector(); setPreview(); }
+
+// ---------------------------------------------------------------- events
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.kind === 'num' && t.dataset.t) {
+    const v = t.value === '' ? null : Number(t.value);
+    t.parentElement.querySelectorAll('input').forEach(o => { if (o !== t) o.value = v ?? ''; });
+    queue(t.dataset.t, t.dataset.p, v);
+  } else if (t.type === 'color' && t.dataset.t) queue(t.dataset.t, t.dataset.p, t.value.toUpperCase());
+});
+document.addEventListener('change', e => {
+  const t = e.target, d = t.dataset;
+  if (d.kind === 'str' && t.type !== 'color') queue(d.t, d.p, t.value === '' ? null : t.value);
+  else if (d.kind === 'bool') queue(d.t, d.p, t.value === '' ? null : t.value === 'true');
+  else if (d.kind === 'list') queue(d.t, d.p, t.value.trim() ? t.value.split(',').map(x => x.trim()).filter(Boolean) : null);
+  else if (d.kind === 'json') { try { queue(d.t, d.p, t.value.trim() ? JSON.parse(t.value) : null); } catch (err) { toast('That is not valid: ' + err.message, 'bad'); } }
+  else if (d.co) {
+    const box = t.parentElement, get = k => box.querySelector(`[data-co="${k}"]`).value;
+    const x = get('x'), y = get('y'), label = get('label');
+    queue(d.t, 'callout', x === '' && y === '' && !label ? null : {x: Number(x || 0.5), y: Number(y || 0.5), label: label || 'here'});
+  } else if (d.wire) op('/api/use', {style: d.wire, scene: sel.scene, on: t.checked});
+  else if (d.tool && t.id === 'ton') op('/api/tool_move', {node: d.tool, on: t.value});
+  else if (t.id === 'addst' && t.value) { queue(d.style, t.value, t.value.endsWith('size') ? 1 : t.value === 'seconds' ? 3 : t.value.endsWith('shape') ? 'none' : t.value.endsWith('photo') ? 'colour' : t.value === 'dark' ? true : 0); }
+});
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button,.node,.clip'); if (!t) return;
+  const d = t.dataset;
+  if (d.pw) { e.stopPropagation(); return op('/api/switch', {scene: sel.scene, stage: d.pw, on: stageOff(sel.scene, d.pw)}); }
+  if (d.reset) return queue(d.reset, d.p, null);
+  if (d.set) return queue(d.set, d.p, JSON.parse(d.v));
+  if (d.unuse) return op('/api/use', {style: d.unuse, scene: sel.scene, on: false});
+  if (d.tpw) { e.stopPropagation(); return op('/api/tool_toggle', {node: d.tpw, on: !!node(d.tpw).off}); }
+  if (d.tcopy) return dupTool(d.tcopy);
+  if (d.trm) return rmTool(d.trm);
+  if (d.add) return addTool(d.add, d.on, d.before);
+  if (d.lay) return restack(d.lay, Number(d.dir));
+  if (t.classList.contains('node') && !e.target.closest('input')) { if (moved) return; sel.node = d.k; drawCanvas(); drawInspector(); return; }
+  if (t.classList.contains('clip') && d.scene) return select(d.scene);
+  const i = sceneIdx(sel.scene);
+  switch (t.id) {
+    case 'undo': return op('/api/undo', {});
+    case 'redo': return op('/api/redo', {});
+    case 'vset': sel.node = 'settings'; return drawInspector();
+    case 'sound': sel.node = 'sound'; return drawInspector();
+    case 'theme': { const r = document.documentElement, n = r.dataset.theme === 'dark' ? 'light' : 'dark'; r.dataset.theme = n; try { localStorage.setItem('venus-theme2', n); } catch (er) {} return drawCanvas(); }
+    case 'render': return op('/api/render', {}, 'Rendering the full video. Keep working; it shows here when done.');
+    case 'full': return showVideo('/api/video?t=' + Date.now());
+    case 'play': { $('#busy').classList.add('on'); $('#busy').textContent = 'making a quick draft…';
+      const s = S.scenes[i]; try { const r = await fetch(`/api/play?scene=${encodeURIComponent(s.id)}&k=${s.key}`); if (!r.ok) throw new Error((await r.json()).error);
+        showVideo(URL.createObjectURL(await r.blob())); } catch (er) { toast('Play: ' + er.message, 'bad'); } $('#busy').classList.remove('on'); return; }
+    case 'holdA': holdA = $('#pv').src; $('#pa').src = holdA; ['#pa', '#wl', '#wipe', '#wipelab'].forEach(s => $(s).style.display = ''); wipe(); return toast('Held as A. Change something, then drag the wipe to compare.');
+    case 'lk': return op('/api/lock', {node: sel.scene, on: !node(sel.scene).locked});
+    case 'lkp': return op('/api/lock', {node: d.node, on: !node(d.node).locked});
+    case 'ml': return op('/api/move', {scene: sel.scene, before: S.scenes[i - 1].id});
+    case 'mr': return op('/api/move', {scene: sel.scene, after: S.scenes[i + 1].id});
+    case 'cp': return op('/api/copy', {scene: sel.scene}, 'Copied');
+    case 'rm': if (confirmRemove()) return op('/api/remove', {node: sel.scene}, 'Removed (Undo brings it back)'); return;
+    case 'mkstyle': { const name = $('#newstyle').value.trim(); if (name) op('/api/use', {style: name, scene: sel.scene, on: true}, `Style ${name} wired in: click it to give it settings`); return; }
+    case 'dgo': return describe(d.node, $('#dtext').value, d.stage);
+    case 'aichip': return;
+    case 'fit': return fit();
+    case 'tidy': try { localStorage.removeItem(layoutKey(sel.scene)); } catch (er) {} drawCanvas(); return requestAnimationFrame(fit);
+    case 'addn': { const r = t.getBoundingClientRect(); return openMenu(r.left, r.bottom + 4, null); }
+    case 'mode': simple = !simple; try { localStorage.setItem('venus-simple', simple ? '1' : '0'); } catch (er) {}
+      if (sel.node === 'st:look' || sel.node === 'st:in' || (simple && sel.node?.startsWith('merge:'))) sel.node = sel.node === 'st:look' ? 'st:picture' : 'out';
+      view = {}; drawCanvas(); drawInspector(); return toast(simple ? 'Simple view: the look sits inside the photo, the transition inside the scene' : 'Every node is showing');
+    case 'tipsbtn': $('#tips').style.display = ''; return;
+    case 'tipsok': $('#tips').style.display = 'none'; try { localStorage.setItem('venus-tips-seen', '1'); } catch (er) {} return;
+  }
+});
+let rmArmed = 0;
+function confirmRemove() { if (Date.now() - rmArmed < 3000) return true; rmArmed = Date.now(); toast('Click Remove again to remove this scene'); return false; }
+$('#aichip').onclick = () => op('/api/clear', {});
+async function describe(id, text, stage) {
+  text = (text || '').trim(); if (!text) return;
+  try { const r = await api('/api/describe', {node: id, text, stage}); apply(r.state, true);
+    toast(r.did.length ? 'Done now: ' + r.did.join('; ') + (node(id)?.ask?.left?.length ? ' · the rest is waiting for your AI' : '') : 'Saved for your AI to read'); }
+  catch (e) { toast(e.message, 'bad'); }
+}
+document.addEventListener('keydown', e => {
+  if (e.target.dataset?.desc && e.key === 'Enter') { describe(e.target.dataset.desc, e.target.value, e.target.dataset.stage); e.target.value = ''; return; }
+  if ((e.target.dataset?.gdesc || e.target.id === 'gask') && e.key === 'Enter') { describe(sel.scene, e.target.value); e.target.value = ''; return; }
+  if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); op(e.shiftKey ? '/api/redo' : '/api/undo', {}); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); if (sel.node?.startsWith('tool:')) dupTool(sel.node.slice(5)); return; }
+  if (e.key.toLowerCase() === 'd' && sel.node?.startsWith('st:') && SC.bypass.includes(sel.node.slice(3))) op('/api/switch', {scene: sel.scene, stage: sel.node.slice(3), on: stageOff(sel.scene, sel.node.slice(3))});
+  if (e.key.toLowerCase() === 'd' && sel.node?.startsWith('tool:')) op('/api/tool_toggle', {node: sel.node.slice(5), on: !!node(sel.node.slice(5)).off});
+  if ((e.key === 'Delete' || e.key === 'Backspace') && sel.node?.startsWith('tool:')) { e.preventDefault(); rmTool(sel.node.slice(5)); }
+  if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey) fit();
+  if (e.key === 'Escape') closeMenu();
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const i = sceneIdx(sel.scene) + (e.key === 'ArrowRight' ? 1 : -1); if (S.scenes[i]) select(S.scenes[i].id); }
+});
+$('#scrub').addEventListener('input', () => { clearTimeout($('#scrub')._t); $('#scrub')._t = setTimeout(setPreview, 120); });
+function wipe() { const p = $('#wipe').value; $('#pa').style.clipPath = `inset(0 ${100 - p}% 0 0)`; $('#wl').style.left = p + '%'; }
+$('#wipe').addEventListener('input', wipe);
+// ---------------------------------------------------------------- graph editing
+async function addTool(tool, on, before) {
+  const r = await op('/api/tool_add', {scene: sel.scene, tool, on, before: before || undefined});
+  if (r?.made) { sel.node = 'tool:' + r.made; drawCanvas(); drawInspector(); toast(`${TOOL_NAME[tool]} added. It changes ${G.dz ? onWhat(on) : 'the whole picture'}.`); }
+}
+async function dupTool(id) { const r = await op('/api/tool_copy', {node: id}); if (r?.made) { sel.node = 'tool:' + r.made; drawCanvas(); drawInspector(); } }
+async function rmTool(id) { const r = await op('/api/remove', {node: id}, 'Deleted (Undo brings it back)'); if (r && sel.node === 'tool:' + id) { sel.node = 'out'; drawInspector(); } }
+function restack(layer, dir) {
+  if (layer === 'reset') return op('/api/layers', {scene: sel.scene, order: []}, 'Back to the usual order');
+  const o = [...G.order], i = o.indexOf(layer), j = i + dir; if (j < 0 || j >= o.length) return;
+  [o[i], o[j]] = [o[j], o[i]]; return setOrder(o);
+}
+function setOrder(o) {
+  const full = o.concat(SC.layers.filter(x => !o.includes(x)));  // layers this scene doesn't show keep their place after
+  return op('/api/layers', {scene: sel.scene, order: full}, 'Now, from the bottom up: ' + o.map(x => LAYER_NAME[x].toLowerCase()).join(', '));
+}
+// right-click menu: add a tool (on a wire: right there)
+function closeMenu() { document.querySelector('.menu')?.remove(); }
+function openMenu(x, y, w) {
+  closeMenu();
+  const on = w ? (w.branch || (w.kind === 'trunk' ? w.branch : null)) : null;
+  const rows = Object.keys(SC.tools).map(t => {
+    const bs = SC.toolOn[t].filter(b => branchHere(b) && (!on || b === on));
+    return bs.length ? `<div class="mr" title="${esc(TOOL_DOES[t])}"><b>${TOOL_NAME[t]}</b>${bs.map(b => `<button data-add="${t}" data-on="${b}" ${w?.before ? `data-before="${esc(w.before)}"` : ''}>${on || bs.length === 1 ? 'add' : 'on ' + BRANCH_NAME[b].toLowerCase()}</button>`).join('')}</div>` : '';
+  }).join('');
+  const m = document.createElement('div'); m.className = 'menu';
+  m.innerHTML = `<div class="mh">${on ? 'Add a tool here' : 'Add a tool'}</div>${rows || '<div class="mr">No tool fits here</div>'}
+    <div class="mh">Graph</div><button class="mi" id="m-fit">Fit the graph (F)</button><button class="mi" id="m-tidy">Tidy the layout</button>`;
+  document.body.appendChild(m);
+  m.style.left = Math.min(x, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(y, innerHeight - m.offsetHeight - 8) + 'px';
+  m.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'm-fit') fit(); if (b.id === 'm-tidy') $('#tidy').click(); closeMenu(); });
+}
+document.addEventListener('pointerdown', e => { if (!e.target.closest('.menu')) closeMenu(); }, true);
+$('#canvas').addEventListener('contextmenu', e => {
+  e.preventDefault(); const h = e.target.closest('path.hit'); openMenu(e.clientX, e.clientY, h ? wires[+h.dataset.w] : null);
+});
+// dragging: nodes (where they sit is only for you), the canvas (pan), a branch's dot (restack)
+let drag = null, moved = false;
+const W2 = e => { const c = $('#canvas').getBoundingClientRect(), v = V(); return {x: (e.clientX - c.left - v.x) / v.z, y: (e.clientY - c.top - v.y) / v.z}; };
+$('#canvas').addEventListener('pointerdown', e => {
+  if (e.button !== 0 || e.target.closest('button,input,.cv-title,.cv-ask,#mini')) return;
+  moved = false;
+  const sx = e.clientX, sy = e.clientY;
+  const port = e.target.closest('.port[data-layer]');
+  if (port) { drag = {kind: 'wire', layer: port.dataset.layer, from: box(port.parentElement.dataset.k), sx, sy}; e.preventDefault(); return; }
+  const h = e.target.closest('[data-drag]');
+  if (h) { const n = h.parentElement, p = W2(e); drag = {kind: 'node', k: h.dataset.drag, el: n, dx: p.x - n.offsetLeft, dy: p.y - n.offsetTop, sx, sy}; return; }
+  if (!e.target.closest('.node')) { const v = V(); drag = {kind: 'pan', x: e.clientX - v.x, y: e.clientY - v.y, sx, sy}; $('#canvas').classList.add('panning'); }
+});
+function overAt(e, sel) { const hide = drag?.el; if (hide) hide.style.pointerEvents = 'none'; const t = document.elementFromPoint(e.clientX, e.clientY); if (hide) hide.style.pointerEvents = ''; return t?.closest(sel); }
+document.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (!moved && Math.hypot(e.clientX - (drag.sx ?? e.clientX), e.clientY - (drag.sy ?? e.clientY)) < 3) return; moved = true;
+  if (drag.kind === 'pan') { const v = V(); v.x = e.clientX - drag.x; v.y = e.clientY - drag.y; return applyView(); }
+  if (drag.kind === 'node') {
+    const p = W2(e); drag.el.style.left = (p.x - drag.dx) + 'px'; drag.el.style.top = (p.y - drag.dy) + 'px'; drawWires();
+    if (drag.k.startsWith('tool:')) { document.querySelectorAll('path.hot').forEach(x => x.classList.remove('hot'));
+      const h = overAt(e, 'path.hit.ins'); if (h) h.nextElementSibling?.classList.add('hot'); }
+    return;
+  }
+  if (drag.kind === 'wire') {
+    const p = W2(e), x1 = drag.from.x + drag.from.w / 2, y1 = drag.from.y + drag.from.h, m = Math.max(30, Math.abs(p.y - y1) / 2);
+    let t = $('#wires').querySelector('.tmp'); if (!t) { t = document.createElementNS('http://www.w3.org/2000/svg', 'path'); t.setAttribute('class', 'tmp');
+      t.setAttribute('fill', 'none'); t.setAttribute('stroke', LAYER_COL[drag.layer]); t.setAttribute('stroke-width', '2.5'); t.setAttribute('stroke-dasharray', '6 4'); $('#wires').appendChild(t); }
+    t.setAttribute('d', `M${x1} ${y1} C${x1} ${y1 + m} ${p.x} ${p.y - m} ${p.x} ${p.y}`);
+    document.querySelectorAll('.node.merge.drop').forEach(x => x.classList.remove('drop'));
+    overAt(e, '.node.merge')?.classList.add('drop');
+  }
+});
+document.addEventListener('pointerup', e => {
+  const d = drag; drag = null; $('#canvas').classList.remove('panning'); if (!d) return;
+  if (d.kind === 'node' && moved) {
+    try { const k = layoutKey(sel.scene), saved = JSON.parse(localStorage.getItem(k) || '{}'); saved[d.k] = {x: d.el.offsetLeft, y: d.el.offsetTop}; localStorage.setItem(k, JSON.stringify(saved)); } catch (er) {}
+    if (d.k.startsWith('tool:')) {  // dropped on a wire: the tool moves there
+      d.el.style.pointerEvents = 'none'; const h = document.elementFromPoint(e.clientX, e.clientY)?.closest('path.hit.ins'); d.el.style.pointerEvents = '';
+      const w = h && wires[+h.dataset.w], id = d.k.slice(5);
+      if (w && w.a !== d.k && w.b !== d.k && (w.branch || w.kind === 'trunk')) {
+        const tool = node(id).params.tool, to = w.branch;
+        if (!SC.toolOn[tool].includes(to)) toast(`${TOOL_NAME[tool]} doesn't work on ${onWhat(to)}`, 'bad');
+        else { try { const k = layoutKey(sel.scene), saved = JSON.parse(localStorage.getItem(k) || '{}'); delete saved[d.k]; localStorage.setItem(k, JSON.stringify(saved)); } catch (er) {}
+          op('/api/tool_move', {node: id, on: to, before: w.before || undefined}, `${TOOL_NAME[tool]} moved. It changes ${G.dz ? onWhat(to) : 'the whole picture'} now.`); }
+      }
+    }
+    setTimeout(() => { moved = false; }, 0);
+  }
+  if (d.kind === 'wire') {
+    $('#wires').querySelector('.tmp')?.remove();
+    const m = overAt(e, '.node.merge'); document.querySelectorAll('.node.merge.drop').forEach(x => x.classList.remove('drop'));
+    if (m && m.dataset.merge !== d.layer) {
+      const o = G.order.filter(x => x !== d.layer); o.splice(o.indexOf(m.dataset.merge) + (G.order.indexOf(m.dataset.merge) > G.order.indexOf(d.layer) ? 1 : 0), 0, d.layer);
+      try { localStorage.removeItem(layoutKey(sel.scene)); } catch (er) {}
+      setOrder(o);
+    } else drawWires();
+  }
+  if (d.kind === 'pan' && !moved && !e.target.closest('.node')) { /* a click on empty canvas */ }
+});
+$('#canvas').addEventListener('wheel', e => {
+  e.preventDefault(); const c = $('#canvas').getBoundingClientRect();
+  if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) zoomAt(e.clientX - c.left, e.clientY - c.top, V().z * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
+  else { V().x -= e.deltaX; applyView(); }
+}, {passive: false});
+$('#mini').addEventListener('click', e => {
+  const m = $('#mini')._map; if (!m) return; const r = $('#mini').getBoundingClientRect(), sx = $('#mini').width / r.width;
+  const wx = ((e.clientX - r.left) * sx - m.ox) / m.k, wy = ((e.clientY - r.top) * sx - m.oy) / m.k, v = V(), c = $('#canvas').getBoundingClientRect();
+  v.x = c.width / 2 - wx * v.z; v.y = c.height / 2 - wy * v.z; applyView();
+});
+// what a wire or a junction means, on hover
+$('#canvas').addEventListener('pointermove', e => {
+  const tip = $('#wtip'), t = drag ? null : e.target.closest?.('[data-tip]');
+  if (!t || !t.dataset.tip) { tip.classList.remove('on'); return; }
+  const [a, b] = t.dataset.tip.split('|'); tip.innerHTML = esc(a) + (b ? `<i>${esc(b)}</i>` : '');
+  tip.classList.add('on'); tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = (e.clientY + 16) + 'px';
+});
+$('#canvas').addEventListener('pointerleave', () => $('#wtip').classList.remove('on'));
+// reordering scenes in the strip
+let dragScene = null;
+$('#strip').addEventListener('dragstart', e => { dragScene = e.target.closest('.clip')?.dataset.scene; });
+$('#strip').addEventListener('dragover', e => { const c = e.target.closest('.clip[data-scene]'); if (!c || !dragScene) return; e.preventDefault();
+  document.querySelectorAll('.clip.drop').forEach(x => x.classList.remove('drop')); c.classList.add('drop'); });
+$('#strip').addEventListener('drop', e => { const c = e.target.closest('.clip[data-scene]'); e.preventDefault();
+  if (c && dragScene && c.dataset.scene !== dragScene) op('/api/move', {scene: dragScene, before: c.dataset.scene}); dragScene = null; });
+window.addEventListener('resize', () => { fitFrame(); if (sel.scene) { drawWires(); applyView(); } });
+(async () => {
+  SC = await api('/api/schema'); const st = await api('/api/state'); sel.scene = st.scenes[0]?.id; sel.node = 'out'; apply(st, true);
+  try { if (!localStorage.getItem('venus-tips-seen')) $('#tips').style.display = ''; } catch (e) {}
+  setInterval(() => refresh(false), 1000);
+})();
+</script></body></html>

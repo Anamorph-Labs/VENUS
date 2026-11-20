@@ -667,6 +667,15 @@ def cmd_nodes(a: argparse.Namespace) -> None:
         if problems:
             print("\nproblems:\n  " + "\n  ".join(problems))
         return
+    if a.action in ("asks", "listen"):
+        import time as _time
+
+        end = _time.time() + (a.timeout or 0)
+        while a.action == "listen" and not nd.asks(doc) and _time.time() < end:
+            _time.sleep(1.0)  # wait for the person to describe something in Studio
+            doc = nd.read(f)
+        print(nd.asks_text(doc, str(f)))
+        return
     if a.action == "check":
         problems = nd.check(doc)
         if not problems:
@@ -717,6 +726,43 @@ def cmd_nodes(a: argparse.Namespace) -> None:
         done = [f"copied {ids[0]} as {new}"]
     elif a.action == "remove":
         done = [f"removed {x}" for nid in ids for x in nd.remove(doc, nid, a.force)]
+    elif a.action == "describe":
+        if len(ids) < 2:
+            raise SystemExit('describe a node in plain words: alvenus nodes describe FILE scene3.words "bigger and slower"')
+        got = nd.describe(doc, ids[0], " ".join(ids[1:]))
+        ask = (nd.find(doc, ids[0]) or {}).get("ask") or {}
+        done = [f"did: {'; '.join(got)}" if got else "nothing Venus could do on its own"]
+        if ask.get("left"):
+            done.append(f"left for your AI: {'; '.join(ask['left'])}")
+    elif a.action == "answer":
+        if len(ids) < 2:
+            raise SystemExit('answer a description: alvenus nodes answer FILE scene3.words "made the words bigger and slower"')
+        nd.answer(doc, ids[0], " ".join(ids[1:]))
+        done = [f"answered {ids[0]}"]
+    elif a.action in ("off", "on") and len(ids) == 1 and (nd.find(doc, ids[0]) or {}).get("kind") == "tool":
+        nd.toggle_tool(doc, ids[0], a.action == "on", a.force)
+        done = [f"{ids[0]} {a.action}"]
+    elif a.action == "add":
+        if len(ids) < 2 or not a.on:
+            raise SystemExit("add a tool: alvenus nodes add FILE scene3 blur amount=0.4 --on background  (see: alvenus nodes guide)")
+        params = {}
+        for item in ids[2:]:
+            k, eq, raw = item.partition("=")
+            if not eq:
+                raise SystemExit(f"{item}: write tool settings as NAME=VALUE")
+            params[k.strip()] = nd.parse_value(raw)
+        new = nd.add_tool(doc, ids[0], ids[1], a.on, a.force, **params)
+        if a.before:
+            nd.move_tool(doc, new, before=a.before, force=a.force)
+        done = [f"added {new} on the {a.on}"]
+    elif a.action == "layers":
+        if len(ids) < 2:
+            raise SystemExit("say the layers bottom to top: alvenus nodes layers FILE scene3 shape words picture marks")
+        done = ["layers, bottom to top: " + ", ".join(nd.set_layers(doc, ids[0], ids[1:], a.force))]
+    elif a.action in ("off", "on"):
+        if len(ids) != 2:
+            raise SystemExit(f"switch a stage of a scene {a.action}: alvenus nodes {a.action} FILE scene3 shape (look, shape, words, marks)")
+        done = [nd.switch(doc, ids[0], ids[1], a.action == "on", a.force)]
     elif a.action in ("use", "unuse"):
         if len(ids) < 2:
             raise SystemExit(f"{a.action} a style on scenes: alvenus nodes {a.action} FILE STYLE scene2 scene4")
@@ -994,17 +1040,22 @@ def main(argv: list[str] | None = None) -> None:
     nd = sub.add_parser("nodes", help="the video as named nodes your AI can point at: show, set, lock, move, and a map to look at",
                         description="Actions: init (storyboard -> node file), show, guide, set NODE.PARAM=VALUE..., lock ID..., "
                                     "unlock ID..., move SCENE, copy SCENE, remove ID..., use STYLE SCENE... (wire scenes to a shared style), "
-                                    "unuse STYLE SCENE..., check, view (an HTML map), export --out sb.json")
+                                    "unuse STYLE SCENE..., check, view (an HTML map), export --out sb.json, describe NODE TEXT, "
+                                    "asks (descriptions waiting for your AI), listen (wait for the next one), answer NODE NOTE, "
+                                    "off/on SCENE STAGE (switch look, shape, words or marks off to compare) or off/on TOOL, "
+                                    "add SCENE TOOL [p=v...] --on BRANCH (blur, glow, grade, vignette), layers SCENE LAYER... (bottom to top)")
     nd.add_argument("action", choices=["init", "show", "guide", "set", "lock", "unlock", "move", "copy", "remove", "use", "unuse", "check", "view",
-                                       "export"])
+                                       "export", "describe", "asks", "listen", "answer", "off", "on", "add", "layers"])
     nd.add_argument("file", nargs="?", default="", help="the node file (for init: the storyboard)")
     nd.add_argument("ids", nargs="*", help="node ids, or NODE.PARAM=VALUE for set")
     nd.add_argument("--out", "-o", help="where to write (init, view, export)")
     nd.add_argument("--force", action="store_true", help="change a locked node anyway (it stays locked), or replace a file")
     nd.add_argument("--after", metavar="SCENE")
-    nd.add_argument("--before", metavar="SCENE")
+    nd.add_argument("--before", metavar="ID", help="move: the scene to go before; add: the tool to go before")
+    nd.add_argument("--on", metavar="BRANCH", help="add: background, picture, words, marks or output")
     nd.add_argument("--first", action="store_true")
     nd.add_argument("--as", dest="as_id", metavar="ID", help="copy: the new scene's id")
+    nd.add_argument("--timeout", type=float, default=600, help="listen: seconds to wait for a description (default 600)")
 
     def run_nodes(a: argparse.Namespace) -> None:
         if a.action != "guide" and not a.file:
@@ -1012,6 +1063,19 @@ def main(argv: list[str] | None = None) -> None:
         cmd_nodes(a)
 
     nd.set_defaults(func=run_nodes)
+
+    so = sub.add_parser("studio", help="open Venus Studio: a node editor for a node file, in your browser, on this computer")
+    so.add_argument("file", help="a node file (make one with: alvenus nodes init storyboard.json)")
+    so.add_argument("--port", type=int, default=8765)
+    so.add_argument("--no-open", action="store_true", help="don't open the browser")
+
+    def run_studio(a: argparse.Namespace) -> None:
+        from .studio import serve
+
+        need_ffmpeg()
+        serve(Path(a.file), a.port, not a.no_open)
+
+    so.set_defaults(func=run_studio)
 
     rv = sub.add_parser("review", help="check a finished video: reading time, contrast, black frames, flashing, sound and picture")
     rv.add_argument("video")

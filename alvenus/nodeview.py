@@ -55,7 +55,8 @@ def view_data(path: Path, doc: dict) -> dict:
         scenes.append({**node(sn), "n": k + 1, "type": p.get("type", "?"), "seconds": p.get("seconds"),
                        "use": sn.get("use") or [], "thumb": thumb, "redrawn": sn["id"] in redrawn,
                        "trans": ((inn or {}).get("params") or {}).get("transition") or trans,
-                       "parts": [node(x) for x in parts if x["kind"] != "in"], "inNode": node(inn) if inn else None})
+                       "parts": [node(x) for x in parts if x["kind"] != "in"] + [node(t) for t in nd.tools_of(doc, sn["id"])],
+                       "inNode": node(inn) if inn else None})
     top = []
     for n in nd.tidy(doc)["nodes"]:
         if n["kind"] in ("settings", "sound", "style"):

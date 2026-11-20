@@ -795,5 +795,156 @@ class Nodes(unittest.TestCase):
         self.assertNotEqual(k, _scene_key({**sc, "_k": 2}, 3, 1080, 1920, 30))
 
 
+class Studio(unittest.TestCase):
+    def doc(self):
+        from alvenus import nodes as nd
+        return nd.to_nodes({"design": "paper", "scenes": [
+            {"type": "title", "text": "Hi", "seconds": 2},
+            {"type": "image", "file": "cup.jpg", "caption": "A cup", "seconds": 3, "words_size": 1.0}]})
+
+    def test_plain_asks_are_understood(self):
+        from alvenus.nodes import understand
+        got, rest = understand("much bigger, no shape and make it feel like a punch", "words")
+        self.assertEqual([(a, b) for a, b, _ in got], [("words", "size"), ("picture", "shape")])
+        self.assertEqual(rest, ["make it feel like a punch"])
+        got, rest = understand("picture bigger, tilt left, red, 4 seconds, whip", "scene")
+        self.assertEqual([(a, b) for a, b, _ in got], [("picture", "size"), ("picture", "angle"), ("picture", "shape_colour"),
+                                                       ("scene", "seconds"), ("in", "transition")])
+        self.assertEqual(rest, [])
+
+    def test_describe_applies_and_keeps_the_ask_for_the_ai(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        did = nd.describe(doc, "scene2.words", "bigger and slower, but more tense")
+        self.assertEqual(did, ["words.size = 1.2", "words.speed = 0.42"])
+        a = nd.find(doc, "scene2.words")["ask"]
+        self.assertEqual((a["status"], a["left"]), ("waiting", ["more tense"]))
+        self.assertIn("for you to do: more tense", nd.asks_text(doc, "v.nodes.json"))
+        nd.answer(doc, "scene2.words", "held the last word longer")
+        self.assertEqual(nd.asks(doc), [])
+        nd.describe(doc, "scene2.picture", "no shape", stage="shape")  # a part that wasn't there yet
+        self.assertEqual(nd.find(doc, "scene2.picture")["params"]["shape"], "none")
+        self.assertEqual(nd.check(doc), [])
+
+    def test_asks_do_not_break_locks(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        nd.lock(doc, ["scene1"])
+        with self.assertRaises(SystemExit):
+            nd.describe(doc, "scene1.words", "bigger")
+        old = nd.node_hash(nd.find(doc, "scene2.words"))
+        nd.find(doc, "scene2.words")["ask"] = {"text": "x", "status": "done"}
+        self.assertEqual(nd.node_hash(nd.find(doc, "scene2.words")), old)
+
+    def test_switching_a_stage_off(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        nd.switch(doc, "scene2", "words", on=False)
+        nd.switch(doc, "scene2", "shape", on=False)
+        sc = nd.to_storyboard(doc)["scenes"][1]
+        self.assertNotIn("caption", sc)
+        self.assertEqual(sc["picture_shape"], "none")
+        nd.switch(doc, "scene2", "words", on=True)
+        nd.switch(doc, "scene2", "shape", on=True)
+        self.assertEqual(nd.to_storyboard(doc)["scenes"][1]["caption"], "A cup")
+        self.assertNotIn("off", nd.find(doc, "scene2.words"))
+        with self.assertRaises(SystemExit):
+            nd.switch(doc, "scene2", "picture", on=False)
+
+    def test_studio_schema_covers_every_stage(self):
+        from alvenus import nodes as nd
+        from alvenus.studio import schema
+        sc = schema()
+        for stage, part, params in nd.STAGES:
+            for p in params:
+                self.assertIn(p, sc[stage], (stage, p))
+
+
+class Graph(unittest.TestCase):
+    """A scene as a node graph: layer order and tool nodes."""
+
+    def doc(self):
+        from alvenus import nodes as nd
+        return nd.to_nodes({"design": "paper", "scenes": [
+            {"type": "title", "text": "Hi", "seconds": 2},
+            {"type": "image", "file": "cup.jpg", "caption": "A cup", "seconds": 3,
+             "layers": ["shape", "words", "picture", "marks"],
+             "tools": [{"tool": "blur", "on": "background", "amount": 0.4}, {"tool": "glow", "on": "words", "off": True}]}]})
+
+    def test_tools_and_layers_survive_the_round_trip(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        self.assertEqual([n["id"] for n in nd.tools_of(doc, "scene2")], ["scene2.blur", "scene2.glow"])
+        self.assertEqual(nd.find(doc, "scene2.glow")["off"], ["tool"])
+        sb = nd.to_storyboard(doc)
+        self.assertEqual(sb["scenes"][1]["layers"], ["shape", "words", "picture", "marks"])
+        self.assertEqual(sb["scenes"][1]["tools"], [{"name": "blur", "tool": "blur", "on": "background", "amount": 0.4},
+                                                    {"name": "glow", "tool": "glow", "on": "words", "off": True}])
+        self.assertEqual(nd.to_storyboard(nd.to_nodes(sb)), sb)
+        self.assertEqual(nd.check(doc), [])
+
+    def test_bad_tools_are_refused_in_plain_words(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        nd.find(doc, "scene2.blur")["params"]["on"] = "words!"
+        nd.find(doc, "scene2.glow")["params"]["amount"] = 4
+        got = " ".join(nd.check(doc))
+        self.assertIn("blur can sit on", got)
+        self.assertIn("glow amount must be a number from 0 to 1", got)
+        with self.assertRaises(SystemExit):
+            nd.add_tool(self.doc(), "scene2", "vignette", "words")
+
+    def test_describing_changes_the_graph(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        nd.set_layers(doc, "scene2", [])
+        self.assertNotIn("layers", nd.find(doc, "scene2")["params"])  # the usual order is not written
+        did = nd.describe(doc, "scene2", "words behind the picture, soft glow on the picture, add a vignette, no blur")
+        self.assertEqual(nd.find(doc, "scene2")["params"]["layers"], ["shape", "words", "picture", "marks"])
+        tools = {n["id"]: n["params"] for n in nd.tools_of(doc, "scene2")}
+        self.assertEqual(tools["scene2.glow2"], {"tool": "glow", "on": "picture"})
+        self.assertEqual(tools["scene2.vignette"]["on"], "output")
+        self.assertNotIn("scene2.blur", tools)
+        self.assertEqual(len(did), 4)
+
+    def test_a_scene_lock_covers_its_tools(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        nd.lock(doc, ["scene2"])
+        with self.assertRaises(SystemExit):
+            nd.add_tool(doc, "scene2", "blur", "picture")
+        nd.find(doc, "scene2.blur")["params"]["amount"] = 0.9  # edited by hand
+        self.assertTrue(any("locked" in x for x in nd.check(doc)))
+
+    def test_copy_and_remove_take_the_tools_along(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        new = nd.copy_scene(doc, "scene2")
+        self.assertEqual([n["id"] for n in nd.tools_of(doc, new)], [f"{new}.blur", f"{new}.glow"])
+        gone = nd.remove(doc, "scene2")
+        self.assertIn("scene2.blur", gone)
+        self.assertEqual(nd.check(doc), [])
+
+    def test_words_are_drawn_into_the_scene_only_when_something_sits_over_them(self):
+        from alvenus.paper import ass_tools, inside
+        self.assertFalse(inside({"type": "image"}))
+        self.assertFalse(inside({"type": "image", "tools": [{"tool": "blur", "on": "words"}]}))
+        self.assertTrue(inside({"type": "image", "layers": ["shape", "words", "picture", "marks"]}))
+        self.assertTrue(inside({"type": "image", "tools": [{"tool": "vignette", "on": "output"}]}))
+        self.assertFalse(inside({"type": "image", "tools": [{"tool": "vignette", "on": "output", "off": True}]}))
+        ev = ["Dialogue: 20,0:00:00.00,0:00:01.00,Card,,0,0,0,,{\\an7\\bord0}HI"]
+        out = ass_tools(ev, [{"tool": "glow", "on": "words", "amount": 0.5}], 1080, "#D4F01E")
+        self.assertEqual(len(out), 2)
+        self.assertTrue(out[0].startswith("Dialogue: 19,"))
+        self.assertIn("\\bord6.5\\blur8.6", out[0])  # the halo comes after the event's own \\bord0, so it wins
+
+    def test_the_scene_cache_keys_on_words_only_when_they_are_drawn_in(self):
+        from alvenus.story import _scene_key
+        sc = {"type": "image", "caption": "one", "_design": "paper", "_k": 1}
+        self.assertEqual(_scene_key(sc, 3, 640, 360, 30), _scene_key({**sc, "caption": "two"}, 3, 640, 360, 30))
+        sc["layers"] = ["shape", "words", "picture", "marks"]
+        self.assertNotEqual(_scene_key(sc, 3, 640, 360, 30), _scene_key({**sc, "caption": "two"}, 3, 640, 360, 30))
+
+
 if __name__ == "__main__":
     unittest.main()

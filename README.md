@@ -171,6 +171,18 @@ lock the parts you like so nothing touches them, share settings between scenes
 with style nodes, and rebuild only what changed. `alvenus nodes view FILE` draws
 the node map as a page, with a frame of every scene.
 
+`alvenus studio video.nodes.json` opens **Venus Studio** in your browser: a node
+editor laid out like a compositing app, with a live frame of the scene and its
+node graph: the paper along the bottom, each layer (shape, picture, words, marks)
+dropping into a Merge from its own branch, and tool nodes (blur, glow, grade,
+vignette) you add with a right-click and drag onto any wire. Drag a branch onto
+another Merge to restack (words behind the print), pan, zoom, and a map in the
+corner. Sliders and colours for each node, switch-off to compare,
+a before/after wipe, undo, and one button to render. Describe what you want in
+any node's box; Venus does the simple asks at once and keeps every description
+on the node for your own AI, whose changes show up in Studio as it makes them.
+Nothing leaves your computer.
+
 More explainer graphics for talking-head cuts: `--map "3=city.png|0.3,0.6 Old port;
 0.7,0.4 Market"`, `--timeline "2=1990 First stall, 2024 500 stalls|How it grew"`,
 `--kinetic "5=lose, track"`.

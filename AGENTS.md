@@ -382,6 +382,63 @@ touches, and nothing else moves.
    with a frame of each scene from the last build, locks, and what changed. Send
    it to the creator so they can point at a node ("scene4.words feels slow").
 
+### Venus Studio: the creator edits, you help (`alvenus studio`)
+
+`alvenus studio FILE.nodes.json` opens a node editor in the creator's browser, on
+their computer: a viewer with a live frame of the selected scene, the scenes
+along the bottom, the scene's node graph in the middle, and sliders, colours and
+lists on the right. Every change is saved to the node file at once, and what you
+change in the file shows up in Studio within a second, outlined in blue, so the
+two of you work on the same video side by side.
+
+The graph is built like a compositing page. The **paper** runs along the bottom
+(the trunk). Each layer comes down into it along its own **branch** and is laid
+on top by a **Merge**, in order: by default shape, then picture (Picture ->
+Look), then words, then marks. After the last Merge come the output tools, then
+**In** (the transition) and **Output**. Style nodes are wired (dashed) into the
+nodes they set. The creator can drag a branch onto another Merge to restack, and
+add **tool nodes** anywhere (right-click, or on a wire): blur, glow, grade,
+vignette. You do the same from the command line:
+
+- `alvenus nodes layers FILE scene3 shape words picture marks` sets what sits over
+  what, bottom to top (here the words go behind the print, for a collage feel).
+  Anything left out keeps its place. Putting a layer over the words, or any
+  output tool, draws that scene's words into the scene itself.
+- `alvenus nodes add FILE scene3 glow amount=0.6 --on words` puts a tool on a
+  branch: `background` (the paper), `picture`, `words`, `marks`, or `output`
+  (everything merged above it). `--before scene3.blur` puts it ahead of another
+  tool. Tools are nodes like any other: `nodes set FILE scene3.glow.amount=0.3`,
+  `nodes off FILE scene3.glow`, `nodes remove FILE scene3.glow`.
+- Use them with taste, as an editor would: a blurred paper pushes the print
+  forward; a soft glow lifts the one line that matters; a vignette closes in on
+  a quiet moment; a grade on the picture alone (`grade --on picture`) matches a
+  photo to the page. One or two tools a scene, not a stack.
+- In scenes that are not designed pages (stats, charts, maps...), tools on the
+  paper, picture or output work on the whole picture, and the order is fixed.
+
+The creator can **describe what they want in any node's box** ("warmer and
+slower", "make this feel like the moment it breaks"). Plain asks Venus does at
+once; every description stays on the node for you:
+
+1. `alvenus nodes listen FILE` waits (up to 10 minutes; `--timeout`) until the
+   creator writes something, then prints each description with its node, what
+   Venus already did, what is left for you, and the node's settings now.
+   `alvenus nodes asks FILE` prints them without waiting.
+2. Read it as a storyteller: what does the creator feel is missing in that
+   moment? Make the change with `nodes set` (look at the scene with `nodes show
+   FILE sceneN` first). Check or refine what Venus already did.
+3. Answer in a few plain words, which the creator sees under their description:
+   `alvenus nodes answer FILE scene4.words "slowed the words so 'broken' lands last"`.
+4. Run `listen` again while Studio is open, so the creator never waits on you.
+
+Stages can be switched off to compare, as in a finishing app: `alvenus nodes off
+FILE scene3 shape` (look, shape, words, marks), `nodes on` to bring it back; a
+tool switches off by its id (`nodes off FILE scene3.glow`). Descriptions can
+change the graph too: "words behind the picture", "soft glow on the words",
+"blur the paper", "more contrast", "no vignette" are done by Venus at once. A
+description can also be written from the command line: `nodes describe FILE
+scene3.words "bigger"`.
+
 ## Rules
 
 - Everything stays on the creator's computer. Never upload their footage or script.

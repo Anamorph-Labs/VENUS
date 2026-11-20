@@ -44,7 +44,7 @@ CONTROLS = {
     "words_size": "size of the words, 1 = the design's own (0.4 to 2.5)",
     "words_speed": "seconds between words arriving (0.05 to 1.5); default fills about 70% of the scene",
     "words_delay": "seconds after the scene starts before the first word (0 to 5; default 0.25)",
-    "words_align": "left or centre",
+    "words_align": "left, centre or right",
     "words_caps": "true or false: words in capitals",
     "picture_size": "size of the print, 1 = the design's own (0.5 to 1.4)",
     "picture_shape": "what sits behind the print: circle, block, blob or none",
@@ -66,8 +66,8 @@ def control_problem(key: str, v) -> str | None:
         lo, hi = num[key]
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not lo <= v <= hi:
             return f"{key} must be a number from {lo:g} to {hi:g}"
-    elif key == "words_align" and v not in ("left", "centre", "center"):
-        return "words_align must be left or centre"
+    elif key == "words_align" and v not in ("left", "centre", "center", "right"):
+        return "words_align must be left, centre or right"
     elif key in ("words_caps", "mark_show") and not isinstance(v, bool):
         return f"{key} must be true or false"
     elif key == "picture_shape" and v not in SHAPES:
@@ -78,6 +78,162 @@ def control_problem(key: str, v) -> str | None:
                                                                  or isinstance(v, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", v)):
         return f"{key} must be #RRGGBB" + (" or accent" if key == "picture_shape_colour" else "")
     return None
+
+
+# ------------------------------------------------------------- node graph
+# A scene as a node graph: the paper at the bottom, then its layers merged on
+# top in order ("layers", bottom to top), with tools on a layer's branch or on
+# the merged output ("tools": [{"tool": "blur", "on": "picture", "amount": 0.4}]).
+
+LAYERS = ("shape", "picture", "words", "marks")
+TOOLS = {  # tool -> {param: (lowest, highest, default)}
+    "blur": {"amount": (0.0, 1.0, 0.35)},
+    "glow": {"amount": (0.0, 1.0, 0.5)},
+    "grade": {"bright": (-0.5, 0.5, 0.0), "contrast": (0.5, 1.8, 1.0), "saturation": (0.0, 2.0, 1.0), "warmth": (-1.0, 1.0, 0.0)},
+    "vignette": {"amount": (0.0, 1.0, 0.5)},
+}
+TOOL_ON = {  # which branches each tool can sit on
+    "blur": ("background", "picture", "words", "marks", "output"),
+    "glow": ("picture", "words", "marks", "output"),
+    "grade": ("background", "picture", "output"),
+    "vignette": ("background", "output"),
+}
+BRANCHES = ("background", "picture", "words", "marks", "output")
+
+
+def layers_of(sc: dict) -> list[str]:
+    """The scene's layers, bottom to top (anything left out keeps its usual place)."""
+    want = [x for x in sc.get("layers") or [] if x in LAYERS]
+    return want + [x for x in LAYERS if x not in want]
+
+
+def tools_on(sc: dict, branch: str) -> list[dict]:
+    return [t for t in sc.get("tools") or [] if isinstance(t, dict) and t.get("on") == branch and not t.get("off")]
+
+
+def inside(sc: dict) -> bool:
+    """Words and marks are drawn into the scene itself (not over the finished
+    cut) when something sits above them or a tool works on the whole output."""
+    return layers_of(sc) != list(LAYERS) or bool(tools_on(sc, "output"))
+
+
+def _tv(t: dict, p: str) -> float:
+    lo, hi, d = TOOLS[t["tool"]][p]
+    try:
+        return min(hi, max(lo, float(t.get(p, d))))
+    except (TypeError, ValueError):
+        return d
+
+
+def tool_problem(t) -> str | None:
+    if not isinstance(t, dict) or t.get("tool") not in TOOLS:
+        return f"a tool is one of {', '.join(TOOLS)}"
+    if t.get("on") not in TOOL_ON[t["tool"]]:
+        return f"{t['tool']} can sit on {', '.join(TOOL_ON[t['tool']])}"
+    for p, v in t.items():
+        if p in ("tool", "on", "name", "off"):
+            continue
+        if p not in TOOLS[t["tool"]]:
+            return f"{t['tool']} has no {p!r}; it has {', '.join(TOOLS[t['tool']])}"
+        lo, hi, _ = TOOLS[t["tool"]][p]
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not lo <= v <= hi:
+            return f"{t['tool']} {p} must be a number from {lo:g} to {hi:g}"
+    return None
+
+
+def pil_tools(img, tools: list[dict], u: int):
+    """Tools on one layer (an RGBA Pillow image), in order."""
+    from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter
+
+    for t in tools:
+        img = img.convert("RGBA")
+        kind = t["tool"]
+        if kind == "blur":
+            r = _tv(t, "amount") * u * 0.02
+            if r > 0.2:
+                img = img.filter(ImageFilter.GaussianBlur(r))
+        elif kind == "glow":
+            a = _tv(t, "amount")
+            soft = img.filter(ImageFilter.GaussianBlur(u * 0.02 * max(a, 0.05)))
+            soft = ImageEnhance.Brightness(soft).enhance(1 + 0.6 * a)
+            rgb = ImageChops.screen(img.convert("RGB"), Image.blend(Image.new("RGB", img.size), soft.convert("RGB"), min(1.0, 0.35 + a * 0.6)))
+            alpha = ImageChops.lighter(img.getchannel("A"), soft.getchannel("A").point(lambda v: round(v * a * 0.8)))
+            img = Image.merge("RGBA", (*rgb.split(), alpha))
+        elif kind == "grade":
+            alpha = img.getchannel("A")
+            rgb = img.convert("RGB")
+            rgb = ImageEnhance.Brightness(rgb).enhance(1 + _tv(t, "bright"))
+            rgb = ImageEnhance.Contrast(rgb).enhance(_tv(t, "contrast"))
+            rgb = ImageEnhance.Color(rgb).enhance(_tv(t, "saturation"))
+            wm = _tv(t, "warmth")
+            if wm:
+                r, g, b = rgb.split()
+                rgb = Image.merge("RGB", (r.point(lambda v: min(255, round(v * (1 + 0.1 * wm)))), g,
+                                          b.point(lambda v: min(255, round(v * (1 - 0.1 * wm))))))
+            img = Image.merge("RGBA", (*rgb.split(), alpha))
+        elif kind == "vignette":
+            a = _tv(t, "amount")
+            w, h = img.size
+            m = Image.new("L", (w, h), 0)
+            ImageDraw.Draw(m).ellipse([w * 0.04, h * 0.02, w * 0.96, h * 0.98], fill=255)
+            m = m.filter(ImageFilter.GaussianBlur(min(w, h) * 0.2))
+            dark = Image.new("RGBA", (w, h), (0, 0, 0, 255))
+            keep = m.point(lambda v: round(255 - (255 - v) * (0.35 + 0.6 * a)))
+            img = Image.composite(img, Image.alpha_composite(img, Image.merge("RGBA", (*dark.split()[:3], ImageChops.invert(keep)))), keep)
+    return img
+
+
+def ff_tools(tools: list[dict], src: str, out: str, u: int, tag: str) -> list[str]:
+    """The same tools as ffmpeg filter-graph steps, from label src to label out."""
+    steps, cur = [], src
+    for i, t in enumerate(tools):
+        nxt = f"{tag}{i}"
+        kind = t["tool"]
+        if kind == "blur":
+            s = _tv(t, "amount") * u * 0.02
+            steps.append(f"[{cur}]gblur=sigma={max(s, 0.01):.2f}[{nxt}]")
+        elif kind == "glow":
+            a = _tv(t, "amount")
+            s = u * 0.02 * max(a, 0.05)
+            steps.append(f"[{cur}]split[{nxt}a][{nxt}b]")
+            steps.append(f"[{nxt}b]gblur=sigma={s:.2f},eq=brightness={0.25 * a:.3f}[{nxt}c]")
+            steps.append(f"[{nxt}a][{nxt}c]blend=all_mode=screen:all_opacity={min(1.0, 0.35 + a * 0.6):.3f}[{nxt}]")
+        elif kind == "grade":
+            wm = _tv(t, "warmth")
+            steps.append(f"[{cur}]eq=brightness={_tv(t, 'bright') * 0.5:.3f}:contrast={_tv(t, 'contrast'):.3f}:"
+                         f"saturation={_tv(t, 'saturation'):.3f},colorbalance=rm={0.1 * wm:.3f}:bm={-0.1 * wm:.3f}[{nxt}]")
+        elif kind == "vignette":
+            steps.append(f"[{cur}]vignette=a={0.25 + 0.5 * _tv(t, 'amount'):.3f}[{nxt}]")
+        cur = nxt
+    steps.append(f"[{cur}]null[{out}]")
+    return steps
+
+
+def ass_tools(events: list[str], tools: list[dict], u: int, accent: str) -> list[str]:
+    """Blur and glow on words or marks, as libass tags (glow: a soft halo in the accent colour)."""
+    if not tools:
+        return events
+    blur = sum(_tv(t, "amount") for t in tools if t["tool"] == "blur") * u * 0.008
+    glows = [_tv(t, "amount") for t in tools if t["tool"] == "glow"]
+    out = []
+
+    def tag(e: str, extra: str) -> str:
+        head, sep, text = e.partition(",,0,0,0,,")
+        if not sep:
+            return e
+        if text.startswith("{"):
+            end = text.index("}")
+            return head + sep + text[:end] + extra + text[end:]
+        return head + sep + "{" + extra + "}" + text
+
+    for e in events:
+        if glows:
+            a = max(glows)
+            layer, rest = e.split(",", 1)
+            lay = layer.split(":")[0] + ": " + str(max(0, int(layer.split(":")[1]) - 1))
+            out.append(tag(lay + "," + rest, f"\\bord{u * 0.012 * a:.1f}\\blur{u * 0.016 * a:.1f}\\3c{_ass(_rgb(accent))}\\3a&H40&\\shad0"))
+        out.append(tag(e, f"\\blur{blur:.1f}") if blur else e)
+    return out
 
 
 def _rgb(hex_rgb: str) -> tuple[int, int, int]:
@@ -499,15 +655,18 @@ def print_rect(sc: dict, w: int, h: int, pic) -> tuple[int, int, int, int]:
 
 
 def scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: int, total: int) -> None:
-    """One scene of a designed storyboard: paper, furniture, print, light."""
+    """One scene of a designed storyboard: paper, then its layers in order
+    (shape, print, and, when the graph asks, words and marks), light, grain."""
     import tempfile
 
     from .media import run
     from .story import _still
+    from .style import ass_filter, write_ass
 
     design = sc["_design"]
     dark = bool(sc.get("dark")) or sc["type"] not in ("clip", "image", "title", "text")
     accent = sc.get("_accent", "#D4F01E")
+    u = min(w, h)
     tmp = Path(tempfile.mkdtemp(prefix="venus-p-", dir=out.parent))
     try:
         bg = background(design, w, h, k, total, sc.get("_label", ""), dark, sc.get("_words", ""))
@@ -516,9 +675,12 @@ def scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: in
         D = max(d, 0.1)
         dirx = -1 if k % 2 else 1
         inputs = ["-loop", "1", "-t", f"{d:.3f}", "-i", str(bg_p)]
-        g = [f"[0:v]fps={fps:g},crop={w}:{h}:x='(iw-ow)/2*(1+{dirx}*0.8*min(t/{D:.3f},1))':y='(ih-oh)/2*(1-0.4*min(t/{D:.3f},1))',setsar=1[b0]"]
+        g = [f"[0:v]fps={fps:g},crop={w}:{h}:x='(iw-ow)/2*(1+{dirx}*0.8*min(t/{D:.3f},1))':y='(ih-oh)/2*(1-0.4*min(t/{D:.3f},1))',setsar=1[bc]"]
+        g += ff_tools(tools_on(sc, "background"), "bc", "b0", u, "tb")
         last, n = "b0", 1
         media = sc.get("file") if has_print(sc) else None
+        pic_tools = tools_on(sc, "picture")
+        plate = under = None
         if media:
             pic = _first_frame(media)
             rect = print_rect(sc, w, h, pic)
@@ -526,37 +688,58 @@ def scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: in
             plate, under, (x, y, pw, ph) = print_plate(design, w, h, k, rect, accent, pic if still else None, dark,
                                                        sc.get("picture_shape"), sc.get("picture_shape_colour"),
                                                        sc.get("picture_angle"), sc.get("picture_photo"))
-            pl_p, un_p = tmp / "plate.png", tmp / "under.png"
-            plate.save(pl_p)
-            under.save(un_p)
-            # the colour shape lands just after the print, behind it: a beat of its own
-            inputs += ["-loop", "1", "-t", f"{d:.3f}", "-i", str(un_p)]
-            g.append(f"[{n}:v]format=rgba,fade=t=in:st=0.55:d=0.12:alpha=1[un]")
-            g.append(f"[{last}][un]overlay=x='{dirx}*{w * 0.02:.1f}*min(t/{D:.3f},1)':y=0:eval=frame[b0u]")
-            last, n = "b0u", n + 1
-            inputs += ["-loop", "1", "-t", f"{d:.3f}", "-i", str(pl_p)]
-            # the print drops in (slides up out of a fade), then drifts against the paper
-            ease = "pow(1-min(t/0.35,1),3)"
-            dx = f"{-dirx}*{w * 0.012:.1f}*min(t/{D:.3f},1)"
-            g.append(f"[{n}:v]format=rgba,fade=t=in:st=0:d=0.18:alpha=1[pl]")
-            g.append(f"[{last}][pl]overlay=x='{dx}':y='{h * 0.035:.1f}*{ease}':eval=frame[b1]")
-            last, n = "b1", n + 1
-            if not still:
-                photo = sc.get("picture_photo") or ("grey" if design == "mono" else "warm")
-                look = {"grey": "hue=s=0,eq=contrast=1.12", "colour": "eq=contrast=1.04",
-                        "warm": "eq=saturation=0.55:contrast=1.05,colorbalance=rs=0.04:bs=-0.05"}[photo]
-                inputs += ["-ss", f"{float(sc.get('from', 0)):.3f}", "-t", f"{d + 0.2:.3f}", "-i", media]
-                g.append(f"[{n}:v]fps={fps:g},scale={pw}:{ph}:force_original_aspect_ratio=increase,crop={pw}:{ph},{look},"
-                         f"format=rgba,fade=t=in:st=0:d=0.18:alpha=1[clip]")
-                g.append(f"[{last}][clip]overlay=x='{x}+{dx}':y='{y}+{h * 0.035:.1f}*{ease}':eval=frame:shortest=0[b2]")
-                last, n = "b2", n + 1
-        if design == "mono" and not dark:
-            lf = tmp / "leaf.png"
-            leaf_shadow(w, h, seed=k).save(lf)
-            inputs += ["-loop", "1", "-t", f"{d:.3f}", "-i", str(lf)]
-            g.append(f"[{last}][{n}:v]overlay=x='-{w * 0.15:.1f}+{w * 0.025:.1f}*sin(t*0.7+{k})':y=0[b3]")
-            last, n = "b3", n + 1
-        g.append(f"[{last}]noise=alls={5 if design == 'mono' else 7}:allf=t,format=yuv420p[v]")
+            if pic_tools:
+                plate = pil_tools(plate, pic_tools, u)
+        drawn = inside(sc)
+        L = float(sc.get("_len", d))
+        ease = "pow(1-min(t/0.35,1),3)"
+        dx = f"{-dirx}*{w * 0.012:.1f}*min(t/{D:.3f},1)"
+        for layer in layers_of(sc):
+            if layer == "shape" and under is not None:
+                # the colour shape lands just after the print: a beat of its own
+                un_p = tmp / "under.png"
+                under.save(un_p)
+                inputs += ["-loop", "1", "-t", f"{d:.3f}", "-i", str(un_p)]
+                g.append(f"[{n}:v]format=rgba,fade=t=in:st=0.55:d=0.12:alpha=1[un]")
+                g.append(f"[{last}][un]overlay=x='{dirx}*{w * 0.02:.1f}*min(t/{D:.3f},1)':y=0:eval=frame[bu]")
+                last, n = "bu", n + 1
+            elif layer == "picture":
+                if plate is not None:
+                    pl_p = tmp / "plate.png"
+                    plate.save(pl_p)
+                    inputs += ["-loop", "1", "-t", f"{d:.3f}", "-i", str(pl_p)]
+                    # the print drops in (slides up out of a fade), then drifts against the paper
+                    g.append(f"[{n}:v]format=rgba,fade=t=in:st=0:d=0.18:alpha=1[pl]")
+                    g.append(f"[{last}][pl]overlay=x='{dx}':y='{h * 0.035:.1f}*{ease}':eval=frame[b1]")
+                    last, n = "b1", n + 1
+                    if not still:
+                        photo = sc.get("picture_photo") or ("grey" if design == "mono" else "warm")
+                        look = {"grey": "hue=s=0,eq=contrast=1.12", "colour": "eq=contrast=1.04",
+                                "warm": "eq=saturation=0.55:contrast=1.05,colorbalance=rs=0.04:bs=-0.05"}[photo]
+                        inputs += ["-ss", f"{float(sc.get('from', 0)):.3f}", "-t", f"{d + 0.2:.3f}", "-i", media]
+                        g.append(f"[{n}:v]fps={fps:g},scale={pw}:{ph}:force_original_aspect_ratio=increase,crop={pw}:{ph},{look}[cl0]")
+                        g += ff_tools(pic_tools, "cl0", "cl1", u, "tp")
+                        g.append("[cl1]format=rgba,fade=t=in:st=0:d=0.18:alpha=1[clip]")
+                        g.append(f"[{last}][clip]overlay=x='{x}+{dx}':y='{y}+{h * 0.035:.1f}*{ease}':eval=frame:shortest=0[b2]")
+                        last, n = "b2", n + 1
+                # light over the paper and the print, then the grain of the page
+                if design == "mono" and not dark:
+                    lf = tmp / "leaf.png"
+                    leaf_shadow(w, h, seed=k).save(lf)
+                    inputs += ["-loop", "1", "-t", f"{d:.3f}", "-i", str(lf)]
+                    g.append(f"[{last}][{n}:v]overlay=x='-{w * 0.15:.1f}+{w * 0.025:.1f}*sin(t*0.7+{k})':y=0[b3]")
+                    last, n = "b3", n + 1
+                g.append(f"[{last}]noise=alls={5 if design == 'mono' else 7}:allf=t[b4]")
+                last = "b4"
+            elif layer in ("words", "marks") and drawn:
+                ev, _ = scene_events(sc, k, 0.0, L, w, h, total, only=layer)
+                if ev:
+                    a = tmp / f"{layer}.ass"
+                    write_ass(a, w, h, accent, extra_rows=ev, cut_len=L)
+                    g.append(f"[{last}]{ass_filter(a)}[w{layer}]")
+                    last = f"w{layer}"
+        g += ff_tools(tools_on(sc, "output"), last, "bo", u, "to")
+        g.append("[bo]format=yuv420p[v]")
         run(["ffmpeg", "-nostdin", "-y", "-v", "error"] + inputs + ["-filter_complex", ";".join(g), "-map", "[v]",
              "-t", f"{d:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p",
              "-r", f"{fps:g}", str(out)])
@@ -829,8 +1012,10 @@ def mark_events(design: str, kind: str, px: float, py: float, label: str, t0: fl
     return ev
 
 
-def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: int) -> tuple[list[str], list[float]]:
-    """Everything drawn over one designed scene, and the times its beats land."""
+def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: int,
+                 only: str | None = None) -> tuple[list[str], list[float]]:
+    """Everything drawn over one designed scene, and the times its beats land
+    (only="words" or "marks": just that layer, with the tools on its branch)."""
     from .story import _still
 
     design, accent = sc["_design"], sc.get("_accent", "#D4F01E")
@@ -870,6 +1055,7 @@ def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: 
                                delay=float(sc.get("words_delay", 0.25)))
         ev += e
         beats += lands
+    wev, ev = ev, []
     if rect:
         x, y, pw, ph = rect
         c = sc.get("callout")
@@ -915,4 +1101,115 @@ def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: 
                 ev.append(f"Dialogue: 22,{_t(ta + 0.2)},{_t(t1)},Card,,0,0,0,,{{\\an{7 if side > 0 else 9}\\pos({nx:.0f},{ay + u * 0.02:.0f})"
                           f"\\fnNothing You Could Do\\b0\\fs{s}\\bord0\\shad0\\1c{red}\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{_esc(sc['note'])}")
             beats.append(ta)
-    return ev, beats
+    wev = ass_tools(wev, tools_on(sc, "words"), u, accent)
+    ev = ass_tools(ev, tools_on(sc, "marks"), u, accent)
+    return ({"words": wev, "marks": ev}.get(only, wev + ev) if only else wev + ev), beats
+
+
+# ------------------------------------------------------------------- stills
+
+
+def _frame_at(path: str, ts: float):
+    import io
+    import subprocess
+
+    from PIL import Image
+
+    from .story import _still
+
+    if _still(path):
+        return Image.open(path)
+    raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-ss", f"{max(0.0, ts):.3f}", "-i", path, "-frames:v", "1",
+                          "-f", "image2pipe", "-vcodec", "png", "-"], capture_output=True, check=True).stdout
+    return Image.open(io.BytesIO(raw))
+
+
+def still(sc: dict, w: int, h: int, d: float, t: float, out: Path) -> None:
+    """One frame of a designed scene at time t, made the way the video makes
+    it (same layers in the same order, same moves, same words and tools), in
+    about a second: Studio's live preview."""
+    import subprocess
+    import tempfile
+
+    from PIL import Image
+
+    from .story import _still
+    from .style import ass_filter, write_ass
+
+    design, k, total = sc["_design"], sc.get("_k", 0), sc.get("_total", 1)
+    dark = bool(sc.get("dark")) or sc["type"] not in ("clip", "image", "title", "text")
+    accent = sc.get("_accent", "#D4F01E")
+    u = min(w, h)
+    D = max(d, 0.1)
+    f = min(t / D, 1)
+    dirx = -1 if k % 2 else 1
+    bg = background(design, w, h, k, total, sc.get("_label", ""), dark, sc.get("_words", ""))
+    W, H = bg.size
+    x0, y0 = (W - w) / 2 * (1 + dirx * 0.8 * f), (H - h) / 2 * (1 - 0.4 * f)
+    frame = pil_tools(bg.crop((round(x0), round(y0), round(x0) + w, round(y0) + h)).convert("RGBA"),
+                      tools_on(sc, "background"), u)
+    tmp = Path(tempfile.mkdtemp(prefix="venus-still-"))
+
+    def over(layer, dx: int, dy: int, alpha: float = 1.0):
+        nonlocal frame
+        lay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        if alpha < 1:
+            layer = layer.copy()
+            layer.putalpha(layer.getchannel("A").point(lambda v: round(v * alpha)))
+        lay.paste(layer, (dx, dy))
+        frame = Image.alpha_composite(frame, lay)
+
+    def burn(events: list[str]):
+        nonlocal frame
+        if not events:
+            return
+        frame.convert("RGB").save(tmp / "f.png")
+        write_ass(tmp / "f.ass", w, h, accent, extra_rows=events, cut_len=d)
+        subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(tmp / "f.png"), "-vf",
+                        f"setpts=PTS-STARTPTS+{t:.3f}/TB,{ass_filter(tmp / 'f.ass')}", "-frames:v", "1", str(tmp / "g.png")],
+                       check=True, capture_output=True)
+        frame = Image.open(tmp / "g.png").convert("RGBA")
+
+    try:
+        media = sc.get("file") if has_print(sc) else None
+        pic_tools = tools_on(sc, "picture")
+        plate = under = None
+        if media:
+            pic = _first_frame(media)
+            rect = print_rect(sc, w, h, pic)
+            is_still = _still(media)
+            plate, under, (x, y, pw, ph) = print_plate(design, w, h, k, rect, accent, pic if is_still else None, dark,
+                                                       sc.get("picture_shape"), sc.get("picture_shape_colour"),
+                                                       sc.get("picture_angle"), sc.get("picture_photo"))
+            if pic_tools:
+                plate = pil_tools(plate, pic_tools, u)
+        ease = (1 - min(t / 0.35, 1)) ** 3
+        dx, dy = round(-dirx * w * 0.012 * f), round(h * 0.035 * ease)
+        a = min(1.0, t / 0.18)
+        pending: list[str] = []  # words and marks waiting to be drawn, kept together when nothing comes between
+        for layer in layers_of(sc):
+            if layer in ("words", "marks"):
+                pending += scene_events(sc, k, 0.0, d, w, h, total, only=layer)[0]
+                continue
+            burn(pending)
+            pending = []
+            if layer == "shape" and under is not None and t >= 0.55:
+                over(under, round(dirx * w * 0.02 * f), 0, min(1.0, (t - 0.55) / 0.12))
+            elif layer == "picture":
+                if plate is not None:
+                    over(plate, dx, dy, a)
+                    if not is_still:
+                        from PIL import ImageOps
+
+                        clip = ImageOps.fit(_treat(_frame_at(media, float(sc.get("from", 0)) + t), design, sc.get("picture_photo")),
+                                            (pw, ph), Image.LANCZOS)
+                        over(pil_tools(clip.convert("RGBA"), pic_tools, u), x + dx, y + dy, a)
+                if design == "mono" and not dark:
+                    over(leaf_shadow(w, h, seed=k), round(-w * 0.15 + w * 0.025 * math.sin(t * 0.7 + k)), 0)
+        burn(pending)
+        frame = pil_tools(frame, tools_on(sc, "output"), u)
+        frame.convert("RGB").save(out, quality=88)
+    finally:
+        for x in tmp.glob("*"):
+            x.unlink()
+        tmp.rmdir()

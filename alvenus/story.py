@@ -113,6 +113,18 @@ def load(path: Path, data: dict | None = None) -> dict:
         for key in CONTROLS:
             if key in sc and (why := control_problem(key, sc[key])):
                 problems.append(f"scene {i + 1}: {why}")
+    from .paper import LAYERS, tool_problem
+
+    for i, sc in enumerate(sb.get("scenes") or []):
+        lay = sc.get("layers")
+        if lay is not None and not (isinstance(lay, list) and set(lay) <= set(LAYERS) and len(set(lay)) == len(lay)):
+            problems.append(f"scene {i + 1}: layers is a list, bottom to top, of {', '.join(LAYERS)}")
+        tools = sc.get("tools")
+        if tools is not None and not isinstance(tools, list):
+            problems.append(f"scene {i + 1}: tools is a list of {{\"tool\": ..., \"on\": ...}}")
+        for t in tools or []:
+            if why := tool_problem(t):
+                problems.append(f"scene {i + 1}: {why}")
     from .backgrounds import KINDS as BGS
 
     for i, sc in enumerate([sb] + list(sb.get("scenes") or [])):
@@ -160,11 +172,26 @@ def _push(d: float, fps: float, amount: float) -> str:
 
 
 def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: int) -> None:
-    kind = sc["type"]
     if sc.get("_design"):
         from .paper import scene_video
 
         return scene_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_total", 1))
+    _plain_scene(sc, d, w, h, fps, out)
+    from .paper import ff_tools, tools_on
+
+    # node-graph tools on a plain scene work on its whole picture (it is one layer)
+    tools = [t for b in ("background", "picture", "output") for t in tools_on(sc, b)]
+    if tools:
+        raw = out.with_name(out.stem + ".raw.mp4")
+        out.rename(raw)
+        g = ff_tools(tools, "0:v", "t", min(w, h), "tt") + ["[t]format=yuv420p[v]"]
+        run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(raw), "-filter_complex", ";".join(g), "-map", "[v]",
+             "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", str(out)])
+        raw.unlink()
+
+
+def _plain_scene(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> None:
+    kind = sc["type"]
     base = ["ffmpeg", "-nostdin", "-y", "-v", "error"]
     enc = ["-t", f"{d:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", "-r", f"{fps:g}", str(out)]
     media = sc.get("file") if kind in ("clip", "image", "title", "text", "quote", "stat") else None
@@ -211,6 +238,11 @@ def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
              "subtitle", "note"}
     keep = {k: v for k, v in sc.items() if k not in words and k != "_k" and not k.startswith(("words_", "mark_"))
             and not (sc["type"] == "compare" and k in ("left", "right"))}
+    if sc.get("_design"):
+        from .paper import inside
+
+        if inside(sc):  # its words are drawn into the scene itself (the node graph put something over them)
+            keep = {k: v for k, v in sc.items() if k != "_k"}
     if sc["type"] in ("map",):  # a map's pins are drawn later too, but its picture is the image
         keep["image"] = sc.get("image")
     stamps = []
@@ -264,6 +296,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     sb["_why"] = {"asked": [float(sc.get("seconds", 3.0)) for sc in scenes], "got": lengths,
                   "beat": bool(sb.get("music") and sb.get("cut_on_beat", True)), "trans": trans, "td": td}
     starts = [sum(lengths[:i]) for i in range(len(lengths))]
+    for sc, L in zip(scenes, lengths):
+        sc["_len"] = L  # the scene's own length (its video runs on under the next transition)
     total = sum(lengths)
     tmp = Path(tempfile.mkdtemp(prefix="alvenus-s-", dir=out.parent))
     notes: list[str] = []
@@ -331,8 +365,11 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         if design and sc["type"] in ("title", "text", "clip", "image"):
             from .paper import scene_events
 
+            from .paper import inside
+
             ev, b = scene_events(sc, sc["_k"], *spans[i], w, h, sc["_total"])
-            designed += ev
+            if not inside(sc):  # (else they are already in the scene's own picture)
+                designed += ev
             beats += b
     sb["_beats"] = beats
     for i, sc in enumerate(scenes):
