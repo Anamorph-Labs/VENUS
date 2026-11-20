@@ -321,8 +321,9 @@ def handler(st: Studio):
                     return self._send(200, page.encode(), "text/html; charset=utf-8")
                 if u.path.startswith("/fonts/"):  # the interface's own type, served from the package (nothing is fetched)
                     f = Path(__file__).with_name("studio_fonts") / Path(u.path).name
-                    if f.suffix == ".woff2" and f.exists():
-                        return self._send(200, f.read_bytes(), "font/woff2")
+                    kind = {".woff2": "font/woff2", ".png": "image/png"}.get(f.suffix)  # type and the logo
+                    if kind and f.exists():
+                        return self._send(200, f.read_bytes(), kind)
                 if u.path == "/api/state":
                     st.poll()
                     return self._json(st.state())

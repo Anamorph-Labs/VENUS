@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Venus Studio</title>
+<title>Venus Studio · Anamorph Labs</title>
 <style>
 @font-face{font-family:"Hanken Grotesk";src:url(/fonts/HankenGrotesk-normal.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
 @font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-normal.woff2) format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
@@ -159,13 +159,18 @@ box-shadow:var(--shadow);z-index:20;display:none;max-width:80vw}
 .chip.ai{color:var(--accent);border-color:var(--soft-accent);background:var(--panel)}
 kbd{font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--soft)}
 header button,header h1{white-space:nowrap}
+header .brand{display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin:0 14px 0 4px}
+header .brand h1{margin:0;font-size:19px}
+header .logo{height:14px;width:auto;display:block}
+header .logo.dk,:root[data-theme="dark"] header .logo.lt{display:none}
+:root[data-theme="dark"] header .logo.dk{display:block}
 #pv:not([src]){visibility:hidden}
 @media (max-width:1180px){.cv-title .hint{display:none}}
 @media (max-width:1100px){.status{display:none}}
 @media (max-width:900px){.app{grid-template-columns:1fr;grid-template-rows:44px minmax(0,1fr) 40vh}aside{grid-column:1;border-left:0;border-top:1px solid var(--line)}}
 </style></head><body>
 <div class="app">
-<header><h1>Venus Studio</h1><span class="file" id="file"></span>
+<header><div class="brand"><h1>Venus Studio</h1><img class="logo lt" src="/fonts/anamorph-labs-light.png" alt="by Anamorph Labs"><img class="logo dk" src="/fonts/anamorph-labs-dark.png" alt="by Anamorph Labs"></div><span class="file" id="file"></span>
 <span class="chip ai" id="aichip" style="display:none" title="nodes your AI changed in the last few minutes"></span>
 <span class="status" id="status"></span>
 <button id="undo" title="Undo (Ctrl+Z)">Undo</button><button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
