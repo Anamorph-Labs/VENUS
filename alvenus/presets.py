@@ -53,6 +53,20 @@ PRESETS: dict[str, dict] = {
         "scene_beat": 0.3, "look": "punchy", "transition": "glitch", "transition_seconds": 0.35, "music_lufs": -18.0,
         "background": "orbs", "title_style": "stamp", "accent": "#3DF5C8",
     },
+    "mono-editorial": {
+        "about": "Greyscale editorial reel: grey grid paper, print details, black-and-white photos, one lime accent, words one at a time in mixed type.",
+        "aspect": "9:16", "captions": True, "caption_style": "pop", "max_pause": 0.4, "beat": 0.15,
+        "scene_beat": 0.5, "look": "natural", "transition": "blur", "transition_seconds": 0.35, "music_lufs": -22.0,
+        "background": "dark", "title_style": "track", "accent": "#D4F01E", "design": "mono",
+        "learned_from": "reference board, pins 3, 5, 6, 8, 31, 32, 34, 40, 52",
+    },
+    "vox-paper": {
+        "about": "Vox-style paper collage: crumpled paper, torn photo prints with tape, colour shapes and paint, heavy captions with a highlighter.",
+        "aspect": "16:9", "captions": True, "caption_style": "pop", "max_pause": 0.5, "beat": 0.2,
+        "scene_beat": 0.7, "look": "natural", "transition": "slide", "transition_seconds": 0.3, "music_lufs": -24.0,
+        "background": "dark", "title_style": "block", "accent": "#F2C230", "design": "paper",
+        "learned_from": "reference board, pins 14, 18, 19, 23, 26, 42, 53, 55, 58, 63",
+    },
 }
 
 

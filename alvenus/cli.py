@@ -544,7 +544,7 @@ def cmd_make(a: argparse.Namespace) -> None:
     t0 = time.time()
     sb = story.load(Path(a.storyboard))
     style = a.style or sb.get("style")
-    sb = {**pack(style, "aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background"), **sb}
+    sb = {**pack(style, "aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background", "design"), **sb}
     aspect = a.aspect or sb.get("aspect", "16:9")
     if aspect not in ASPECTS:
         raise SystemExit(f"aspect {aspect!r}: choose from {', '.join(sorted(ASPECTS))}")

@@ -139,12 +139,36 @@ def _colour(path: Path, length: float, n: int = 12, size: tuple[int, int] | None
             "colours": colours}
 
 
+def graphic_beats(path: Path, fps: float = 12.5) -> list[float]:
+    """Moments something new lands in the picture: a word, a label, a mark,
+    a new shot. Edits of the references change a graphic about once a second
+    even inside one scene, so counting only cuts misses their pace. The frame
+    is split into a 16x9 grid; a beat is a sudden change in a few cells (a
+    whole-frame drift changes every cell a little and is not counted)."""
+    proc = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(path), "-an", "-vf",
+                           f"fps={fps:g},scale=64:36:flags=area,format=gray", "-f", "rawvideo", "-"], capture_output=True)
+    a = np.frombuffer(proc.stdout, np.uint8)
+    f = a[: len(a) // 2304 * 2304].reshape(-1, 36, 64).astype(np.float32) / 255
+    if len(f) < 3:
+        return []
+    cells = np.abs(f[2:] - f[:-2]).reshape(-1, 9, 4, 16, 4).mean(axis=(2, 4))  # change over 2 frames, per cell
+    hot = (cells > 0.06).mean(axis=(1, 2))  # share of the frame that changed sharply
+    beats, last = [], -1e9
+    for k in range(1, len(hot) - 1):
+        if hot[k] >= 0.012 and hot[k] >= hot[k - 1] and hot[k] >= hot[k + 1] and (k - last) / fps >= 0.3:
+            beats.append(round((k + 1) / fps, 2))
+            last = k
+    return beats
+
+
 def measure(path: Path) -> dict:
     length = duration(path)
     w, h = video_size(path) or (0, 0)
     ed = _edits(path, length)
+    beats = graphic_beats(path)
     return {"file": path.name, "seconds": round(length, 2), "shape": _shape(w, h) if w and h else None,
-            "average_shot_seconds": round(length / max(1, ed["shots"]), 2), **ed, **_colour(path, length, size=(w, h))}
+            "average_shot_seconds": round(length / max(1, ed["shots"]), 2),
+            "seconds_per_graphic_beat": round(length / max(1, len(beats)), 2), **ed, **_colour(path, length, size=(w, h))}
 
 
 def _med(rows: list[dict], key: str, default: float = 0.0) -> float:

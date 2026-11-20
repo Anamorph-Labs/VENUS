@@ -1,4 +1,10 @@
 Inter fonts, Copyright 2016-2023 The Inter Project Authors (https://github.com/rsms/inter)
+Instrument Serif, Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif)
+Big Shoulders, Copyright 2019 The Big Shoulders Project Authors (https://github.com/xotypeco/big_shoulders)
+Nothing You Could Do, Copyright (c) 2010, Kimberly Geswein (kimberlygeswein.com)
+DM Mono, Copyright 2020 The DM Mono Project Authors (https://www.github.com/googlefonts/dm-mono)
+Libre Baskerville, Copyright 2012 The Libre Baskerville Project Authors (https://github.com/impallari/Libre-Baskerville) with Reserved Font Name Libre Baskerville.
+All of these fonts are licensed under the SIL Open Font License 1.1, reproduced below.
 Licensed under the SIL Open Font License 1.1, reproduced below.
 
 PREAMBLE

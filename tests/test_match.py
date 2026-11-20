@@ -626,5 +626,37 @@ class PhoneFootage(unittest.TestCase):
         self.assertIn("afade=t=in:d=0.03", af)
 
 
+class Designs(unittest.TestCase):
+    def test_markup_roles(self):
+        from alvenus.paper import parse, plain
+        got = parse("NEXT taught him *precision.* _so_ ==fast== now", {"next"})
+        self.assertEqual(got, [("NEXT", "big"), ("taught", "plain"), ("him", "plain"), ("precision.", "serif"),
+                               ("so", "light"), ("fast", "mark"), ("now", "plain")])
+        self.assertEqual(plain("a *b c* ==d=="), "a b c d")
+
+    def test_words_fit_their_box(self):
+        from alvenus.paper import word_events
+        ev, lands = word_events("Every morning the *same* cup of ==coffee.==", {"same"}, 0, 3, 1080, 1920, "mono",
+                                "#D4F01E", (90, 200, 900, 400), False)
+        self.assertEqual(len(lands), 7)
+        self.assertTrue(all(b > a for a, b in zip(lands, lands[1:])))
+        import re
+        xs = [int(m.group(1)) for m in (re.search(r"\\move\((\d+),", e) for e in ev) if m]
+        self.assertTrue(all(90 <= x <= 990 for x in xs))
+
+    def test_print_layout_stays_in_frame(self):
+        from alvenus.paper import layout
+        for w, h in ((1080, 1920), (1920, 1080), (1080, 1350)):
+            for words in (True, False):
+                for a in (0.5, 1.0, 2.0):
+                    x, y, pw, ph = layout(w, h, words, a)
+                    self.assertTrue(x >= 0 and y >= 0 and x + pw <= w and y + ph <= h, (w, h, words, a))
+
+    def test_design_packs(self):
+        from alvenus.presets import PRESETS
+        self.assertEqual(PRESETS["mono-editorial"]["design"], "mono")
+        self.assertEqual(PRESETS["vox-paper"]["design"], "paper")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -256,7 +256,7 @@ def finish(
             "[vst][duck]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.89:level=false[ao]",
         ]
     else:
-        parts.append(f"[{a}]anull[ao]")
+        parts.append(f"[{a}]apad[ao]")  # never let the sound end before the picture (-t trims both)
 
     args += [
         "-filter_complex", ";".join(parts), "-map", "[vo]", "-map", "[ao]", "-t", f"{total:.3f}",

@@ -310,6 +310,25 @@ first scene is a hook under 2.5 seconds; keep the shape, replace the words.
    timeline and quote scenes on a background is a complete video. Footage-free
    scenes drift with a slow camera move (type over a background that moves less,
    for depth); `"camera": false` keeps them still.
+   **Designed looks** (`"style": "mono-editorial"` or `"vox-paper"`, or `"design":
+   "mono"` / `"paper"`): the scenes become a designed page instead of footage on a
+   background. "mono" is a greyscale editorial reel: grey grid paper with print
+   details (header, scene number, crop marks, barcode, small columns of the video's
+   own words), black-and-white photos as prints, one accent shape, words arriving
+   one at a time in mixed type. "paper" is a Vox-style collage: crumpled paper,
+   torn photo prints with tape, a paint blob or flat colour circle behind, heavy
+   caps with a highlighter, red hand-drawn arrows and loops. Pictures (`image` or
+   `clip`) become prints beside or under the words; give each scene a `caption`
+   (or `text` for a words-only scene). Mark words up for the type to change:
+   `*word*` elegant serif italic (the feeling word), `_word_` small and light (the
+   filler words), `==word==` highlighted (the one fact), and `big_words` for the
+   huge ones. Use one or two marks per line, not more: the contrast is the point.
+   A `title` scene takes `subtitle` too. Extra: `"label"` (the figure caption under
+   a print, mono), `"note"` (a handwritten note by the arrow, paper), `"dark": true`
+   (a dark page for a change of mood, mono). Stats, charts, lists and other graphic
+   scenes sit on a dark page in these looks. A new graphic lands about every
+   0.8 s, near the pace of the references these were learned from; `alvenus study`
+   reports `seconds_per_graphic_beat` for any video, to compare pace.
 5. `alvenus make sb.json --draft --out draft.mp4` first: it takes seconds. Look at
    `draft.sheet.jpg` (one frame per scene), fix what is weak, repeat; then build
    without `--draft`. Venus reviews the result itself and fixes reading time,

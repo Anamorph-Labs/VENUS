@@ -100,6 +100,10 @@ def load(path: Path) -> dict:
     for key, allowed in (("transition", TRANSITIONS), ("title_style", TITLE_STYLES), ("style", PRESETS)):
         if sb.get(key) and sb[key] not in allowed:
             problems.append(f"{key} {sb[key]!r}: choose one of {', '.join(allowed)}")
+    from .paper import DESIGNS
+
+    if sb.get("design") and sb["design"] not in DESIGNS:
+        problems.append(f"design {sb['design']!r}: choose one of {', '.join(DESIGNS)}")
     from .backgrounds import KINDS as BGS
 
     for i, sc in enumerate([sb] + list(sb.get("scenes") or [])):
@@ -148,6 +152,10 @@ def _push(d: float, fps: float, amount: float) -> str:
 
 def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: int) -> None:
     kind = sc["type"]
+    if sc.get("_design"):
+        from .paper import scene_video
+
+        return scene_video(sc, d, w, h, fps, out, k, sc.get("_total", 1))
     base = ["ffmpeg", "-nostdin", "-y", "-v", "error"]
     enc = ["-t", f"{d:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", "-r", f"{fps:g}", str(out)]
     media = sc.get("file") if kind in ("clip", "image", "title", "text", "quote", "stat") else None
@@ -200,6 +208,11 @@ def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
         if f and Path(f).exists():
             st = Path(f).stat()
             stamps.append((f, st.st_size, st.st_mtime_ns))
+    if sc.get("_design"):
+        from .paper import VERSION, has_words
+
+        keep["_design_v"] = VERSION
+        keep["_has_words"] = has_words(sc)
     blob = json.dumps([keep, round(d, 3), w, h, fps, media.DRAFT, stamps, 1], sort_keys=True, default=str)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
@@ -217,6 +230,16 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         sc["_bg"], sc["_accent"] = sb.get("background", "dark"), sb.get("accent", "#FFD23F")
         footage = sc.get("file") or sc["type"] in ("clip", "image", "map", "split")
         sc["_dir"] = 0 if footage or not moving else (1 if k % 2 == 0 else -1)
+    design = sb.get("design")
+    for k, sc in enumerate(scenes):
+        sc["_design"], sc["_total"] = design, len(scenes)
+        if design:
+            from .paper import plain
+
+            first = next((x for x in scenes if x["type"] == "title" and x.get("text")), None)
+            sc["_label"] = sb.get("label") or (plain(first["text"]) if first else "")
+            sc["_words"] = " ".join(plain(x.get("text") or x.get("caption") or "") for x in scenes)
+            sc["_dir"] = 0  # designed scenes move their own layers
     lengths = [float(sc.get("seconds", 3.0)) for sc in scenes]
     if sb.get("cut_on_beat", True):
         lengths = _beat_snap(lengths, sb.get("music"))
@@ -287,9 +310,21 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         step = (t1 - t0) * fill / max(1, len(ws))
         return [Word(x, t0 + 0.15 + k * step, t0 + 0.15 + (k + 1) * step, line) for k, x in enumerate(ws)]
 
+    designed: list[str] = []
+    beats: list[float] = []
+    for i, sc in enumerate(scenes):
+        if design and sc["type"] in ("title", "text", "clip", "image"):
+            from .paper import scene_events
+
+            ev, b = scene_events(sc, i, *spans[i], w, h, len(scenes))
+            designed += ev
+            beats += b
+    sb["_beats"] = beats
     for i, sc in enumerate(scenes):
         t0, t1 = spans[i]
         kind = sc["type"]
+        if design and kind in ("title", "text", "clip", "image"):
+            continue
         if sc.get("caption") and sb.get("captions", True):
             words += spread(sc["caption"], i, t0, t1)
         if kind == "title":
@@ -313,7 +348,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                                 bool(sc.get("route", True))))
     from .graphics import callout_events, compare_events, list_events
 
-    more, pops = [], []
+    more, pops = list(designed), []
     for i, sc in enumerate(scenes):
         t0, t1 = spans[i]
         if sc["type"] == "list":
@@ -324,7 +359,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             side = lambda d: (str(d["title"]), [str(x) for x in d.get("points") or []])
             more += compare_events(side(sc["left"]), side(sc["right"]), t0, t1, w, h, sb.get("accent", "#FFD23F"))
             pops += [t0 + 0.3, t0 + 0.3 + min(1.2, (t1 - t0) * 0.3)]
-        if sc.get("callout"):
+        if sc.get("callout") and not (design and sc["type"] in ("clip", "image", "title", "text")):
             c = sc["callout"]
             more += callout_events(float(c["x"]), float(c["y"]), str(c["label"]), t0, t1, w, h, sb.get("accent", "#FFD23F"))
             pops.append(t0 + 0.8)
