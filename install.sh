@@ -51,6 +51,15 @@ if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; 
     echo "Please install FFmpeg (https://ffmpeg.org/download.html), then run this again."; exit 1
   fi
 fi
+if ! ffmpeg -hide_banner -filters 2>/dev/null | grep -q " subtitles "; then
+  # Venus draws its words with libass; Homebrew's plain ffmpeg is built without it
+  if command -v brew >/dev/null 2>&1; then
+    echo "This FFmpeg can't draw words on video; adding Homebrew's ffmpeg-full (Venus uses it on its own)"
+    brew install ffmpeg-full && export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"
+  else
+    echo "Note: this FFmpeg has no libass, so words can't be drawn on video. Install a full FFmpeg build."
+  fi
+fi
 ffmpeg -version | head -1
 
 say "Venus"
