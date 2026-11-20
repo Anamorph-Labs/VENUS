@@ -164,6 +164,13 @@ Change one scene and build again: only what changed is redrawn (kept in
 `--versions` builds three quick drafts side by side with the reason for each; and
 `video.why.md` says why every scene is as long as it is.
 
+`alvenus nodes init storyboard.json` turns a storyboard into a node file: the same
+video as named nodes (`scene3.words`, `scene3.picture`, `scene5.in`...), so you and
+your AI can say exactly what to change (`alvenus nodes set FILE scene3.words.size=1.3`),
+lock the parts you like so nothing touches them, share settings between scenes
+with style nodes, and rebuild only what changed. `alvenus nodes view FILE` draws
+the node map as a page, with a frame of every scene.
+
 More explainer graphics for talking-head cuts: `--map "3=city.png|0.3,0.6 Old port;
 0.7,0.4 Market"`, `--timeline "2=1990 First stall, 2024 500 stalls|How it grew"`,
 `--kinetic "5=lose, track"`.

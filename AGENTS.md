@@ -313,7 +313,7 @@ first scene is a hook under 2.5 seconds; keep the shape, replace the words.
    **Designed looks** (`"style": "mono-editorial"` or `"vox-paper"`, or `"design":
    "mono"` / `"paper"`): the scenes become a designed page instead of footage on a
    background. "mono" is a greyscale editorial reel: grey grid paper with print
-   details (header, scene number, crop marks, barcode, small columns of the video's
+   details (header, scene number, crop marks, barcode, small columns of the scene's
    own words), black-and-white photos as prints, one accent shape, words arriving
    one at a time in mixed type. "paper" is a Vox-style collage: crumpled paper,
    torn photo prints with tape, a paint blob or flat colour circle behind, heavy
@@ -343,6 +343,44 @@ first scene is a hook under 2.5 seconds; keep the shape, replace the words.
    side by side (their style, the opposite energy, a tighter pace), with
    `video-versions.jpg` to compare and `video-versions.md` with why each exists.
    They pick one; build it in full from its saved `.storyboard.json`.
+
+### Nodes: precise control (`alvenus nodes`)
+
+For anything past a first draft, work on a node file instead of the storyboard.
+It is the same video cut into named nodes, so every change names exactly what it
+touches, and nothing else moves.
+
+1. `alvenus nodes init sb.json` writes `sb.nodes.json` (nothing is lost; `nodes
+   export FILE --out sb.json` goes back). Nodes: `settings`, `sound`, one `sceneN`
+   per scene, and under each scene its parts: `sceneN.in` (its transition),
+   `.words`, `.picture`, `.mark` (callout, note) and `.graphic` (the number, chart,
+   list, map or comparison). Ids are names, not positions: a moved scene keeps its id.
+2. `alvenus nodes show FILE` prints the map in a few lines: read it before every
+   change, not the JSON. `nodes guide` lists what each node can hold.
+3. Change with `alvenus nodes set FILE NODE.PARAM=VALUE ...`, for example
+   `scene3.words.size=1.3 scene3.picture.shape=none scene5.in.transition=whip`
+   (`null` removes a setting; a missing part is created). A wrong name is refused
+   with the nearest right one, and nothing is saved until everything checks out.
+   Controls in the designed looks: words `size`, `speed` (seconds between words),
+   `delay`, `align`, `caps`; picture `size`, `shape` (circle, block, blob, none),
+   `shape_colour`, `angle` (tilt of a still), `photo` (grey, colour, warm),
+   `darken`, `push`; mark `colour`, `show` (false hides the automatic label or arrow).
+4. **Lock what the creator likes**: `alvenus nodes lock FILE scene3` (a scene lock
+   covers its parts and the styles it uses). A locked node refuses `set`, the
+   self-review leaves it alone, and a build stops if it was edited by hand. When
+   the creator says "keep that one", lock it before changing anything else.
+5. **Shared styles**: `alvenus nodes use FILE calm scene2 scene5`, then
+   `nodes set FILE calm.words.size=0.9 calm.picture.shape=none`. Every scene using
+   the style follows it; a scene's own setting still wins. Use one for a recurring
+   kind of beat (all quotes, all close-ups) instead of repeating settings.
+6. Order: `nodes move FILE scene5 --after scene2` (or `--before`, `--first`),
+   `nodes copy FILE scene2 [--as id]`, `nodes remove FILE scene4`.
+7. Build with `alvenus make FILE --out video.mp4` as usual. It prints which nodes
+   changed since the last build and which scenes it redrew; words, marks and
+   timing never redraw a scene. `--scene scene3` builds one scene by its id.
+8. `alvenus nodes view FILE` writes `FILE.html`: the node map as boxes and wires,
+   with a frame of each scene from the last build, locks, and what changed. Send
+   it to the creator so they can point at a node ("scene4.words feels slow").
 
 ## Rules
 

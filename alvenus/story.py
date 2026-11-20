@@ -49,11 +49,16 @@ EXAMPLE = {
 }
 
 
-def load(path: Path) -> dict:
-    try:
-        sb = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as e:
-        raise SystemExit(f"{path}: can't read the storyboard ({e})")
+def load(path: Path, data: dict | None = None) -> dict:
+    """Read and check a storyboard. `data` is one already read (from a node
+    file); file names in it are still taken from beside `path`."""
+    if data is not None:
+        sb = data
+    else:
+        try:
+            sb = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise SystemExit(f"{path}: can't read the storyboard ({e})")
     base = path.parent
     problems = []
     for key in ("music", "voiceover"):
@@ -100,10 +105,14 @@ def load(path: Path) -> dict:
     for key, allowed in (("transition", TRANSITIONS), ("title_style", TITLE_STYLES), ("style", PRESETS)):
         if sb.get(key) and sb[key] not in allowed:
             problems.append(f"{key} {sb[key]!r}: choose one of {', '.join(allowed)}")
-    from .paper import DESIGNS
+    from .paper import CONTROLS, DESIGNS, control_problem
 
     if sb.get("design") and sb["design"] not in DESIGNS:
         problems.append(f"design {sb['design']!r}: choose one of {', '.join(DESIGNS)}")
+    for i, sc in enumerate(sb.get("scenes") or []):
+        for key in CONTROLS:
+            if key in sc and (why := control_problem(key, sc[key])):
+                problems.append(f"scene {i + 1}: {why}")
     from .backgrounds import KINDS as BGS
 
     for i, sc in enumerate([sb] + list(sb.get("scenes") or [])):
@@ -155,7 +164,7 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
     if sc.get("_design"):
         from .paper import scene_video
 
-        return scene_video(sc, d, w, h, fps, out, k, sc.get("_total", 1))
+        return scene_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_total", 1))
     base = ["ffmpeg", "-nostdin", "-y", "-v", "error"]
     enc = ["-t", f"{d:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", "-r", f"{fps:g}", str(out)]
     media = sc.get("file") if kind in ("clip", "image", "title", "text", "quote", "stat") else None
@@ -198,8 +207,10 @@ def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
 
     from . import media
 
-    words = {"text", "caption", "label", "items", "title", "who", "value", "points", "callout", "big_words", "pins", "bars"}
-    keep = {k: v for k, v in sc.items() if k not in words and not (sc["type"] == "compare" and k in ("left", "right"))}
+    words = {"text", "caption", "label", "items", "title", "who", "value", "points", "callout", "big_words", "pins", "bars",
+             "subtitle", "note"}
+    keep = {k: v for k, v in sc.items() if k not in words and k != "_k" and not k.startswith(("words_", "mark_"))
+            and not (sc["type"] == "compare" and k in ("left", "right"))}
     if sc["type"] in ("map",):  # a map's pins are drawn later too, but its picture is the image
         keep["image"] = sc.get("image")
     stamps = []
@@ -213,6 +224,7 @@ def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
 
         keep["_design_v"] = VERSION
         keep["_has_words"] = has_words(sc)
+        keep["_k"] = sc.get("_k")  # the scene's place picks its shape and paper
     blob = json.dumps([keep, round(d, 3), w, h, fps, media.DRAFT, stamps, 1], sort_keys=True, default=str)
     return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
@@ -232,13 +244,16 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         sc["_dir"] = 0 if footage or not moving else (1 if k % 2 == 0 else -1)
     design = sb.get("design")
     for k, sc in enumerate(scenes):
-        sc["_design"], sc["_total"] = design, len(scenes)
+        # its place in the whole video (a scene built alone with --scene keeps its own)
+        at, of = sb.get("_place") or (k, len(scenes))
+        sc["_design"], sc["_total"], sc["_k"] = design, of, at
         if design:
             from .paper import plain
 
-            first = next((x for x in scenes if x["type"] == "title" and x.get("text")), None)
-            sc["_label"] = sb.get("label") or (plain(first["text"]) if first else "")
-            sc["_words"] = " ".join(plain(x.get("text") or x.get("caption") or "") for x in scenes)
+            if design == "mono":  # the page furniture prints the video's name and this scene's own words
+                first = next((x for x in scenes if x["type"] == "title" and x.get("text")), None)
+                sc["_label"] = sb.get("label") or (plain(first["text"]) if first else "")
+                sc["_words"] = plain(sc.get("text") or sc.get("caption") or "")
             sc["_dir"] = 0  # designed scenes move their own layers
     lengths = [float(sc.get("seconds", 3.0)) for sc in scenes]
     if sb.get("cut_on_beat", True):
@@ -316,7 +331,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         if design and sc["type"] in ("title", "text", "clip", "image"):
             from .paper import scene_events
 
-            ev, b = scene_events(sc, i, *spans[i], w, h, len(scenes))
+            ev, b = scene_events(sc, sc["_k"], *spans[i], w, h, sc["_total"])
             designed += ev
             beats += b
     sb["_beats"] = beats
@@ -389,11 +404,13 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     return notes
 
 
-def autofix(sb: dict, findings) -> list[str]:
+def autofix(sb: dict, findings, frozen: set[str] = frozenset()) -> list[str]:
     """Change the storyboard so the problems the self-review found go away:
     text too quick to read gets a longer scene, text that is hard to read gets
     a darker picture behind it, flashing transitions become dissolves. Returns
-    what was changed, in plain words ([] = nothing left that can be fixed)."""
+    what was changed, in plain words ([] = nothing left that can be fixed).
+    `frozen` holds what must not change ("3:seconds" = scene 4's length,
+    "end_card_seconds"): the parts the person locked."""
     spans = sb.get("_spans") or {}
     scenes = sb["scenes"]
     if not spans:
@@ -409,15 +426,15 @@ def autofix(sb: dict, findings) -> list[str]:
         for t in getattr(f, "times", [])[:12]:
             if kind == "reading":
                 more = round(f.extra["need"] - f.extra["shown"] + 0.4, 1)
-                if t >= end - 0.05 and sb.get("end_card"):
+                if t >= end - 0.05 and sb.get("end_card") and "end_card_seconds" not in frozen:
                     sb["end_card_seconds"] = round(float(sb.get("end_card_seconds", 2.5)) + more, 1)
                     done.append(f"end card held {more}s longer")
-                elif (i := scene_at(t)) is not None and float(scenes[i].get("seconds", 3.0)) < 12:
+                elif (i := scene_at(t)) is not None and float(scenes[i].get("seconds", 3.0)) < 12 and f"{i}:seconds" not in frozen:
                     scenes[i]["seconds"] = round(spans[i][1] - spans[i][0] + more, 1)
                     done.append(f"scene {i + 1} lengthened to {scenes[i]['seconds']}s so its text can be read")
             elif kind == "contrast":
                 i = scene_at(t)
-                if i is None or scenes[i].get("type") not in ("clip", "image", "title", "text", "quote", "stat", "split"):
+                if i is None or scenes[i].get("type") not in ("clip", "image", "title", "text", "quote", "stat", "split") or f"{i}:darken" in frozen:
                     continue
                 cur = float(scenes[i].get("darken", 0.22 if scenes[i]["type"] in ("title", "text", "quote", "stat") else 0.0))
                 if cur < 0.45 and not any(d.startswith(f"scene {i + 1} darkened") for d in done):
@@ -425,7 +442,8 @@ def autofix(sb: dict, findings) -> list[str]:
                     done.append(f"scene {i + 1} darkened behind its text")
             elif kind == "flash":
                 near = min(range(1, len(scenes)), key=lambda j: abs(spans[j][0] - t), default=None)
-                if near is not None and abs(spans[near][0] - t) < 1.0 and scenes[near].get("transition", sb.get("transition")) in ("glitch", "flash"):
+                if near is not None and abs(spans[near][0] - t) < 1.0 and scenes[near].get("transition", sb.get("transition")) in ("glitch", "flash") \
+                        and f"{near}:transition" not in frozen:
                     scenes[near]["transition"] = "crossfade"
                     done.append(f"scene {near + 1} now dissolves in instead of flashing")
     return list(dict.fromkeys(done))

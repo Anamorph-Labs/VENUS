@@ -29,13 +29,55 @@ DESIGNS = {
     "mono": "greyscale editorial: grey grid paper, print furniture, black-and-white photos, one accent colour, words one at a time in mixed type",
     "paper": "Vox-style paper collage: crumpled paper, torn photo prints with tape, colour shapes and paint, heavy captions with a highlighter",
 }
-VERSION = 4  # bump when the drawing changes, so cached scenes are redrawn
+VERSION = 5  # bump when the drawing changes, so cached scenes are redrawn
 
 INK = (17, 17, 17)
 CREAM = (238, 229, 210)
 TEAL = (47, 143, 139)
 RED = (200, 65, 47)
 MARK_RED = "&H002F41D0&"  # hand-drawn red, as an ASS colour (BGR)
+
+# Controls a storyboard (or a node file) can set on one scene, beside the
+# defaults each design picks. Names are the scene keys; in a node file they
+# are the part's own params (words.size, picture.shape, mark.colour...).
+CONTROLS = {
+    "words_size": "size of the words, 1 = the design's own (0.4 to 2.5)",
+    "words_speed": "seconds between words arriving (0.05 to 1.5); default fills about 70% of the scene",
+    "words_delay": "seconds after the scene starts before the first word (0 to 5; default 0.25)",
+    "words_align": "left or centre",
+    "words_caps": "true or false: words in capitals",
+    "picture_size": "size of the print, 1 = the design's own (0.5 to 1.4)",
+    "picture_shape": "what sits behind the print: circle, block, blob or none",
+    "picture_shape_colour": "colour of that shape: #RRGGBB, or accent",
+    "picture_angle": "tilt of a still print in degrees (-12 to 12)",
+    "picture_photo": "how the photo is printed: grey, colour or warm",
+    "mark_colour": "colour of the hand-drawn marks and labels: #RRGGBB",
+    "mark_show": "false hides the automatic figure label or arrow",
+}
+SHAPES = ("circle", "block", "blob", "none")
+PHOTOS = ("grey", "colour", "warm")
+
+
+def control_problem(key: str, v) -> str | None:
+    """Why a control's value can't be used (None when it can)."""
+    num = {"words_size": (0.4, 2.5), "words_speed": (0.05, 1.5), "words_delay": (0.0, 5.0),
+           "picture_size": (0.5, 1.4), "picture_angle": (-12.0, 12.0)}
+    if key in num:
+        lo, hi = num[key]
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not lo <= v <= hi:
+            return f"{key} must be a number from {lo:g} to {hi:g}"
+    elif key == "words_align" and v not in ("left", "centre", "center"):
+        return "words_align must be left or centre"
+    elif key in ("words_caps", "mark_show") and not isinstance(v, bool):
+        return f"{key} must be true or false"
+    elif key == "picture_shape" and v not in SHAPES:
+        return f"picture_shape must be one of {', '.join(SHAPES)}"
+    elif key == "picture_photo" and v not in PHOTOS:
+        return f"picture_photo must be one of {', '.join(PHOTOS)}"
+    elif key in ("picture_shape_colour", "mark_colour") and not (v == "accent" and key == "picture_shape_colour"
+                                                                 or isinstance(v, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", v)):
+        return f"{key} must be #RRGGBB" + (" or accent" if key == "picture_shape_colour" else "")
+    return None
 
 
 def _rgb(hex_rgb: str) -> tuple[int, int, int]:
@@ -180,24 +222,26 @@ def background(design: str, w: int, h: int, k: int, total: int, label: str, dark
                        (ox + m, oy + h - round(h * 0.2)), (ox + w - m, oy + h - round(h * 0.2))):
             d.line([(cx - c, cy), (cx + c, cy)], fill=ink[:3] + (140,), width=1)
             d.line([(cx, cy - c), (cx, cy + c)], fill=ink[:3] + (140,), width=1)
-        # footer: barcode, and two tiny columns made of the video's own words
+        # footer: barcode, and two tiny columns: this scene's own words, and a colophon
         bh = round(u * 0.035)
         _barcode(d, ox + w - m - round(u * 0.16), oy + h - m - bh, round(u * 0.16), bh, rng, ink)
-        words = (words_text or label or "venus edition").lower().split()
-        words = (words * (1 + 40 // max(1, len(words))))
         col_w = round(u * 0.2)
-        for ci in range(2):
-            x0 = ox + m + ci * (col_w + round(u * 0.03))
-            yb = oy + h - m - round(u * 0.105)
+
+        def wrap(words: list[str]) -> list[str]:
             lines, cur = [], ""
-            for wd in words[ci * 23 + k * 7:]:
-                if d.textlength(cur + " " + wd, font=tiny) > col_w:
+            for wd in words:
+                if cur and d.textlength(cur + " " + wd, font=tiny) > col_w:
                     lines.append(cur)
                     cur = wd
                 else:
                     cur = (cur + " " + wd).strip()
-                if len(lines) == 4:
-                    break
+            return (lines + [cur] if cur else lines)[:4]
+
+        colophon = [(label or "venus").lower()[:30], f"edition {k + 1:02d} of {total:02d}", "set in inter & dm mono", "printed on grey stock"]
+        cols = [wrap((words_text or "").lower().split()), colophon]
+        for ci, lines in enumerate(c for c in cols if c):
+            x0 = ox + m + ci * (col_w + round(u * 0.03))
+            yb = oy + h - m - round(u * 0.105)
             for li, txt in enumerate(lines):
                 d.text((x0, yb + li * round(u * 0.017)), txt, font=tiny, fill=ink[:3] + (120,))
         d.text((ox + m, oy + h - m - round(u * 0.014)), "EST. 2026 — EDITION " + num[-2:], font=tiny, fill=ink[:3] + (150,))
@@ -267,11 +311,18 @@ def layout(w: int, h: int, has_text: bool, src_aspect: float) -> tuple[int, int,
     return round(cx - pw / 2), round(cy - ph / 2), pw, ph
 
 
-def _treat(img, design: str):
+def _or(v, default):
+    return default if v is None else v
+
+
+def _treat(img, design: str, photo: str | None = None):
     from PIL import ImageEnhance, ImageOps
 
     img = img.convert("RGB")
-    if design == "mono":
+    photo = photo or ("grey" if design == "mono" else "warm")
+    if photo == "colour":
+        return ImageEnhance.Contrast(img).enhance(1.04)
+    if photo == "grey":
         g = ImageOps.autocontrast(ImageOps.grayscale(img), cutoff=1)
         g = ImageEnhance.Contrast(g).enhance(1.12)
         return g.convert("RGB")
@@ -310,7 +361,8 @@ def _blob(size: int, rng, fill):
 
 
 def print_plate(design: str, w: int, h: int, k: int, rect: tuple[int, int, int, int], accent: str,
-                picture=None, dark: bool = False):
+                picture=None, dark: bool = False, shape: str | None = None, shape_colour: str | None = None,
+                angle_in: float | None = None, photo: str | None = None):
     """The print and what lies under it, as one transparent layer the size of
     the frame: the accent shape or paint, the shadow, the border, the photo
     (when it is a still; a moving clip is laid into the window later) and,
@@ -324,9 +376,21 @@ def print_plate(design: str, w: int, h: int, k: int, rect: tuple[int, int, int, 
     under = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     plate = under  # the shape is drawn on its own layer, so it can land on its own beat
     acc = _rgb(accent)
-    # what sits behind the print
+    if shape_colour:
+        acc = _rgb(accent if shape_colour == "accent" else shape_colour)
+    # what sits behind the print (the design picks one per scene unless asked)
     if design == "mono":
-        if k % 2 == 0:
+        own = "circle" if k % 2 == 0 else "block"
+    else:
+        own = ("blob", "circle", "circle")[(k + 2) % 3]
+    shape = shape or own
+    if shape == "blob":
+        b = _blob(round(max(pw, ph) * 0.95), rng, acc)
+        plate.alpha_composite(b, (round(x - pw * 0.08 - b.width / 2 + b.width * 0.25), round(y + ph * 0.18 - b.height / 2)))
+    elif shape == "none":
+        pass
+    elif design == "mono":
+        if shape == "circle":
             r = round(max(pw, ph) * 0.42)
             cx, cy = x + pw * (0.22 if k % 4 == 0 else 0.8), y + ph * 0.3
             ImageDraw.Draw(plate).ellipse([cx - r, cy - r, cx + r, cy + r], fill=acc + (255,))
@@ -334,15 +398,18 @@ def print_plate(design: str, w: int, h: int, k: int, rect: tuple[int, int, int, 
             bx = x - round(pw * 0.08) if k % 4 == 1 else x + round(pw * 0.62)
             ImageDraw.Draw(plate).rectangle([bx, y - round(ph * 0.12), bx + round(pw * 0.46), y + round(ph * 0.7)], fill=acc + (255,))
     else:
-        shape = (k + 2) % 3
-        if shape == 0:
-            b = _blob(round(max(pw, ph) * 0.95), rng, acc)
-            plate.alpha_composite(b, (round(x - pw * 0.08 - b.width / 2 + b.width * 0.25), round(y + ph * 0.18 - b.height / 2)))
-        else:
-            col = TEAL if shape == 1 else RED
+        teal = (k + 2) % 3 != 2
+        if shape == "circle":
+            col = acc if shape_colour else (TEAL if teal else RED)
             r = round(max(pw, ph) * 0.36)
-            cx, cy = x + (pw * 0.12 if shape == 1 else pw * 0.9), y + ph * (0.2 if shape == 1 else 0.75)
+            cx, cy = x + (pw * 0.12 if teal else pw * 0.9), y + ph * (0.2 if teal else 0.75)
             ImageDraw.Draw(plate).ellipse([cx - r, cy - r, cx + r, cy + r], fill=col + (255,))
+        else:  # a torn block of colour behind one corner
+            col = acc if shape_colour else (TEAL if teal else RED)
+            bx = x - round(pw * 0.1) if teal else x + round(pw * 0.55)
+            pts = [(bx + rng.uniform(-1, 1) * u * 0.006, y - round(ph * 0.1) + i * ph * 0.8 / 12) for i in range(13)]
+            pts += [(bx + pw * 0.55 + rng.uniform(-1, 1) * u * 0.006, y + ph * 0.7 - i * ph * 0.8 / 12) for i in range(13)]
+            ImageDraw.Draw(plate).polygon(pts, fill=col + (255,))
     plate = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     # the print: border and (for paper) a torn bottom edge
     border = round(u * (0.012 if design == "mono" else 0.02))
@@ -356,14 +423,15 @@ def print_plate(design: str, w: int, h: int, k: int, rect: tuple[int, int, int, 
     if picture is not None:
         from PIL import ImageOps
 
-        pic = ImageOps.fit(_treat(picture, design), (pw, ph), Image.LANCZOS, centering=(0.5, 0.4))
+        pic = ImageOps.fit(_treat(picture, design, photo), (pw, ph), Image.LANCZOS, centering=(0.5, 0.4))
         face.paste(pic, (border, border))
     else:  # the window where the clip will play
         ImageDraw.Draw(face).rectangle([border, border, border + pw - 1, border + ph - 1], fill=(0, 0, 0, 0))
     face.putalpha(Image.fromarray(np.minimum(np.asarray(sheet), np.asarray(face.getchannel("A")))))
+    tilt = rng.choice((-1, 1)) * rng.uniform(1.2, 2.6)  # drawn always, so other choices stay put
     angle = 0.0
-    if design == "paper" and picture is not None:
-        angle = rng.choice((-1, 1)) * rng.uniform(1.2, 2.6)
+    if picture is not None:  # a moving clip plays in a straight window
+        angle = float(_or(angle_in, tilt if design == "paper" else 0.0))
     rot = face.rotate(angle, resample=Image.BICUBIC, expand=True) if angle else face
     px, py = x - border - (rot.width - face.width) // 2, y - border - (rot.height - face.height) // 2
     # soft shadow under the print
@@ -417,6 +485,19 @@ def has_words(sc: dict) -> bool:
     return bool(sc.get("text") or sc.get("caption"))
 
 
+def print_rect(sc: dict, w: int, h: int, pic) -> tuple[int, int, int, int]:
+    """Where this scene's print sits, with its own size if one is asked for."""
+    x, y, pw, ph = layout(w, h, has_words(sc), pic.width / max(1, pic.height))
+    k = float(sc.get("picture_size", 1.0))
+    if k == 1.0:
+        return x, y, pw, ph
+    cx, cy = x + pw / 2, y + ph / 2
+    nw, nh = round(pw * k) // 2 * 2, round(ph * k) // 2 * 2
+    nx = min(max(round(cx - nw / 2), 0), max(0, w - nw))
+    ny = min(max(round(cy - nh / 2), 0), max(0, h - nh))
+    return nx, ny, nw, nh
+
+
 def scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: int, total: int) -> None:
     """One scene of a designed storyboard: paper, furniture, print, light."""
     import tempfile
@@ -440,9 +521,11 @@ def scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: in
         media = sc.get("file") if has_print(sc) else None
         if media:
             pic = _first_frame(media)
-            rect = layout(w, h, has_words(sc), pic.width / max(1, pic.height))
+            rect = print_rect(sc, w, h, pic)
             still = _still(media)
-            plate, under, (x, y, pw, ph) = print_plate(design, w, h, k, rect, accent, pic if still else None, dark)
+            plate, under, (x, y, pw, ph) = print_plate(design, w, h, k, rect, accent, pic if still else None, dark,
+                                                       sc.get("picture_shape"), sc.get("picture_shape_colour"),
+                                                       sc.get("picture_angle"), sc.get("picture_photo"))
             pl_p, un_p = tmp / "plate.png", tmp / "under.png"
             plate.save(pl_p)
             under.save(un_p)
@@ -459,7 +542,9 @@ def scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: in
             g.append(f"[{last}][pl]overlay=x='{dx}':y='{h * 0.035:.1f}*{ease}':eval=frame[b1]")
             last, n = "b1", n + 1
             if not still:
-                look = "hue=s=0,eq=contrast=1.12" if design == "mono" else "eq=saturation=0.55:contrast=1.05,colorbalance=rs=0.04:bs=-0.05"
+                photo = sc.get("picture_photo") or ("grey" if design == "mono" else "warm")
+                look = {"grey": "hue=s=0,eq=contrast=1.12", "colour": "eq=contrast=1.04",
+                        "warm": "eq=saturation=0.55:contrast=1.05,colorbalance=rs=0.04:bs=-0.05"}[photo]
                 inputs += ["-ss", f"{float(sc.get('from', 0)):.3f}", "-t", f"{d + 0.2:.3f}", "-i", media]
                 g.append(f"[{n}:v]fps={fps:g},scale={pw}:{ph}:force_original_aspect_ratio=increase,crop={pw}:{ph},{look},"
                          f"format=rgba,fade=t=in:st=0:d=0.18:alpha=1[clip]")
@@ -550,7 +635,8 @@ def _t(x: float) -> str:
 
 
 def word_events(text: str, big: set[str], t0: float, t1: float, w: int, h: int, design: str, accent: str,
-                box: tuple[int, int, int, int], dark: bool, align: str = "left", caps: bool = False, layer: int = 20) -> tuple[list[str], list[float]]:
+                box: tuple[int, int, int, int], dark: bool, align: str = "left", caps: bool = False, layer: int = 20,
+                size: float = 1.0, speed: float | None = None, delay: float = 0.25) -> tuple[list[str], list[float]]:
     """Words set into `box` (x, y, width, height), each arriving on its own
     beat: it fades up out of a blur and settles. Mixed type on one baseline.
     Returns the events and the time each word lands."""
@@ -559,6 +645,7 @@ def word_events(text: str, big: set[str], t0: float, t1: float, w: int, h: int, 
     base = u * (0.115 if h > w else 0.11)
     if design == "paper":
         base *= 0.92
+    base *= size
     faces = {
         "plain": (("Inter Display", "Black") if design == "paper" else ("Inter", "ExtraBold"), 1.0),
         "big": (("Inter Display", "Black"), 1.9),
@@ -597,15 +684,15 @@ def word_events(text: str, big: set[str], t0: float, t1: float, w: int, h: int, 
     y = by + (bh - total_h) / 2
     n = len(words)
     span = max(0.6, (t1 - t0) * 0.72)
-    step = min(0.42, span / max(1, n))
+    step = speed if speed else min(0.42, span / max(1, n))
     ev, lands = [], []
     i = 0
     for ln, lh in zip(lines, heights):
         y += lh
         lw = sum(x[3] for x in ln) + space * (len(ln) - 1)
-        x = bx if align == "left" else bx + (bw - lw) / 2
+        x = bx if align == "left" else bx + (bw - lw) / 2 if align in ("centre", "center") else bx + bw - lw
         for wd, r, size, wid, desc, fam in ln:
-            ta = t0 + 0.25 + i * step
+            ta = t0 + delay + i * step
             lands.append(ta)
             col = grey if r == "light" else ink
             fn, style = fam
@@ -629,7 +716,8 @@ def word_events(text: str, big: set[str], t0: float, t1: float, w: int, h: int, 
     return ev, lands
 
 
-def title_events(text: str, sub: str, t0: float, t1: float, w: int, h: int, design: str, accent: str, dark: bool) -> list[str]:
+def title_events(text: str, sub: str, t0: float, t1: float, w: int, h: int, design: str, accent: str, dark: bool,
+                 scale: float = 1.0) -> list[str]:
     """A title card: for "mono" a huge condensed name with a spaced-out label
     above it; for "paper" big condensed caps with a small underlined serif line."""
     u = min(w, h)
@@ -640,7 +728,8 @@ def title_events(text: str, sub: str, t0: float, t1: float, w: int, h: int, desi
     size = u * 0.2
     wid, _ = _measure(words, size, ("Big Shoulders", "Bold"))
     # the name fills the width of the page, as on a poster (but never towers over it)
-    size = min(size * (w - 2 * m) / max(1.0, wid), u * (0.42 if h > w else 0.3))
+    fit, cap = size * (w - 2 * m) / max(1.0, wid), u * (0.42 if h > w else 0.3)
+    size = min(fit, cap) * scale if scale <= 1 else min(fit, cap * scale)  # bigger, but never wider than the page
     wid, _ = _measure(words, size, ("Big Shoulders", "Bold"))
     col = ink if design == "mono" else (TEAL if not dark else (120, 200, 196))
     if design == "mono":
@@ -690,7 +779,7 @@ def _wobble_ellipse(cx: float, cy: float, rx: float, ry: float, rng) -> str:
 
 
 def mark_events(design: str, kind: str, px: float, py: float, label: str, t0: float, t1: float, w: int, h: int,
-                accent: str, dark: bool, seed: int) -> list[str]:
+                accent: str, dark: bool, seed: int, colour: str | None = None) -> list[str]:
     """A note on the picture. "paper": a red hand-drawn loop around the spot,
     a line out to a yellow tag. "mono": a dot, a hairline, a small mono label."""
     u = min(w, h)
@@ -700,11 +789,12 @@ def mark_events(design: str, kind: str, px: float, py: float, label: str, t0: fl
     lx = px + (u * 0.2 if right else -u * 0.2)
     ly = py - u * 0.12
     lx = min(max(lx, u * 0.06), w - u * 0.06)
+    red = _ass(_rgb(colour)) if colour else MARK_RED
     if design == "paper":
         if kind == "loop":
             r = u * 0.075
             path = _wobble_ellipse(px, py, r * 1.25, r, rng)
-            ev.append(f"Dialogue: 22,{_t(t0)},{_t(t1)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\1a&HFF&\\3c{MARK_RED}\\bord{u * 0.006:.1f}\\shad0"
+            ev.append(f"Dialogue: 22,{_t(t0)},{_t(t1)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\1a&HFF&\\3c{red}\\bord{u * 0.006:.1f}\\shad0"
                       f"\\clip(0,0,{px - r * 1.4:.0f},{h})\\t(0,420,\\clip(0,0,{w},{h}))\\fad(0,200)\\p1}}{path}{{\\p0}}")
         s = round(u * 0.032)
         tw, _ = _measure(label.upper(), s, ("Inter", "ExtraBold"))
@@ -722,7 +812,7 @@ def mark_events(design: str, kind: str, px: float, py: float, label: str, t0: fl
         ev.append(f"Dialogue: 24,{_t(t0 + 0.45)},{_t(t1)},Card,,0,0,0,,{{\\an1\\pos({x0 + pad:.0f},{y1 - s * 0.18:.0f})\\fnInter\\b1\\fs{s}"
                   f"\\bord0\\shad0\\1c&H00111111&\\alpha&HFF&\\t(0,160,\\alpha&H00&)\\fad(0,200)}}{_esc(label.upper())}")
     else:
-        ink = "&H00EEEEEE&" if dark else "&H00111111&"
+        ink = red if colour else ("&H00EEEEEE&" if dark else "&H00111111&")
         s = round(u * 0.028)
         r = u * 0.009
         ev.append(f"Dialogue: 22,{_t(t0)},{_t(t1)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\1c{ink}\\bord0\\shad0\\fad(150,200)\\p1}}"
@@ -754,11 +844,12 @@ def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: 
     if has_print(sc):
         try:
             pic = _first_frame(sc["file"])
-            rect = layout(w, h, bool(words), pic.width / max(1, pic.height))
+            rect = print_rect(sc, w, h, pic)
         except Exception:
             rect = None
     if sc["type"] == "title" and not sc.get("file"):
-        ev += title_events(sc.get("text", ""), sc.get("subtitle", ""), t0, t1, w, h, design, accent, dark)
+        ev += title_events(sc.get("text", ""), sc.get("subtitle", ""), t0, t1, w, h, design, accent, dark,
+                           float(sc.get("words_size", 1.0)))
         beats += [t0 + 0.15, t0 + 0.75]
     elif words:
         m = round(u * (0.085 if vertical else 0.07))
@@ -772,8 +863,11 @@ def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: 
             box = (m, round(h * 0.62), w - 2 * m, round(h * 0.26))
         else:
             box = (m, round(h * 0.22), w - 2 * m, round(h * 0.56))
-        align = "centre" if (design == "paper" and not (rect and not vertical)) else "left"
-        e, lands = word_events(words, big, t0, t1, w, h, design, accent, box, dark, align=align, caps=design == "paper")
+        align = sc.get("words_align") or ("centre" if (design == "paper" and not (rect and not vertical)) else "left")
+        caps = sc.get("words_caps", design == "paper")
+        e, lands = word_events(words, big, t0, t1, w, h, design, accent, box, dark, align=align, caps=bool(caps),
+                               size=float(sc.get("words_size", 1.0)), speed=sc.get("words_speed"),
+                               delay=float(sc.get("words_delay", 0.25)))
         ev += e
         beats += lands
     if rect:
@@ -781,15 +875,19 @@ def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: 
         c = sc.get("callout")
         if c:
             ta = t0 + min(1.2, (t1 - t0) * 0.45)
-            ev += mark_events(design, "loop", x + float(c["x"]) * pw, y + float(c["y"]) * ph, str(c["label"]), ta, t1, w, h, accent, dark, k)
+            ev += mark_events(design, "loop", x + float(c["x"]) * pw, y + float(c["y"]) * ph, str(c["label"]), ta, t1, w, h, accent, dark, k,
+                              sc.get("mark_colour"))
             beats.append(ta)
+        elif sc.get("mark_show") is False:
+            pass
         elif design == "mono":
             # a figure label under the print, the small print of a magazine page
             ta = t0 + min(1.4, (t1 - t0) * 0.5)
             s = round(u * 0.02)
+            mink = _ass(_rgb(sc["mark_colour"])) if sc.get("mark_colour") else ("&H00EEEEEE&" if dark else "&H00111111&")
             lab = f"FIG. {k + 1:02d}" + (f" — {sc['label']}" if sc.get("label") else "")
             ev.append(f"Dialogue: 18,{_t(ta)},{_t(t1)},Card,,0,0,0,,{{\\an7\\pos({x},{y + ph + round(u * 0.022)})\\fnDM Mono\\b0\\fs{s}"
-                      f"\\bord0\\shad0\\1c&H00111111&\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{_esc(lab.upper())}")
+                      f"\\bord0\\shad0\\1c{mink}\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{_esc(lab.upper())}")
             beats.append(ta)
         else:
             # a hand-drawn arrow pointing in at the print
@@ -803,7 +901,8 @@ def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: 
             hd = u * 0.04
             path = (f"m {ax:.0f} {ay:.0f} b {mx:.0f} {my:.0f} {mx:.0f} {my:.0f} {tipx:.0f} {tipy:.0f} "
                     f"m {tipx + side * hd:.0f} {tipy - hd * 0.3:.0f} l {tipx:.0f} {tipy:.0f} l {tipx + side * hd * 0.6:.0f} {tipy + hd:.0f}")
-            ev.append(f"Dialogue: 22,{_t(ta)},{_t(t1)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\1a&HFF&\\3c{MARK_RED}\\bord{u * 0.007:.1f}\\shad0"
+            red = _ass(_rgb(sc["mark_colour"])) if sc.get("mark_colour") else MARK_RED
+            ev.append(f"Dialogue: 22,{_t(ta)},{_t(t1)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\1a&HFF&\\3c{red}\\bord{u * 0.007:.1f}\\shad0"
                       f"\\alpha&HFF&\\t(0,200,\\alpha&H00&)\\fad(0,200)\\p1}}{path}{{\\p0}}")
             if sc.get("note"):
                 s = round(u * 0.04)
@@ -814,6 +913,6 @@ def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: 
                 if side < 0 and nx - nw < u * 0.03:
                     nx = u * 0.03 + nw
                 ev.append(f"Dialogue: 22,{_t(ta + 0.2)},{_t(t1)},Card,,0,0,0,,{{\\an{7 if side > 0 else 9}\\pos({nx:.0f},{ay + u * 0.02:.0f})"
-                          f"\\fnNothing You Could Do\\b0\\fs{s}\\bord0\\shad0\\1c{MARK_RED}\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{_esc(sc['note'])}")
+                          f"\\fnNothing You Could Do\\b0\\fs{s}\\bord0\\shad0\\1c{red}\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{_esc(sc['note'])}")
             beats.append(ta)
     return ev, beats

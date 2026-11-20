@@ -542,7 +542,20 @@ def cmd_make(a: argparse.Namespace) -> None:
     need_ffmpeg()
     draft_mode(a)
     t0 = time.time()
-    sb = story.load(Path(a.storyboard))
+    from . import nodes as nd
+
+    src = Path(a.storyboard)
+    doc = nd.read(src) if nd.is_nodes(src) else None
+    if doc is not None:  # a node file: check the nodes and locks, then build its storyboard
+        problems = nd.check(doc)
+        if problems:
+            raise SystemExit("node file problems:\n  " + "\n  ".join(problems))
+        changed = nd.changes(doc, nd.read_last(src))
+        if changed:
+            print("changed since the last build: " + ", ".join(c if not c.startswith("-") else f"{c[1:]} (removed)" for c in changed))
+        sb = story.load(src, nd.to_storyboard(doc))
+    else:
+        sb = story.load(src)
     style = a.style or sb.get("style")
     sb = {**pack(style, "aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background", "design"), **sb}
     aspect = a.aspect or sb.get("aspect", "16:9")
@@ -551,10 +564,18 @@ def cmd_make(a: argparse.Namespace) -> None:
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     if a.scene:
-        n = a.scene
+        ids = [x["id"] for x in nd.scenes_of(doc)] if doc else []
+        n = ids.index(a.scene) + 1 if a.scene in ids else int(a.scene) if a.scene.isdigit() else 0
         if not 1 <= n <= len(sb["scenes"]):
-            raise SystemExit(f"--scene {n}: the storyboard has scenes 1 to {len(sb['scenes'])}")
-        one = {**sb, "scenes": [sb["scenes"][n - 1]], "end_card": None, "music": None, "progress": False}
+            raise SystemExit(f"--scene {a.scene}: the storyboard has scenes 1 to {len(sb['scenes'])}"
+                             + (f" ({', '.join(ids)})" if ids else ""))
+        one = {**sb, "scenes": [sb["scenes"][n - 1]], "end_card": None, "music": None, "progress": False,
+               "_place": (n - 1, len(sb["scenes"]))}
+        first = next((x for x in sb["scenes"] if x["type"] == "title" and x.get("text")), None)
+        if first and not sb.get("label"):  # the page header names the whole video, as in the full build
+            from .paper import plain
+
+            one["label"] = plain(first["text"])
         print(f"scene {n} on its own, to check it quickly")
         story.build(one, out, ASPECTS[aspect])
         print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s")
@@ -565,11 +586,12 @@ def cmd_make(a: argparse.Namespace) -> None:
     for n in story.build(sb, out, ASPECTS[aspect]):
         print("   " + n)
     fixed: list[str] = []
+    asked = [dict(x) for x in sb["scenes"]], sb.get("end_card_seconds")
     for _ in range(2 if not (a.no_fix or a.draft) else 0):  # watch, fix, build again; twice at most
         try:
             from .selfcheck import review
 
-            changes = story.autofix(sb, review(out))
+            changes = story.autofix(sb, review(out), nd.frozen(doc) if doc else frozenset())
         except Exception as e:
             print(f"   (self-review could not run: {e})")
             break
@@ -578,7 +600,21 @@ def cmd_make(a: argparse.Namespace) -> None:
         fixed += changes
         print("self-review: fixing " + "; ".join(changes) + ". Building again.")
         story.build(sb, out, ASPECTS[aspect])
-    if fixed:
+    if fixed and doc is not None:  # the fixes go back on the nodes they belong to, in a copy beside the video
+        fixed_doc = json.loads(json.dumps(doc))
+        ids = [x["id"] for x in nd.scenes_of(fixed_doc)]
+        for i, (before, sc) in enumerate(zip(asked[0], sb["scenes"])):
+            for key in ("seconds", "darken", "transition"):
+                if sc.get(key) != before.get(key):
+                    nd.set_scene_key(fixed_doc, ids[i], key, sc[key])
+        if sb.get("end_card_seconds") != asked[1]:
+            nd.find(fixed_doc, "settings")["params"]["end_card_seconds"] = sb["end_card_seconds"]
+        if out.parent.resolve() != src.parent.resolve():
+            nd.absolute_files(fixed_doc, src.parent)
+        nd.relock(fixed_doc)
+        nd.write(out.with_suffix(".nodes.json"), fixed_doc)
+        print(f"   fixed nodes saved as {out.with_suffix('.nodes.json')} (locked nodes were left as they are)")
+    elif fixed:
         keep = {k: v for k, v in sb.items() if not k.startswith("_")}
         keep["scenes"] = [{k: v for k, v in sc.items() if not k.startswith("_")} for sc in sb["scenes"]]
         out.with_suffix(".storyboard.json").write_text(json.dumps(keep, indent=2), encoding="utf-8")
@@ -586,10 +622,123 @@ def cmd_make(a: argparse.Namespace) -> None:
     write_sheet(out, [(a0 + (a1 - a0) * 0.6, f"{i + 1} {sb['scenes'][i]['type']}") for i, (a0, a1) in sorted(sb["_spans"].items())])
     out.with_suffix(".why.md").write_text(story.explain(sb), encoding="utf-8")
     redrawn = sb.get("_redrawn")
-    if redrawn is not None and len(redrawn) < len(sb["scenes"]):
+    if doc is not None:
+        ids = [x["id"] for x in nd.scenes_of(doc)]
+        nd.save_last(src, doc, out, sb["_spans"], [ids[i] for i in redrawn or []])
+        if redrawn is not None and len(redrawn) < len(ids):
+            print(f"   redrew {', '.join(ids[i] for i in redrawn) or 'no scenes'} ({len(redrawn)} of {len(ids)}); "
+                  "the rest were kept from the last build")
+    elif redrawn is not None and len(redrawn) < len(sb["scenes"]):
         print(f"   redrew {len(redrawn)} of {len(sb['scenes'])} scenes; the rest were kept from the last build")
     print(self_review(out).strip())
     print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s; why it is cut this way: {out.with_suffix('.why.md')}")
+
+
+def cmd_nodes(a: argparse.Namespace) -> None:
+    """Work on a node file: the video as named nodes you can show, set, lock and move."""
+    from . import nodes as nd
+    from . import story
+
+    f = Path(a.file)
+    if a.action == "init":
+        try:
+            sb = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise SystemExit(f"{f}: can't read the storyboard ({e})")
+        if "venus_nodes" in sb:
+            raise SystemExit(f"{f} is already a node file")
+        out = Path(a.out) if a.out else f.with_name((f.name[:-5] if f.name.endswith(".json") else f.name) + ".nodes.json")
+        if out.exists() and not a.force:
+            raise SystemExit(f"{out} already exists; add --force to replace it")
+        doc = nd.to_nodes(sb)
+        if nd.to_storyboard(doc) != sb:  # never lose anything on the way
+            raise SystemExit("this storyboard didn't survive the round trip into nodes; please report it")
+        nd.write(out, doc)
+        print(f"wrote {out}: {len(nd.scenes_of(doc))} scenes as {len(doc['nodes'])} nodes\n")
+        print(nd.show(doc))
+        return
+    if a.action == "guide":
+        print(nd.guide())
+        return
+    doc = nd.read(f)
+    if a.action == "show":
+        print(nd.show(doc, nd.read_last(f), a.ids or None))
+        problems = nd.check(doc)
+        if problems:
+            print("\nproblems:\n  " + "\n  ".join(problems))
+        return
+    if a.action == "check":
+        problems = nd.check(doc)
+        if not problems:
+            try:
+                story.load(f, nd.to_storyboard(doc))
+            except SystemExit as e:
+                problems = str(e).splitlines()[1:] or [str(e)]
+        print("\n".join(["problems:"] + ["  " + x.strip() for x in problems]) if problems else "all good")
+        return
+    if a.action == "export":
+        if not a.out:
+            raise SystemExit("export needs --out FILE for the storyboard")
+        Path(a.out).write_text(json.dumps(nd.to_storyboard(doc), indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"wrote the storyboard to {a.out}")
+        return
+    if a.action == "view":
+        from .nodeview import write_view
+
+        out = Path(a.out) if a.out else f.with_name((f.name[:-5] if f.name.endswith(".json") else f.name) + ".html")
+        write_view(f, doc, out)
+        print(f"wrote {out}: open it in a browser to see the node map")
+        return
+    ids = a.ids or []
+    if a.action == "set":
+        if not ids:
+            raise SystemExit("set needs NODE.PARAM=VALUE, like scene3.words.size=1.3 (null removes a setting)")
+        done = []
+        for item in ids:
+            target, eq, raw = item.partition("=")
+            if not eq:
+                raise SystemExit(f"{item}: write it as NODE.PARAM=VALUE")
+            nd.set_param(doc, target.strip(), nd.parse_value(raw), a.force)
+            done.append(f"{target.strip()} = {raw}")
+    elif a.action in ("lock", "unlock"):
+        done = nd.lock(doc, ids, a.action == "lock")
+        done = [f"{a.action}ed {x}" for x in done]
+    elif a.action == "move":
+        if len(ids) != 1:
+            raise SystemExit("move one scene: alvenus nodes move FILE scene4 --after scene1")
+        nd.move(doc, ids[0], a.after, a.before, a.first)
+        done = [f"moved {ids[0]}"]
+    elif a.action == "copy":
+        if len(ids) != 1:
+            raise SystemExit("copy one scene: alvenus nodes copy FILE scene2 [--as scene2b]")
+        new = nd.copy_scene(doc, ids[0], a.as_id)
+        if a.after or a.before or a.first:
+            nd.move(doc, new, a.after, a.before, a.first)
+        done = [f"copied {ids[0]} as {new}"]
+    elif a.action == "remove":
+        done = [f"removed {x}" for nid in ids for x in nd.remove(doc, nid, a.force)]
+    elif a.action in ("use", "unuse"):
+        if len(ids) < 2:
+            raise SystemExit(f"{a.action} a style on scenes: alvenus nodes {a.action} FILE STYLE scene2 scene4")
+        got = nd.use(doc, ids[0], ids[1:], a.action == "use", a.force)
+        done = [f"{', '.join(got)} {'now use' if a.action == 'use' else 'no longer use'} {ids[0]}"
+                + (f"; give it settings with: alvenus nodes set {f} {ids[0]}.words.size=1.2" if a.action == "use"
+                   and not (nd.find(doc, ids[0]).get("params")) else "")]
+    else:
+        raise SystemExit(f"unknown action {a.action}")
+    problems = nd.check(doc)
+    if not problems:
+        try:
+            story.load(f, nd.to_storyboard(doc))
+        except SystemExit as e:
+            problems = [x.strip() for x in str(e).splitlines()[1:]] or [str(e)]
+    if problems:
+        raise SystemExit("not saved, because:\n  " + "\n  ".join(problems))
+    nd.write(f, doc)
+    print("; ".join(done))
+    touched = {x.split(" = ")[0].rsplit(".", 1)[0] for x in done if " = " in x}
+    if touched:
+        print(nd.show(doc, nd.read_last(f), sorted({t.split(".")[0] for t in touched} | touched)))
 
 
 ENERGETIC = {"reels-punchy", "hype"}
@@ -825,12 +974,13 @@ def main(argv: list[str] | None = None) -> None:
     mo.set_defaults(func=cmd_montage)
 
     mk = sub.add_parser("make", help="build a video from a storyboard (scenes of clips, images, titles, numbers, charts, maps...)")
-    mk.add_argument("storyboard", nargs="?", help="storyboard JSON (see: alvenus make --example sb.json)")
+    mk.add_argument("storyboard", nargs="?", help="storyboard JSON or node file (see: alvenus make --example sb.json; alvenus nodes init)")
     mk.add_argument("--draft", action="store_true", help="quick look: a third of the size, fastest settings, plus a sheet of every scene")
     mk.add_argument("--out", help="output MP4")
     mk.add_argument("--aspect", choices=sorted(ASPECTS), help="overrides the storyboard's aspect")
     mk.add_argument("--style", choices=list(PRESETS), help="a style pack: look, colour, transitions and titles (the storyboard's own settings still win)")
-    mk.add_argument("--scene", type=int, metavar="N", help="build only scene N, in seconds, to check a change before building it all")
+    mk.add_argument("--scene", metavar="N", help="build only scene N (or a node file's scene id, like scene3), in seconds, "
+                    "to check a change before building it all")
     mk.add_argument("--versions", action="store_true", help="three quick versions side by side (your style, the opposite energy, "
                     "tighter pace), each with the reason it exists")
     mk.add_argument("--no-fix", action="store_true", help="only report what the self-review finds; don't change and rebuild")
@@ -840,6 +990,28 @@ def main(argv: list[str] | None = None) -> None:
     mk.add_argument("--template", choices=list(TEMPLATES), help="start from a proven shape with a hook in the first 2 seconds: "
                     "explainer, story, list (top-5) or ad; writes it to the storyboard file (and builds it if --out is given)")
     mk.set_defaults(func=cmd_make)
+
+    nd = sub.add_parser("nodes", help="the video as named nodes your AI can point at: show, set, lock, move, and a map to look at",
+                        description="Actions: init (storyboard -> node file), show, guide, set NODE.PARAM=VALUE..., lock ID..., "
+                                    "unlock ID..., move SCENE, copy SCENE, remove ID..., use STYLE SCENE... (wire scenes to a shared style), "
+                                    "unuse STYLE SCENE..., check, view (an HTML map), export --out sb.json")
+    nd.add_argument("action", choices=["init", "show", "guide", "set", "lock", "unlock", "move", "copy", "remove", "use", "unuse", "check", "view",
+                                       "export"])
+    nd.add_argument("file", nargs="?", default="", help="the node file (for init: the storyboard)")
+    nd.add_argument("ids", nargs="*", help="node ids, or NODE.PARAM=VALUE for set")
+    nd.add_argument("--out", "-o", help="where to write (init, view, export)")
+    nd.add_argument("--force", action="store_true", help="change a locked node anyway (it stays locked), or replace a file")
+    nd.add_argument("--after", metavar="SCENE")
+    nd.add_argument("--before", metavar="SCENE")
+    nd.add_argument("--first", action="store_true")
+    nd.add_argument("--as", dest="as_id", metavar="ID", help="copy: the new scene's id")
+
+    def run_nodes(a: argparse.Namespace) -> None:
+        if a.action != "guide" and not a.file:
+            raise SystemExit(f"nodes {a.action} needs a file")
+        cmd_nodes(a)
+
+    nd.set_defaults(func=run_nodes)
 
     rv = sub.add_parser("review", help="check a finished video: reading time, contrast, black frames, flashing, sound and picture")
     rv.add_argument("video")

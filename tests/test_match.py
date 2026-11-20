@@ -658,5 +658,142 @@ class Designs(unittest.TestCase):
         self.assertEqual(PRESETS["vox-paper"]["design"], "paper")
 
 
+class Nodes(unittest.TestCase):
+    SB = {"style": "mono-editorial", "accent": "#D4F01E", "music": "song.mp3", "scenes": [
+        {"type": "title", "text": "Same Cup", "subtitle": "a ritual", "seconds": 2.6, "_hook": "keep me"},
+        {"type": "image", "file": "cup.jpg", "caption": "Every *same* cup", "seconds": 3, "words_size": 1.2,
+         "picture_shape": "none", "transition": "whip", "darken": 0.1},
+        {"type": "image", "file": "m.jpg", "caption": "Broken", "callout": {"x": 0.5, "y": 0.4, "label": "no power"}, "note": "hm"},
+        {"type": "chart", "bars": [["A", 1], ["B", 2]], "title": "What", "caption": "c"},
+        {"type": "stat", "value": "500", "label": "stalls", "file": "bg.jpg"},
+        {"type": "split", "left": {"file": "a.mp4", "label": "Day"}, "right": {"file": "b.mp4", "label": "Night"}},
+    ]}
+
+    def doc(self):
+        import copy
+        from alvenus import nodes as nd
+        return nd.to_nodes(copy.deepcopy(self.SB))
+
+    def test_round_trip_loses_nothing(self):
+        from alvenus import nodes as nd
+        from alvenus.story import EXAMPLE
+        from alvenus.templates import TEMPLATES
+        for sb in [self.SB, EXAMPLE, *TEMPLATES.values()]:
+            doc = nd.to_nodes(sb)
+            self.assertEqual(nd.to_storyboard(doc), sb)
+            self.assertEqual(nd.check(doc), [])
+
+    def test_parts_hold_the_right_keys(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        self.assertEqual(nd.find(doc, "scene2.words")["params"], {"caption": "Every *same* cup", "size": 1.2})
+        self.assertEqual(nd.find(doc, "scene2.picture")["params"], {"file": "cup.jpg", "shape": "none", "darken": 0.1})
+        self.assertEqual(nd.find(doc, "scene2.in")["params"], {"transition": "whip"})
+        self.assertEqual(nd.find(doc, "scene3.mark")["params"]["note"], "hm")
+        self.assertEqual(nd.find(doc, "scene5.graphic")["params"], {"value": "500", "label": "stalls"})
+        self.assertEqual(nd.find(doc, "scene5.picture")["params"], {"file": "bg.jpg"})
+        self.assertIn("left", nd.find(doc, "scene6.graphic")["params"])
+
+    def test_set_makes_parts_and_explains_mistakes(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        nd.set_param(doc, "scene1.picture.shape", "blob")  # a part that wasn't there yet
+        self.assertEqual(nd.to_storyboard(doc)["scenes"][0]["picture_shape"], "blob")
+        nd.set_param(doc, "scene2.words.sise", 1)
+        self.assertTrue(any("did you mean size" in p for p in nd.check(doc)))
+        nd.set_param(doc, "scene2.words.sise", None)
+        nd.set_param(doc, "scene6.graphic.left.label", "Dawn")  # nested
+        self.assertEqual(nd.to_storyboard(doc)["scenes"][5]["left"], {"file": "a.mp4", "label": "Dawn"})
+        self.assertEqual(nd.check(doc), [])
+        with self.assertRaises(SystemExit):
+            nd.set_param(doc, "scen2.words.size", 1)
+
+    def test_locks_guard_and_freeze(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        nd.lock(doc, ["scene2"])
+        with self.assertRaises(SystemExit):
+            nd.set_param(doc, "scene2.words.size", 1.5)
+        nd.set_param(doc, "scene2.words.size", 1.5, force=True)  # forced: still locked, lock re-stamped
+        self.assertEqual(nd.check(doc), [])
+        nd.find(doc, "scene2.words")["params"]["size"] = 0.9  # edited by hand behind the lock
+        self.assertTrue(any("locked" in p for p in nd.check(doc)))
+        self.assertEqual(nd.frozen(doc), {"1:seconds", "1:darken", "1:transition"})
+
+    def test_autofix_leaves_locked_scenes_alone(self):
+        from types import SimpleNamespace
+        from alvenus.story import autofix
+        sb = {"scenes": [{"type": "text", "text": "a b c d e f", "seconds": 1.0}, {"type": "text", "text": "x", "seconds": 2}],
+              "_spans": {0: (0.0, 1.0), 1: (1.0, 3.0)}}
+        f = SimpleNamespace(kind="reading", times=[0.5], extra={"need": 2.0, "shown": 1.0})
+        self.assertEqual(autofix(sb, [f], frozen={"0:seconds"}), [])
+        self.assertTrue(autofix(sb, [f]))
+
+    def test_styles_wire_into_scenes(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        nd.use(doc, "calm", ["scene2", "scene3"])
+        nd.set_param(doc, "calm.words.size", 0.8)
+        nd.set_param(doc, "calm.picture.shape", "blob")
+        nd.set_param(doc, "calm.dark", True)
+        sc = nd.to_storyboard(doc)["scenes"]
+        self.assertEqual(sc[1]["words_size"], 1.2)  # the scene's own setting wins
+        self.assertEqual((sc[2]["words_size"], sc[2]["picture_shape"], sc[2]["dark"]), (0.8, "blob", True))
+        nd.set_param(doc, "scene3.picture.shape", None)
+        nd.set_param(doc, "calm.bogus", 1)
+        self.assertTrue(any("calm" in p for p in nd.check(doc)))
+        nd.remove(doc, "calm")
+        self.assertNotIn("use", nd.find(doc, "scene2"))
+
+    def test_move_copy_remove(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        new = nd.copy_scene(doc, "scene2")
+        self.assertEqual(new, "scene7")
+        nd.move(doc, "scene7", first=True)
+        doc = nd.tidy(doc)
+        self.assertEqual([n["id"] for n in nd.scenes_of(doc)][:2], ["scene7", "scene1"])
+        self.assertEqual(nd.find(doc, "scene7.words")["of"], "scene7")
+        self.assertEqual(nd.remove(doc, "scene7"), ["scene7", "scene7.in", "scene7.words", "scene7.picture"])
+        self.assertEqual(nd.to_storyboard(doc), self.SB)
+
+    def test_changes_since_last_build(self):
+        from alvenus import nodes as nd
+        doc = self.doc()
+        last = {"hashes": {n["id"]: nd.node_hash(n) for n in doc["nodes"]}}
+        nd.set_param(doc, "scene3.words.caption", "Fixed")
+        nd.remove(doc, "scene6")
+        self.assertEqual(sorted(nd.changes(doc, last)), ["-scene6", "-scene6.graphic", "scene3.words"])
+
+    def test_controls_are_checked(self):
+        from alvenus.paper import control_problem
+        self.assertIsNone(control_problem("words_size", 1.3))
+        self.assertIsNotNone(control_problem("words_size", 9))
+        self.assertIsNotNone(control_problem("picture_shape", "star"))
+        self.assertIsNone(control_problem("picture_shape_colour", "accent"))
+        self.assertIsNotNone(control_problem("mark_colour", "red"))
+
+    def test_controls_change_the_drawing(self):
+        from alvenus.paper import print_plate, word_events
+        a, _ = word_events("one two three", set(), 0, 3, 1080, 1920, "mono", "#D4F01E", (90, 200, 900, 600), False)
+        b, lands = word_events("one two three", set(), 0, 3, 1080, 1920, "mono", "#D4F01E", (90, 200, 900, 600), False,
+                               size=0.5, speed=0.1, delay=1.0)
+        self.assertEqual([round(t, 2) for t in lands], [1.0, 1.1, 1.2])
+        size = lambda ev: max(int(x) for x in __import__("re").findall(r"\\fs(\d+)", "".join(ev)))
+        self.assertLess(size(b), size(a))
+        _, under, _ = print_plate("mono", 540, 960, 0, (100, 300, 300, 400), "#D4F01E", shape="none")
+        self.assertIsNone(under.getbbox())
+        _, under, _ = print_plate("mono", 540, 960, 0, (100, 300, 300, 400), "#D4F01E", shape="blob")
+        self.assertIsNotNone(under.getbbox())
+
+    def test_scene_cache_ignores_word_controls(self):
+        from alvenus.story import _scene_key
+        sc = {"type": "image", "file": "x.jpg", "_design": "mono", "_k": 1}
+        k = _scene_key(sc, 3, 1080, 1920, 30)
+        self.assertEqual(k, _scene_key({**sc, "words_size": 1.4, "mark_colour": "#112233", "note": "n"}, 3, 1080, 1920, 30))
+        self.assertNotEqual(k, _scene_key({**sc, "picture_shape": "blob"}, 3, 1080, 1920, 30))
+        self.assertNotEqual(k, _scene_key({**sc, "_k": 2}, 3, 1080, 1920, 30))
+
+
 if __name__ == "__main__":
     unittest.main()
