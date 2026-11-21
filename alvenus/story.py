@@ -28,7 +28,7 @@ IMAGES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
 def _still(f: str) -> bool:
     return Path(f).suffix.lower() in IMAGES or not has_video(f)
-KINDS = {"clip", "image", "title", "text", "stat", "chart", "line_chart", "quote", "timeline", "map", "split", "list", "compare"}
+KINDS = {"clip", "image", "title", "text", "stat", "chart", "line_chart", "quote", "timeline", "map", "split", "list", "compare", "archive"}
 EXAMPLE = {
     "aspect": "16:9", "look": "natural", "accent": "#FFD23F", "music": "song.mp3", "voiceover": None,
     "transition": "crossfade", "transition_seconds": 0.4, "cut_on_beat": True, "captions": True, "progress": False,
@@ -82,7 +82,7 @@ def load(path: Path, data: dict | None = None) -> dict:
                 sc[side]["file"] = str((base / f).resolve()) if not Path(f).is_absolute() else f
                 if not Path(sc[side]["file"]).exists():
                     problems.append(f"scene {i + 1}: {sc[side]['file']} not found")
-        if kind in ("clip", "image") and not sc.get("file"):
+        if kind in ("clip", "image", "archive") and not sc.get("file"):
             problems.append(f"scene {i + 1}: a {kind} scene needs \"file\"")
         if kind == "map" and not (sc.get("image") and sc.get("pins")):
             problems.append(f"scene {i + 1}: a map scene needs \"image\" and \"pins\"")
@@ -96,6 +96,17 @@ def load(path: Path, data: dict | None = None) -> dict:
         c = sc.get("callout")
         if c is not None and not (isinstance(c, dict) and 0 <= float(c.get("x", -1)) <= 1 and 0 <= float(c.get("y", -1)) <= 1 and c.get("label")):
             problems.append(f"scene {i + 1}: callout needs x and y (0 to 1, across and down the picture) and a label")
+    from .archive import FRAMES
+
+    for i, sc in enumerate(sb.get("scenes") or []):
+        if sc.get("frame") and sc["frame"] not in FRAMES:
+            problems.append(f"scene {i + 1}: frame {sc['frame']!r}: choose one of {', '.join(FRAMES)}")
+        if sc.get("credit") and "|" not in str(sc["credit"]):
+            problems.append(f"scene {i + 1}: credit is \"Role|Name\", e.g. \"Written by|Asha Rao\"")
+    if sb.get("credits") is not None and not (isinstance(sb["credits"], list) and all(isinstance(c, (list, tuple)) and len(c) == 2 for c in sb["credits"])):
+        problems.append("credits is a list of [role, name] pairs, one per scene from the start")
+    if sb.get("quote_style") not in (None, "card", "verse"):
+        problems.append("quote_style: choose card or verse")
     if not sb.get("scenes"):
         problems.append("no scenes")
     from .cut import TRANSITIONS
@@ -176,7 +187,16 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
         from .paper import scene_video
 
         return scene_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_total", 1))
-    _plain_scene(sc, d, w, h, fps, out)
+    if sc["type"] == "archive":
+        from .archive import scene_video as archive_video
+
+        archive_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_accent", "#C0392B"))
+    else:
+        _plain_scene(sc, d, w, h, fps, out)
+    if sc.get("frame"):
+        from .archive import add_frame
+
+        add_frame(out, sc["frame"], d, w, h, fps, sc.get("_k", k))
     from .paper import ff_tools, tools_on
 
     # node-graph tools on a plain scene work on its whole picture (it is one layer)
@@ -208,7 +228,7 @@ def _plain_scene(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> N
                     f"{line}[b];[a][b]{stack}=inputs=2,scale={w}:{h},setsar=1,format=yuv420p[v]", "-map", "[v]"] + enc)
         return
     if media:
-        dim = kind in ("title", "text", "quote", "stat")  # text over a picture: darken it so the words read
+        dim = kind in ("title", "text", "quote", "stat") and not sc.get("_verse")  # text over a picture: darken it so the words read
         dark = float(sc.get("darken", 0.22 if dim else 0.0))
         tail = f",eq=brightness=-{dark:.2f}:saturation=0.75,boxblur=6:1" if dim else (f",eq=brightness=-{dark:.2f}" if dark else "")
         push = float(sc.get("push", 0.06 if kind == "image" else 0.04 if kind == "clip" else 0.03))
@@ -235,7 +255,7 @@ def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
     from . import media
 
     words = {"text", "caption", "label", "items", "title", "who", "value", "points", "callout", "big_words", "pins", "bars",
-             "subtitle", "note"}
+             "subtitle", "note", "year", "tag", "detail", "credit"}
     keep = {k: v for k, v in sc.items() if k not in words and k != "_k" and not k.startswith(("words_", "mark_"))
             and not (sc["type"] == "compare" and k in ("left", "right"))}
     if sc.get("_design"):
@@ -272,8 +292,9 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     moving = sb.get("camera", True)
     for k, sc in enumerate(scenes):  # what a footage-free scene is drawn on, and which way its camera drifts
         sc["_bg"], sc["_accent"] = sb.get("background", "dark"), sb.get("accent", "#FFD23F")
-        footage = sc.get("file") or sc["type"] in ("clip", "image", "map", "split")
+        footage = sc.get("file") or sc["type"] in ("clip", "image", "map", "split", "archive")
         sc["_dir"] = 0 if footage or not moving else (1 if k % 2 == 0 else -1)
+        sc["_verse"] = sc["type"] == "quote" and (sc.get("style") or sb.get("quote_style")) == "verse"
     design = sb.get("design")
     for k, sc in enumerate(scenes):
         # its place in the whole video (a scene built alone with --scene keeps its own)
@@ -361,6 +382,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
 
     designed: list[str] = []
     beats: list[float] = []
+    verses: list = []
+    archive: list = []
     for i, sc in enumerate(scenes):
         if design and sc["type"] in ("title", "text", "clip", "image"):
             from .paper import scene_events
@@ -391,8 +414,12 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             charts.append(Chart(i, [(str(a), float(b)) for a, b in sc.get("bars", [])], sc.get("title", "")))
         elif kind == "line_chart":
             lcharts.append(Chart(i, [(str(a), float(b)) for a, b in sc.get("points", [])], sc.get("title", "")))
+        elif kind == "quote" and (sc.get("style") or sb.get("quote_style")) == "verse":
+            verses.append((sc.get("text", ""), sc.get("who", ""), t0 + (td * 0.8 if i else 0), t1))  # words wait for the reveal
         elif kind == "quote":
             quotes.append(Quote(i, sc.get("who", ""), sc.get("text", "")))
+        elif kind == "archive":
+            archive.append((str(sc.get("year", "")), str(sc.get("tag", "")), str(sc.get("detail", "")), t0 + (td * 0.8 if i else 0), t1, sc.get("_k", i)))
         elif kind == "timeline":
             tls.append(Timeline(i, [(str(a), str(b)) for a, b in sc.get("items", [])], sc.get("title", "")))
         elif kind == "map":
@@ -439,6 +466,16 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         genre.EXTRAS["places"] = places
     if arrivals:
         genre.EXTRAS["arrivals"] = arrivals
+    credits = [tuple(str(x) for x in c) for c in sb.get("credits") or []]
+    credit_rows = []
+    for i, sc in enumerate(scenes):
+        role_name = str(sc["credit"]).split("|", 1) if sc.get("credit") else (credits[i] if i < len(credits) else None)
+        if role_name:
+            t0, t1 = spans[i]
+            credit_rows.append((role_name[0].strip(), role_name[1].strip(), t0 + min(0.5, (t1 - t0) * 0.15), t1 - 0.1))
+    for key, val in (("archive", archive), ("verses", verses), ("credits", credit_rows)):
+        if val:
+            genre.EXTRAS[key] = val
     try:
         notes += finish(base, out, size, fps, spans, music=Path(sb["music"]) if sb.get("music") else None,
                         music_lufs=float(sb.get("music_lufs", -16.0 if not sb.get("voiceover") else -22.0)),

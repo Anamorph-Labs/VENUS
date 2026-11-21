@@ -118,6 +118,7 @@ class Shot:
     why: str = ""
     pulse: float = 0.0  # a quick zoom bump on every beat (loud parts), this much bigger
     beat: float = 0.5  # seconds per beat, for the pulse
+    frame: list | None = None  # [zoom, x, y]: reframed to line up with the shot before (a match cut)
 
     def source_length(self) -> float:
         s1 = self.speed if self.speed_end is None else self.speed_end
@@ -238,6 +239,10 @@ def _shot_filter(sh: Shot, src_size, w: int, h: int, fps: float, look: str, refr
     else:
         fit = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
     vf = f"{timing},fps={fps:g},{fit},setsar=1"
+    if sh.frame:
+        from .matchcut import reframe_filter
+
+        vf += reframe_filter(sh.frame, w, h)
     if sh.gain:
         vf += f",eq=brightness={sh.gain:.3f}"
     from .learnstyle import matched
@@ -298,7 +303,7 @@ def render(shots: list[Shot], music: Path, out: Path, size: str, fps: float = 30
         run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(lst), "-i", str(music),
              "-filter_complex", f"[0:v]{vf},fade=t=out:st={total - 0.4:.3f}:d=0.4[v];"
              f"[1:a]atrim=0:{total:.3f},asetpts=PTS-STARTPTS,afade=t=out:st={total - fade:.3f}:d={fade:.3f}[a]",
-             "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "19",
+             "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-maxrate", "14M", "-bufsize", "28M",
              "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out)])
     finally:
         for f in tmp.glob("*"):

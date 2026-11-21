@@ -178,6 +178,35 @@ hook and the payoff full frame unless the payoff *is* a number.
   `--title-style place` for an opening title in the same family. Only put real
   places and dates the creator gave you.
 
+### Archive documentary, sepia openers and match cuts
+
+- **Archive documentary** (preset `archive-doc`, with `make`): black and white
+  with one red accent. An `"archive"` scene floats an old photograph as a print
+  on a dark desk of documents, the desk and print drifting apart, with its
+  `"year"` large in serif, a red `"tag"` (one word) and a small typed `"detail"`
+  on the side away from the print. Use for a life, a company or a place told
+  through old photos: one photo per scene, in date order. Only use years and
+  facts the creator gave you.
+- **Quote cards** (`"quote_style": "verse"`, on in both presets): the quote in
+  centred serif over the scene's own picture, the source (`"who"`) in a small
+  red tag. Give the quote scene a `"file"` to sit on.
+- **Frames** (any scene, `"frame": "cloud"` or `"ink"`): drifting white clouds
+  (memory, faith, dreams) or ragged sepia ink (film openers) round the picture.
+- **Reveals** between scenes: `bloom` (ink blots spreading), `cloud` (billows
+  and white mist), `tear` (a torn paper edge crossing), `tiles` (squares
+  flipping in a scattered order). Set storyboard `"transition"` or a scene's own.
+- **Sepia film opening** (preset `sepia-film`): brown old-photograph grade,
+  ink frames, and opening credits: storyboard `"credits": [["Directed by",
+  "Name"], ...]`, one per scene from the start (or a scene's `"credit":
+  "Role|Name"`), set in small spaced capitals in a different corner each time.
+  Only real names the creator gave you.
+- **Looks**: `sepia`, `archive` (both with `--look` or `"look"`).
+- **Match cuts** (`montage --match-cut`): shots that share a framing (an eye in
+  the same spot, a figure on the same horizon, one object) are put one after
+  another and lined up, the later shot pushed in and moved so the subject
+  stays put. Suggest it when the clips repeat a subject: faces, eyes, hands,
+  silhouettes, the same object in many places.
+
 ## 3. Check the setup (first time only)
 
 ```sh

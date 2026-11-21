@@ -565,6 +565,13 @@ def cmd_montage(a: argparse.Namespace) -> None:
         tempo = 60 / (beats[1] - beats[0]) if len(beats) > 1 else 0
         print(f"   {tempo:.0f} beats a minute, {len(beats)} beats; quiet parts {sum(e < 0.4 for e in energy)}, loud {sum(e >= 0.75 for e in energy)}")
         shots = mt.plan(infos, beats, energy, down, total, seed=a.seed)
+        if getattr(a, "match_cut", False):
+            from .matchcut import order_shots
+
+            aw, ah = (int(x) for x in ASPECTS[a.aspect].split("x"))
+            shots, groups = order_shots(shots, aw / ah)
+            linked = [g for g in groups if len(g) > 1]
+            print(f"   match cuts: {sum(len(g) for g in linked)} shots in {len(linked)} run(s) of the same framing, lined up shot to shot")
         if getattr(a, "place", None):
             shots = by_place(shots, a.place)
             print(f"   shots grouped by place, in the order given: {', '.join(p.partition('=')[2].split('|')[0] for p in a.place)}")
@@ -665,7 +672,7 @@ def cmd_make(a: argparse.Namespace) -> None:
     else:
         sb = story.load(src)
     style = a.style or sb.get("style")
-    sb = {**pack(style, "aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background", "design", "letterbox", "lower_third_style"), **sb}
+    sb = {**pack(style, "aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background", "design", "letterbox", "lower_third_style", "quote_style"), **sb}
     aspect = a.aspect or sb.get("aspect", "16:9")
     if aspect not in ASPECTS:
         raise SystemExit(f"aspect {aspect!r}: choose from {', '.join(sorted(ASPECTS))}")
@@ -1135,6 +1142,8 @@ def main(argv: list[str] | None = None) -> None:
     mo.add_argument("--accent", help="#RRGGBB for the title bar")
     mo.add_argument("--title-style", choices=list(TITLE_STYLES), help="how the title animates in (default stamp)")
     mo.add_argument("--style", choices=list(PRESETS), help="a style pack: sets aspect, look, title animation and colour (flags still win)")
+    mo.add_argument("--match-cut", action="store_true", help="put shots with the same framing (an eye, a figure on the horizon, "
+                    "one object) one after another and line them up, so the cut matches")
     mo.add_argument("--seed", type=int, default=0, help="a different number gives a different edit of the same material")
     mo.set_defaults(func=cmd_montage)
 

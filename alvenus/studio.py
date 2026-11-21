@@ -33,6 +33,7 @@ PREVIEW_SIZES = {"16:9": (960, 540), "9:16": (540, 960), "1:1": (720, 720), "4:5
 def schema() -> dict:
     """The controls the inspector draws for each kind of node."""
     from .backgrounds import KINDS as BGS
+    from .archive import FRAMES
     from .cut import TRANSITIONS
     from .paper import DESIGNS, PHOTOS, SHAPES
     from .presets import PRESETS
@@ -48,7 +49,7 @@ def schema() -> dict:
         "settings": {"style": pick(PRESETS, "a style pack: look, colour, transitions"), "design": pick(DESIGNS, "the designed look"),
                      "aspect": pick(("16:9", "9:16", "1:1", "4:5"), "shape of the video"), "accent": colour("the one accent colour"),
                      "transition": pick(TRANSITIONS, "how scenes change"), "transition_seconds": num(0.1, 1.2, 0.05, "", 0.4),
-                     "title_style": pick(TITLE_STYLES), "label": text("the name printed on the page"),
+                     "title_style": pick(TITLE_STYLES), "quote_style": pick(("card", "verse"), "quotes as a card or quietly over the picture"), "label": text("the name printed on the page"),
                      "end_card": text("last words on screen"), "background": pick(BGS), "captions": flag("", True),
                      "cut_on_beat": flag("", True)},
         "sound": {"music": text("music file"), "music_lufs": num(-30, -8, 1, "music loudness", -16), "voiceover": text("voice file"),
@@ -58,11 +59,14 @@ def schema() -> dict:
         "in": {"transition": pick(trans, "how this scene comes in")},
         "picture": {"file": text("photo or clip"), "from": num(0, 600, 0.1, "start of the clip, in seconds", 0),
                     "size": num(0.5, 1.4, 0.01, "size of the print", 1), "angle": num(-12, 12, 0.5, "tilt of a still print", 0),
-                    "push": num(-0.2, 0.2, 0.01, "slow zoom (normal scenes)", 0), "label": text("figure caption under the print")},
+                    "push": num(-0.2, 0.2, 0.01, "slow zoom (normal scenes)", 0), "label": text("figure caption under the print"),
+                    "frame": pick(FRAMES, "clouds or ink round the picture")},
         "look": {"photo": pick(PHOTOS, "how the photo is printed"), "darken": num(0, 0.6, 0.01, "darken the picture", 0)},
         "shape": {"shape": pick(SHAPES, "what sits behind the print"), "shape_colour": colour("its colour", accent=True)},
         "words": {"text": text("words of a title or text scene", True), "caption": text("words beside a picture", True),
                   "subtitle": text("small line under a title"), "who": text("who said it"),
+                  "year": text("archive: the year beside the photo"), "tag": text("archive: one word in the red tag"),
+                  "detail": text("archive: a short typed line under the tag"), "credit": text("an opening credit, Role|Name"),
                   "big_words": {"type": "list", "why": "the huge words"},
                   "size": num(0.4, 2.5, 0.05, "size of the words", 1), "speed": num(0.05, 1.5, 0.01, "seconds between words", None),
                   "delay": num(0, 5, 0.05, "wait before the first word", 0.25), "align": pick(("left", "centre", "right")),

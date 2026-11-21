@@ -23,6 +23,12 @@ LOOKS = {
            "eq=saturation=0.82,vignette=PI/4.5,noise=alls=3:allf=t",
     "travel": "colorbalance=rs=0.04:bs=-0.05:rm=0.05:gm=0.01:bm=-0.04:rh=0.04:bh=-0.02,curves=all='0/0.03 0.5/0.52 1/0.97',"
               "eq=saturation=1.16:contrast=1.04,vignette=PI/6",
+    # old brown photographs: lifted blacks, warm paper tone, soft grain and a heavy vignette
+    "sepia": "hue=s=0,curves=all='0/0.07 0.35/0.3 0.75/0.72 1/0.92',colorchannelmixer=rr=1.07:gg=0.9:bb=0.68:gb=0.02:rb=0.02,"
+             "vignette=PI/3.6,noise=alls=5:allf=t",
+    # black-and-white archive: deep blacks, hard contrast, coarse moving grain (lets a red accent sing)
+    "archive": "hue=s=0,curves=all='0/0 0.2/0.12 0.55/0.55 0.85/0.9 1/0.97',colorchannelmixer=rr=1.02:bb=0.97,"
+               "vignette=PI/4,noise=alls=7:allf=t",
     "mono": "hue=s=0,curves=all='0/0.02 0.5/0.47 1/0.98',vignette=PI/5,noise=alls=5:allf=t",
 }
 

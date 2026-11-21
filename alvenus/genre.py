@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from .style import _esc, _t, ass_colour, text_width
 
-EXTRAS: dict = {}  # letterbox: ratio; datestamp: text; places / arrivals: [(text, t0, t1)]; lower_third_style: "doc"
+EXTRAS: dict = {}  # archive: [(year, tag, note, t0, t1, scene)]; verses: [(text, source, t0, t1)]; credits: [(role, name, t0, t1)]; letterbox: ratio; datestamp: text; places / arrivals: [(text, t0, t1)]; lower_third_style: "doc"
 LT_STYLES = ("bar", "doc")
 
 
@@ -54,6 +54,12 @@ def events(w: int, h: int, total: float, accent: str) -> list[str]:
         rows += place_stamp(text, t0, t1, w, h, accent)
     if EXTRAS.get("datestamp"):
         rows += datestamp(str(EXTRAS["datestamp"]), total, w, h)
+    for year, tag, note, t0, t1, k in EXTRAS.get("archive") or []:  # k: the scene's place, which side its print sits
+        rows += archive_card(year, tag, note, t0, t1, w, h, accent, k)
+    for text, source, t0, t1 in EXTRAS.get("verses") or []:
+        rows += verse_card(text, source, t0, t1, w, h, accent)
+    for k, (role, name, t0, t1) in enumerate(EXTRAS.get("credits") or []):
+        rows += credit(role, name, t0, t1, w, h, k)
     return rows
 
 
@@ -231,4 +237,105 @@ def _route(names: list[str], at: int, cx: int, y: int, w: int, h: int, accent: s
             fs = round(u * 0.022)
             rows.append(f"Dialogue: 5,{_t(t0)},{_t(t1)},Card,,0,0,0,,{{\\an8\\pos({px:.0f},{y + r + round(fs * 0.6)})\\fnDM Mono\\fs{fs}"
                         f"\\fsp{round(fs * 0.15)}\\bord0\\shad1\\4a&H80&\\1c{hi if i == at else '&H00E8E8E8&'}{fade}}}{_esc(names[i].upper())}")
+    return rows
+
+
+# --- Archive documentary (from the Venus board, 21 Nov) ----------------------
+# Old photographs brought to life on a timeline, quote cards with a red source
+# tag, and film-opening credits in small spaced capitals.
+
+def _tag(layer: int, t0: float, t1: float, text: str, x: int, y: int, size: int, accent: str, an: int = 7,
+         delay_ms: int = 0) -> list[str]:
+    """A small solid accent label with white capitals (the red tag of the archive films).
+    (x, y) is its top-left corner, or its top-centre when an is 8."""
+    tw = round(text_width(text.upper(), size, "Inter-ExtraBold.otf") * 1.04 + size * 0.12 * len(text))
+    pad_x, pad_y = round(size * 0.45), round(size * 0.28)
+    bw, bh = tw + 2 * pad_x, round(size * 1.15) + 2 * pad_y
+    left = x - bw // 2 if an == 8 else x
+    grow = f"\\clip({left},0,{left},99999)\\t({delay_ms},{delay_ms + 320},0.5,\\clip({left},0,{left + bw},99999))"
+    rows = [_rect(layer, t0, t1, left, y, bw, bh, ass_colour(accent), grow + "\\fad(0,300)")]
+    rows.append(f"Dialogue: {layer + 1},{_t(t0)},{_t(t1)},Card,,0,0,0,,{{\\an7\\pos({left + pad_x},{y + pad_y})\\fnInter ExtraBold"
+                f"\\fs{size}\\fsp{round(size * 0.12)}\\bord0\\shad0\\1c&H00FFFFFF&\\alpha&HFF&\\t({delay_ms + 200},{delay_ms + 450},\\alpha&H00&)"
+                f"\\fad(0,300)}}{_esc(text.upper())}")
+    return rows
+
+
+def archive_card(year: str, tag: str, note: str, t0: float, t1: float, w: int, h: int, accent: str, k: int = 0) -> list[str]:
+    """Words for an archive photograph: the year large in serif beside the
+    picture (it settles in from a soft blur), a red tag with one word, and a
+    small typed note under the tag. They sit on the side away from the print
+    (archive.scene_video puts it left on even scenes, right on odd ones)."""
+    u = min(w, h)
+    vertical = h > w
+    right = k % 2 == 0
+    big = round(u * (0.14 if vertical else 0.13))
+    small = round(u * 0.03)
+    tag_size = round(u * 0.036)
+    rows: list[str] = []
+    if year:
+        x = round(w * (0.94 if right else 0.06)) if not vertical else w // 2
+        y = round(h * (0.78 if not vertical else 0.89))
+        an = (3 if right else 1) if not vertical else 2
+        rows.append(f"Dialogue: 5,{_t(t0 + 0.15)},{_t(t1)},Card,,0,0,0,,{{\\an{an}\\pos({x},{y})\\fnLibre Baskerville\\fs{big}"
+                    f"\\bord0\\shad{max(1, round(big * 0.03))}\\4a&H50&\\1c&H00F2F2F2&\\blur12\\alpha&HFF&"
+                    f"\\t(0,700,0.6,\\blur0\\alpha&H00&)\\fad(0,350)}}{_esc(year)}")
+    if tag:
+        tx = round(w * (0.73 if right else 0.06)) if not vertical else round(w * 0.5)
+        ty = round(h * (0.24 if not vertical else 0.1))
+        rows += _tag(6, t0 + 0.35, t1, tag, tx, ty, tag_size, accent, an=8 if vertical else 7)
+        if note:
+            nx = tx if not vertical else w // 2
+            rows.append(f"Dialogue: 6,{_t(t0 + 0.75)},{_t(t1)},Card,,0,0,0,,{{\\an{8 if vertical else 7}\\pos({nx},{ty + round(tag_size * 2.2)})"
+                        f"\\fnDM Mono\\fs{small}\\fsp{round(small * 0.08)}\\bord0\\shad1\\4a&H60&\\1c&H00CFCFCF&"
+                        f"\\alpha&HFF&\\t(0,400,\\alpha&H00&)\\fad(0,300)}}{_esc(note)}")
+    return rows
+
+
+def verse_card(text: str, source: str, t0: float, t1: float, w: int, h: int, accent: str) -> list[str]:
+    """A quote laid quietly over a picture: centred serif lines that clear
+    from a soft blur, and the source in a small red tag underneath."""
+    from .style import fit_lines
+
+    u = min(w, h)
+    vertical = h > w
+    size0 = round(u * (0.06 if vertical else 0.058))
+    lines, size = fit_lines(text.strip(), size0, (0.8 if vertical else 0.5) * w, max_lines=5)
+    size = round(size)
+    lh = round(size * 1.3)
+    x, y = w // 2, h // 2 - (lh * len(lines)) // 2 - round(size * 0.6)
+    band = lh * len(lines) + round(size * 3)
+    rows = [_rect(4, t0, t1, round(w * 0.12), y - round(size * 0.8), round(w * 0.76), band, "&H00000000&",
+                  f"\\alpha&HFF&\\t(0,700,\\alpha&HA8&)\\blur{round(band * 0.4)}\\fad(0,400)")]
+    body = "\\N".join(_esc(l) for l in lines)
+    rows.append(f"Dialogue: 5,{_t(t0 + 0.2)},{_t(t1)},Card,,0,0,0,,{{\\an8\\q2\\pos({x},{y})\\fnLibre Baskerville\\fs{size}"
+                f"\\bord0\\shad{max(1, round(size * 0.05))}\\4a&H40&\\1c&H00FFFFFF&\\blur8\\alpha&HFF&"
+                f"\\t(0,900,0.6,\\blur0\\alpha&H00&)\\fad(0,400)}}{body}")
+    if source:
+        rows += _tag(6, t0 + 0.9, t1, source, x, y + lh * len(lines) + round(size * 0.5), round(size * 0.5), accent, an=8)
+    return rows
+
+
+def credit(role: str, name: str, t0: float, t1: float, w: int, h: int, k: int = 0) -> list[str]:
+    """An opening credit in a corner of the frame: the role in tiny spaced
+    capitals over the name in larger spaced capitals, fading up slowly. The
+    corner moves round the frame from one credit to the next."""
+    u = min(w, h)
+    small = round(u * 0.019)
+    size = round(u * 0.032)
+    bar = matte(w, h)
+    corner = [(1, 0.07, 0.86), (9, 0.93, 0.12), (3, 0.93, 0.86), (7, 0.07, 0.12)][k % 4]
+    an, fx, fy = corner
+    x = round(w * fx)
+    bottom = an in (1, 3)
+    y = round(h * fy) if not bar else (h - bar - round(h * 0.05) if bottom else bar + round(h * 0.05))
+    halign = 1 if an in (1, 7) else 3
+    gap = round(size * 1.25)
+    yr, yn = (y - gap, y) if bottom else (y, y + gap)
+    fade = f"\\alpha&HFF&\\t(0,900,\\alpha&H00&)\\fad(0,700)"
+    rows = []
+    if role:
+        rows.append(f"Dialogue: 6,{_t(t0)},{_t(t1)},Card,,0,0,0,,{{\\an{halign}\\pos({x},{yr})\\fnDM Mono\\fs{small}"
+                    f"\\fsp{round(small * 0.5)}\\bord0\\shad1\\4a&H70&\\1c&H00D6D6D6&{fade}}}{_esc(role.upper())}")
+    rows.append(f"Dialogue: 6,{_t(t0 + 0.25)},{_t(t1)},Card,,0,0,0,,{{\\an{halign}\\pos({x},{yn})\\fnLibre Baskerville\\fs{size}"
+                f"\\fsp{round(size * 0.3)}\\bord0\\shad1\\4a&H70&\\1c&H00F4F4F4&{fade}}}{_esc(name.upper())}")
     return rows

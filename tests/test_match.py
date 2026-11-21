@@ -1024,6 +1024,83 @@ class Genres(unittest.TestCase):
         self.assertEqual(defaults("documentary")["lower_third_style"], "doc")
         self.assertEqual(defaults("travel-reel")["title_style"], "place")
 
+    # --- archive documentary (Venus board, 21 Nov) ---
+
+    def test_new_reveals_build_their_graphs(self):
+        from alvenus.cut import TRANSITIONS, join_pair
+        for name in ("bloom", "cloud", "tear", "tiles"):
+            self.assertEqual(TRANSITIONS[name], "custom")
+            g = join_pair("0:v", "1:v", "out", name, 1.0, 2.0, "1920x1080", 30, 0)
+            self.assertIn("maskedmerge", g)
+            self.assertTrue(g.endswith("[out]"))
+        self.assertIn("flags=neighbor", join_pair("0:v", "1:v", "o", "tiles", 1.0, 2.0, "1920x1080", 30, 1))
+        self.assertIn("0xEDE6D8", join_pair("0:v", "1:v", "o", "tear", 1.0, 2.0, "1920x1080", 30, 1))  # the torn paper strip
+
+    def test_archive_looks(self):
+        from alvenus.style import LOOKS
+        for name in ("sepia", "archive"):
+            self.assertIn("hue=s=0", LOOKS[name])
+
+    def test_archive_words_sit_away_from_the_print(self):
+        from alvenus import genre
+        left = "".join(genre.archive_card("1908", "Arrival", "First day", 0, 4, 1920, 1080, "#C8102E", k=1))
+        right = "".join(genre.archive_card("1908", "Arrival", "First day", 0, 4, 1920, 1080, "#C8102E", k=0))
+        self.assertIn("ARRIVAL", left)
+        self.assertIn("1908", left)
+        self.assertIn("pos(115,", left)  # odd scene: print on the right, words on the left
+        self.assertIn("pos(1805,", right)  # even scene: year bottom right
+        rows = genre.verse_card("We never thought the street would forget us.", "Letter, 1931", 0, 5, 1920, 1080, "#C8102E")
+        self.assertTrue(any("LETTER, 1931" in r for r in rows))
+        corners = [genre.credit("Written by", "Asha Rao", 0, 3, 1920, 1080, k)[1] for k in range(4)]
+        self.assertEqual(len({c.split("pos(")[1].split(")")[0] for c in corners}), 4)  # each credit in a new corner
+        self.assertIn("ASHA RAO", corners[0])
+
+    def test_storyboard_takes_archive_scenes_frames_and_credits(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from alvenus.story import load
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "p.jpg").write_bytes(b"x")
+            sb = {"scenes": [{"type": "archive", "file": "p.jpg", "year": "1908", "frame": "cloud", "credit": "Written by|Asha Rao"}],
+                  "quote_style": "verse", "credits": [["Music", "Ironhorse"]]}
+            Path(d, "sb.json").write_text(json.dumps(sb))
+            self.assertEqual(load(Path(d, "sb.json"))["scenes"][0]["type"], "archive")
+            for bad in ({"frame": "smoke"}, {"credit": "no bar here"}):
+                sb2 = json.loads(json.dumps(sb))
+                sb2["scenes"][0].update(bad)
+                Path(d, "sb.json").write_text(json.dumps(sb2))
+                with self.assertRaises(SystemExit):
+                    load(Path(d, "sb.json"))
+
+    def test_match_cut_finds_the_same_framing(self):
+        import numpy as np
+        from alvenus.matchcut import chain, distance, line_up, look_at, reframe_filter, runs
+
+        def disc(cx, cy, r):
+            yy, xx = np.mgrid[0:54, 0:96]
+            return np.where(np.hypot(xx - cx, yy - cy) < r, 30.0, 200.0)
+
+        def bars(k):
+            yy, xx = np.mgrid[0:54, 0:96]
+            return 120 + 80 * np.sin(xx / (3 + k))
+
+        looks = [look_at(disc(48, 27, 12)), look_at(bars(0)), look_at(disc(52, 25, 10)), look_at(bars(1)), look_at(disc(46, 28, 13))]
+        self.assertLess(distance(looks[0], looks[2]), distance(looks[0], looks[1]))
+        order = chain(looks)
+        groups = runs(looks, order)
+        self.assertIn(sorted([0, 2, 4]), [sorted(g) for g in groups if len(g) == 3])
+        z, x0, y0 = line_up(looks[0], look_at(disc(70, 20, 6)))
+        self.assertGreater(z, 1.0)
+        self.assertTrue(0 <= x0 <= z - 1 and 0 <= y0 <= z - 1)
+        self.assertIsNone(line_up(looks[0], looks[0]))
+        self.assertIn("crop=1920:1080", reframe_filter([1.5, 0.2, 0.1], 1920, 1080))
+
+    def test_archive_presets(self):
+        from alvenus.presets import defaults
+        self.assertEqual(defaults("archive-doc")["transition"], "bloom")
+        self.assertEqual(defaults("sepia-film")["look"], "sepia")
+
 
 if __name__ == "__main__":
     unittest.main()

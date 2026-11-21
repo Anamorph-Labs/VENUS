@@ -31,6 +31,7 @@ TRANSITIONS = {
     "cut": "", "crossfade": "fade", "dip": "fadeblack", "flash": "fadewhite",
     "zoom": "zoomin", "whip": "smoothleft", "slide": "slideleft", "blur": "hblur",
     "circle": "circleopen", "ink": "custom", "leak": "custom", "glitch": "custom",
+    "bloom": "custom", "cloud": "custom", "tear": "custom", "tiles": "custom",
 }
 
 # Hand-made transitions. FFmpeg's per-pixel expressions are far too slow at
@@ -45,6 +46,23 @@ _MASK = {
     "leak": ("160x90", "255*clip((T/{D})*1.6-0.3-0.3*X/W,0,1)"),
     # Bands of the frame flick between the two shots for a few frames, then settle.
     "glitch": ("8x36", "255*abs(gte(T/{D},0.5)-gt(sin(PI*T/{D}),0.25)*gt(mod(abs(sin(floor(Y)*12.99+floor(T/{D}*9)*78.23))*43758.5,1),0.55))"),
+    # Ink blots spread from a few places at once and run together (sepia film openers).
+    "bloom": ("192x108", "255*clip((T/{D}*0.62-min(min(hypot(X/W-0.22,(Y/H-0.35)*0.56),hypot(X/W-0.74,(Y/H-0.62)*0.56)),"
+              "min(hypot(X/W-0.55,(Y/H-0.12)*0.56),hypot(X/W-0.1,(Y/H-0.85)*0.56)))"
+              "-0.035*(sin(X/W*23+Y/H*7)+sin(Y/H*29-X/W*11)+0.7*sin(X/W*53+Y/H*41)))*10,0,1)"),
+    # Billows of cloud roll in and part on the new shot; a white mist peaks halfway (mist mask below).
+    "cloud": ("160x90", "255*clip((T/{D}*1.1-0.05-0.55*abs(X/W-0.5)-0.25*abs(Y/H-0.5)"
+              "-0.08*(sin(X/W*7+Y/H*3)+sin(Y/H*9-X/W*5)+0.6*sin(X/W*15+Y/H*11)))*3.2,0,1)"),
+    # A torn paper edge crosses the frame; a pale strip of torn paper rides on it (edge mask below).
+    "tear": ("384x216", "255*lt(X/W,T/{D}*1.3-0.15+0.025*sin(Y/H*31)+0.012*sin(Y/H*97+2)+0.006*sin(Y/H*233))"),
+    # The frame breaks into squares that flip to the new shot in a scattered order.
+    "tiles": ("16x9", "255*gt(T/{D}*1.25-0.12,mod(abs(sin(X*12.99+Y*78.23))*43758.5,1))"),
+}
+# Light laid over the blend for the transitions that need it: (mask, colour).
+_OVER = {
+    "cloud": ("160x90", "235*pow(sin(PI*T/{D}),1.5)*clip(0.55+0.3*sin(X/W*6+Y/H*4+T/{D}*2)+0.25*sin(Y/H*9-X/W*3),0,1)", "0xF4F2EE"),
+    "tear": ("384x216", "250*lt(abs(X/W-(T/{D}*1.3-0.15+0.025*sin(Y/H*31)+0.012*sin(Y/H*97+2)+0.006*sin(Y/H*233))"
+             "-0.009-0.004*sin(Y/H*151)),0.009+0.003*sin(Y/H*71))*lt(0.001,T/{D})*lt(T/{D},0.999)", "0xEDE6D8"),
 }
 _GLOW = "230*pow(sin(PI*T/{D}),2)*exp(-pow(X/W-(0.15+0.7*T/{D}),2)/0.09)"
 _WARM = "0xFFC98A"
@@ -60,7 +78,7 @@ def join_pair(a: str, b: str, out: str, name: str, d: float, offset: float, size
     res, expr = _MASK[name]
     e = expr.format(D=f"{d:.4f}")
     mask = (f"nullsrc=s={res}:r={fps:g}:d={d:.4f},geq=lum='{e}':cb='{e}':cr='{e}',"
-            f"scale={w}:{h}:flags={'neighbor' if name == 'glitch' else 'bicubic'},format=yuv420p[m{k}]")
+            f"scale={w}:{h}:flags={'neighbor' if name in ('glitch', 'tiles') else 'bicubic'},format=yuv420p[m{k}]")
     p = [mask,
          f"[{a}]split[a{k}1][a{k}2]", f"[{b}]split[b{k}1][b{k}2]",
          f"[a{k}1]trim=end={offset:.4f},setpts=PTS-STARTPTS[h{k}]",
@@ -75,6 +93,13 @@ def join_pair(a: str, b: str, out: str, name: str, d: float, offset: float, size
               f"color=c={_WARM}:s={size}:r={fps:g}:d={d:.4f},format=yuv420p[warm{k}]",
               f"[{mid}][warm{k}][gm{k}]maskedmerge[lit{k}]"]
         mid = f"lit{k}"
+    elif name in _OVER:
+        ores, oexpr, colour = _OVER[name]
+        g = oexpr.format(D=f"{d:.4f}")
+        p += [f"nullsrc=s={ores}:r={fps:g}:d={d:.4f},geq=lum='{g}':cb='{g}':cr='{g}',scale={w}:{h}:flags=bicubic,format=yuv420p[om{k}]",
+              f"color=c={colour}:s={size}:r={fps:g}:d={d:.4f},format=yuv420p[oc{k}]",
+              f"[{mid}][oc{k}][om{k}]maskedmerge[ov{k}]"]
+        mid = f"ov{k}"
     elif name == "glitch":
         p += [f"[{mid}]chromashift=cbh={max(4, int(w) // 120)}:crh=-{max(4, int(w) // 120)}[gl{k}]"]
         mid = f"gl{k}"

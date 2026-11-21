@@ -31,8 +31,8 @@ KINDS = ("settings", "sound", "style", "scene") + PARTS + ("tool",)
 GRAPHIC_TYPES = {"stat", "chart", "line_chart", "timeline", "list", "compare", "map", "split"}
 PART_KEYS = {
     "in": ("transition",),
-    "words": ("text", "caption", "big_words", "subtitle", "who"),
-    "picture": ("file", "from", "label", "push", "darken"),
+    "words": ("text", "caption", "big_words", "subtitle", "who", "year", "tag", "detail", "credit"),
+    "picture": ("file", "from", "label", "push", "darken", "frame"),
     "mark": ("callout", "note"),
     "graphic": ("value", "label", "bars", "points", "items", "title", "pins", "route", "image", "left", "right"),
 }
@@ -624,7 +624,7 @@ def _line(params: dict) -> str:
     return "  ".join(f"{k}={_short(v)}" for k, v in params.items())
 
 
-PACK_KEYS = ("aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background", "design", "letterbox", "lower_third_style")
+PACK_KEYS = ("aspect", "look", "accent", "transition", "transition_seconds", "title_style", "background", "design", "letterbox", "lower_third_style", "quote_style")
 
 
 def effective(sb: dict) -> dict:

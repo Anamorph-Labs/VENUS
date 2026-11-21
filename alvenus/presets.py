@@ -85,6 +85,20 @@ PRESETS: dict[str, dict] = {
         "scene_beat": 1.4, "look": "doc", "voice": "clean", "transition": "dip", "transition_seconds": 0.9, "music_lufs": -25.0,
         "background": "dark", "title_style": "chapter", "accent": "#C9A86A", "letterbox": "2.39", "lower_third_style": "doc",
     },
+    "archive-doc": {
+        "about": "Archive documentary: black-and-white with one red accent, old photographs floating on a desk of documents with the year beside them, ink-blot and square-tile reveals, quote cards with a red source tag, opening credits in the corners.",
+        "aspect": "16:9", "captions": True, "caption_style": "classic", "max_pause": 1.0, "beat": 0.45,
+        "scene_beat": 1.4, "look": "archive", "voice": "clean", "transition": "bloom", "transition_seconds": 1.1, "music_lufs": -25.0,
+        "background": "dark", "title_style": "chapter", "accent": "#C8102E", "letterbox": "2.39", "lower_third_style": "doc",
+        "quote_style": "verse",
+    },
+    "sepia-film": {
+        "about": "Sepia film opening: brown old-photograph tones, footage seen through spreading ink blots, credits in small spaced capitals in the corners, slow and quiet.",
+        "aspect": "16:9", "captions": True, "caption_style": "classic", "max_pause": 1.0, "beat": 0.5,
+        "scene_beat": 1.6, "look": "sepia", "voice": "clean", "transition": "bloom", "transition_seconds": 1.4, "music_lufs": -24.0,
+        "background": "ink", "title_style": "chapter", "accent": "#8C5A3C", "letterbox": "2.39", "lower_third_style": "doc",
+        "quote_style": "verse",
+    },
     "travel-reel": {
         "about": "Travel reel: vertical, warm sunny grade, cut to the beat, arrival titles in huge condensed capitals with the country written by hand, light leaks, camcorder date.",
         "aspect": "9:16", "captions": True, "caption_style": "pop", "max_pause": 0.35, "beat": 0.12,
