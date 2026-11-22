@@ -34,8 +34,7 @@ and you are thanked by name.
 
 The GitHub forms are public, so never put your email in them. If you would like a
 thank-you email, send your GitHub name and the title of your suggestion to
-Anamorph Labs privately (the address is on the Anamorph Labs site). It is used for
-that note only.
+creative@anamorphlabs.com. It is used for that note only.
 
 ## What makes a good suggestion
 

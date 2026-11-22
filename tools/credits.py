@@ -63,7 +63,7 @@ def build(_a=None) -> None:
             continue
         slug = re.sub(r"[^a-z0-9]+", "-", p["name"].lower()).strip("-") or "contributor"
         (out / f"{slug}-{p['issue']}.txt").write_text(
-            f"Subject: Your idea is now part of Venus\n\nHi {p['name']},\n\n"
+            f"From: creative@anamorphlabs.com\nSubject: Your idea is now part of Venus\n\nHi {p['name']},\n\n"
             f"Thank you for suggesting \"{p['idea']}\". We built it into Venus, and it is out now in version {p['version']}.\n\n"
             "Your name is on the Venus contributors list and on the Anamorph Labs site. Venus is started by Anamorph Labs\n"
             "and grows with people like you, so thank you for helping it get better.\n\n"
