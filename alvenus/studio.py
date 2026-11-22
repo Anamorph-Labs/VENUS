@@ -209,7 +209,7 @@ class Studio:
             if p and p.exists():
                 stamp.append((str(p), p.stat().st_mtime_ns))
         blob = json.dumps([sc, keep, k, len(sb["scenes"]), stamp, 3], sort_keys=True, default=str)
-        return hashlib.sha1(blob.encode(), usedforsecurity=False).hexdigest()[:14]
+        return hashlib.sha256(blob.encode()).hexdigest()[:14]
 
     # ----------------------------------------------------------- pictures
     def preview(self, sid: str, at: float) -> Path:

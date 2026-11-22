@@ -278,7 +278,7 @@ def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
         keep["_has_words"] = has_words(sc)
         keep["_k"] = sc.get("_k")  # the scene's place picks its shape and paper
     blob = json.dumps([keep, round(d, 3), w, h, fps, media.DRAFT, stamps, 1], sort_keys=True, default=str)
-    return hashlib.sha1(blob.encode(), usedforsecurity=False).hexdigest()[:16]
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
 def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:

@@ -254,7 +254,7 @@ class Remembering:
     def _key(self, audio: np.ndarray, prompt: str | None) -> str:
         import hashlib
 
-        h = hashlib.sha1(np.ascontiguousarray(audio, dtype=np.float32).tobytes(), usedforsecurity=False)  # a cache key, not security
+        h = hashlib.sha256(np.ascontiguousarray(audio, dtype=np.float32).tobytes())  # a cache key, not security
         h.update(f"|{self.name}|{prompt or ''}".encode())
         return h.hexdigest()
 

@@ -209,7 +209,7 @@ def node_hash(n: dict) -> str:
     if n.get("off"):  # (only when set, so older locks still match)
         keep["off"] = n["off"]
     blob = json.dumps(keep, sort_keys=True, default=str)
-    return hashlib.sha1(blob.encode(), usedforsecurity=False).hexdigest()[:10]
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
 
 
 def lock_hash(doc: dict, n: dict) -> str:
@@ -220,7 +220,7 @@ def lock_hash(doc: dict, n: dict) -> str:
     group = [node_hash(n)] + [p["kind"] + node_hash(p) for p in parts_of(doc, n["id"])]
     group += ["tool" + t["id"] + node_hash(t) for t in tools_of(doc, n["id"])]
     group += [node_hash(styles[s]) for s in n.get("use") or [] if s in styles]
-    return hashlib.sha1("|".join(group).encode(), usedforsecurity=False).hexdigest()[:10]
+    return hashlib.sha256("|".join(group).encode()).hexdigest()[:12]
 
 
 def _near(word: str, options) -> str:
@@ -343,6 +343,9 @@ def read(path: Path) -> dict:
         raise SystemExit(f"{path}: can't read the node file ({e})")
     if "venus_nodes" not in doc:
         raise SystemExit(f"{path} is not a node file; turn a storyboard into one with: alvenus nodes init {path}")
+    for n in doc.get("nodes") or []:
+        if n.get("locked") and len(str(n.get("lock") or "")) == 10:  # a lock from before the sha256 change
+            n["lock"] = lock_hash(doc, n)
     return doc
 
 
