@@ -1,0 +1,12 @@
+{
+  "about": "Warm night market reels: vertical, amber accent, soft light leaks between scenes.",
+  "by": "Your name here",
+  "aspect": "9:16",
+  "look": "warm",
+  "accent": "#F2A33A",
+  "transition": "leak",
+  "transition_seconds": 0.5,
+  "title_style": "stamp",
+  "captions": true,
+  "caption_style": "pop"
+}

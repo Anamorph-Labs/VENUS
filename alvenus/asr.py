@@ -226,7 +226,7 @@ def fetch_models(model_dir: str | Path | None = None, name: str = DEFAULT_MODEL)
         url = f"https://huggingface.co/{MODELS[name]}/resolve/main/{f}"
         print(f"downloading {url}")
         tmp = dest.with_suffix(dest.suffix + ".part")
-        urllib.request.urlretrieve(url, tmp)
+        urllib.request.urlretrieve(url, tmp)  # nosec B310
         tmp.rename(dest)
     return d
 
@@ -254,7 +254,7 @@ class Remembering:
     def _key(self, audio: np.ndarray, prompt: str | None) -> str:
         import hashlib
 
-        h = hashlib.sha1(np.ascontiguousarray(audio, dtype=np.float32).tobytes())
+        h = hashlib.sha1(np.ascontiguousarray(audio, dtype=np.float32).tobytes(), usedforsecurity=False)  # a cache key, not security
         h.update(f"|{self.name}|{prompt or ''}".encode())
         return h.hexdigest()
 

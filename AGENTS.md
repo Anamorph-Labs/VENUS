@@ -549,10 +549,34 @@ change the graph too: "words behind the picture", "soft glow on the words",
 description can also be written from the command line: `nodes describe FILE
 scene3.words "bigger"`.
 
+## 10. Ideas for Venus itself (`alvenus suggest`)
+
+Venus is started by Anamorph Labs and grows with its users. When the creator
+wishes Venus could do something it can't, or you notice a missing feature while
+working, offer to write it up as a suggestion. **Tell them how it works first:**
+ideas are welcome; code is never added to Venus directly; every proposal is
+scanned and reviewed, and Anamorph Labs builds the good ones itself; when an idea
+ships, its author is thanked and credited by name (CONTRIBUTING.md has the detail).
+
+1. `alvenus suggest "the idea in their words" idea.json` writes the form to fill.
+2. Fill it with them: what Venus would do, why it makes videos better, one concrete
+   example, and the name they want credited ("anonymous" is fine). Code is optional
+   and only explains the idea.
+3. `alvenus suggest idea.json` checks it is complete and carries nothing private
+   (emails, keys, paths from their computer), then prints a link to a filled-in
+   GitHub form. **Give them the link; they read it and press Submit themselves.**
+   Never submit, post or email anything for them.
+4. A new style pack or story recipe can be shared as an add-on: a JSON data file
+   (see `examples/addon-style.json`, `examples/addon-recipe.json` and
+   `alvenus/addons/README.md`), with `"kind": "add-on"` and `"addon_file"` in the
+   suggestion. Venus checks every value before it is sent. `alvenus suggest --addons`
+   lists the add-ons this Venus has.
+
 ## Rules
 
 - Everything stays on the creator's computer. Never upload their footage or script.
 - Never invent or reword script lines; captions show the script as written.
+- Never send a suggestion, email or post for the creator: give them the link and let them submit it.
 - No video before the creator has seen the storyboard and said yes (`alvenus approve`).
 - Say what you are unsure about. A confident wrong cut costs the creator more than
   a question.

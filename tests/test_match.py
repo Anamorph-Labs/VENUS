@@ -1199,5 +1199,71 @@ class IdeaToStoryboard(unittest.TestCase):
         self.assertEqual(parse("It looks *empty*. Yes", set())[2], ("empty.", "serif"))
 
 
+class Community(unittest.TestCase):
+    """Ideas and add-ons from users: data-only add-ons, private-bits check, the form link."""
+
+    def test_example_addons_are_valid_and_load(self):
+        import json
+        import shutil
+        import tempfile
+        from pathlib import Path
+
+        from alvenus import community as cm
+        from alvenus.brief import RECIPES
+        from alvenus.presets import PRESETS
+
+        root = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as d:
+            for kind, f, name in (("styles", "addon-style.json", "test-market"), ("recipes", "addon-recipe.json", "test-before-after")):
+                (Path(d) / kind).mkdir()
+                shutil.copy(root / "examples" / f, Path(d) / kind / f"{name}.json")
+            (Path(d) / "styles" / "bad.json").write_text(json.dumps({"about": "x", "by": "y", "look": "neon", "run": "rm -rf /"}))
+            cm.load_addons(Path(d))
+        try:
+            self.assertEqual(PRESETS["test-market"]["addon"], "Your name here")
+            self.assertEqual(RECIPES["test-before-after"]["beats"][0][0], "hook")
+            self.assertNotIn("bad", PRESETS)
+            self.assertTrue(any("bad.json" in n and "run: not a style setting" in n for n in cm.NOTES))
+        finally:
+            PRESETS.pop("test-market", None)
+            RECIPES.pop("test-before-after", None)
+
+    def test_addons_cannot_replace_built_ins(self):
+        from alvenus.community import recipe_problems, style_problems
+
+        self.assertTrue(any("built-in" in p for p in style_problems("explainer", {"about": "x", "by": "y"})))
+        self.assertTrue(any("built-in" in p for p in recipe_problems("travel", {"about": "x", "by": "y", "beats": []})))
+
+    def test_private_bits_are_caught(self):
+        from alvenus.community import private_bits
+
+        self.assertEqual(private_bits("a lyric overlay on the beat"), [])
+        for bad in ("mail me at a.b@c.com", "key sk-abcdefghijklmnopqrstuv", "ghp_" + "a" * 30, "/Users/hemanth/clips/x.mov",
+                    "password: hunter2"):
+            self.assertTrue(private_bits(bad), bad)
+
+    def test_suggestion_needs_answers_and_gives_a_link(self):
+        from alvenus.community import REPO, form_link, new_suggestion, suggestion_problems
+
+        s = new_suggestion("lyrics on the beat")
+        self.assertTrue(suggestion_problems(s))
+        s.update(title="Lyric overlay", why="saves hours", example="a 20 s montage", credit_name="Asha")
+        self.assertEqual(suggestion_problems(s), [])
+        url, paste = form_link(s)
+        self.assertTrue(url.startswith(f"https://github.com/{REPO}/issues/new?template=suggest-feature.yml"))
+        self.assertIn("lyrics", paste)
+
+    def test_guard_only_allows_addon_data(self):
+        import importlib.util
+        from pathlib import Path
+
+        spec = importlib.util.spec_from_file_location("guard", Path(__file__).resolve().parent.parent / "tools" / "addon_guard.py")
+        g = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(g)
+        self.assertTrue(g.ALLOWED.match("alvenus/addons/styles/night-market.json"))
+        for bad in ("alvenus/cli.py", "alvenus/addons/styles/x.py", ".github/workflows/x.yml", "alvenus/addons/styles/../cli.json"):
+            self.assertFalse(g.ALLOWED.match(bad), bad)
+
+
 if __name__ == "__main__":
     unittest.main()

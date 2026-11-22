@@ -1,0 +1,26 @@
+# When Anamorph Labs labels an idea "shipped", its author is thanked on GitHub and
+# the issue is closed. Only maintainers can add labels, so only they can start this.
+name: Thank you
+on:
+  issues:
+    types: [labeled]
+permissions:
+  issues: write
+  contents: read
+jobs:
+  thank:
+    if: github.event.label.name == 'shipped'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Post the thank-you
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+        run: |
+          version=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+          sed -e "s/{author}/$AUTHOR/g" -e "s/{version}/$version/g" .github/thank-you.md > /tmp/thanks.md
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file /tmp/thanks.md
+          gh issue close "$ISSUE" --repo "$GITHUB_REPOSITORY" --reason completed

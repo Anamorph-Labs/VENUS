@@ -1,0 +1,76 @@
+# Runs on every proposal. Read-only, no secrets: a proposal can never change Venus
+# or reach anything private (never switch this to pull_request_target).
+name: Community checks
+on:
+  pull_request:
+  push:
+    branches: [main, community]
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  addon-rules:
+    name: Add-on rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install numpy pillow
+      - name: Only add-on data, valid, nothing private, own work
+        if: github.event_name == 'pull_request'
+        run: python tools/addon_guard.py "origin/${{ github.base_ref }}"
+
+  tests:
+    name: Tests and a test render
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install .
+      - name: Every test
+        run: python -m unittest discover -s tests -v
+      - name: Add-ons load
+        run: alvenus suggest --addons
+      - name: Test render with every add-on style
+        run: |
+          cp tools/ci-storyboard.json /tmp/sb.json
+          alvenus approve /tmp/sb.json --by "the test machine (a test render only)"
+          alvenus make /tmp/sb.json --draft --no-fix --out /tmp/base.mp4
+          for f in alvenus/addons/styles/*.json; do
+            [ -e "$f" ] || continue
+            n=$(basename "$f" .json)
+            alvenus make /tmp/sb.json --draft --no-fix --style "$n" --out "/tmp/$n.mp4"
+          done
+
+  security:
+    name: Security scans
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install bandit semgrep pip-audit
+      - name: Bandit (risky Python)
+        run: bandit -r alvenus tools -ll -q
+      - name: Semgrep (security rules)
+        run: semgrep scan --config p/python --config p/secrets --config p/github-actions --error --metrics off
+      - name: Gitleaks (leaked keys and passwords, whole history)
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 detect --source /repo --redact -v
+      - name: pip-audit (known holes in the libraries Venus uses)
+        run: pip-audit -r requirements.txt
+      - name: Licences of the libraries Venus uses
+        run: |
+          pip install pip-licenses -r requirements.txt
+          pip-licenses --from=mixed --fail-on="GNU General Public License v2 (GPLv2);GNU General Public License v3 (GPLv3);GNU Affero General Public License v3 (AGPLv3)"

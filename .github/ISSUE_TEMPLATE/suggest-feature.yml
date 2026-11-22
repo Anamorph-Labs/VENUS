@@ -1,0 +1,52 @@
+name: Suggest a feature
+description: An idea for Venus, no code needed. Anamorph Labs reviews every one and builds the good ones.
+title: "Idea: "
+labels: ["idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **How ideas become Venus features:** Venus is started by Anamorph Labs and grows with its users. Code is never added directly: Anamorph Labs reviews each idea, builds the good ones into Venus, and thanks you by name. This form is public, so please don't include your email or anything private. Tip: your AI can fill this in for you with `alvenus suggest "your idea"`.
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: What would Venus do that it can't today?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Why does it make videos better, and for whom?
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: One concrete example. The video, the moment, what a viewer would see.
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Code or sketch (optional)
+      description: Helps us understand the idea. We build it ourselves; it is not copied in as it is.
+      render: python
+  - type: input
+    id: credit
+    attributes:
+      label: Name to credit
+      description: The name to thank on the Anamorph Labs site if this ships (or "anonymous"). Optionally a link.
+    validations:
+      required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Before you submit
+      options:
+        - label: This is my own idea or work, and I'm happy for Anamorph Labs to build it into Venus under the MIT licence.
+          required: true
+        - label: There is nothing private here (no email, footage, keys or paths from my computer).
+          required: true

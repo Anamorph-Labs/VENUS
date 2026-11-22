@@ -48,7 +48,7 @@ def fetch() -> Path:
             continue
         print(f"downloading {Path(f).name} (once; about {'65' if 'text' in f else '90' if 'vision' in f else '2'} MB)")
         tmp = dest.with_suffix(dest.suffix + ".part")
-        urllib.request.urlretrieve(f"https://huggingface.co/{REPO}/resolve/main/{f}", tmp)
+        urllib.request.urlretrieve(f"https://huggingface.co/{REPO}/resolve/main/{f}", tmp)  # nosec B310
         tmp.rename(dest)
     return d
 

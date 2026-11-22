@@ -1,0 +1,49 @@
+name: Share an add-on
+description: A new style pack or story recipe, as a small data file. Checked, scanned and reviewed before anything ships.
+title: "Add-on: "
+labels: ["add-on"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **How add-ons become part of Venus:** add-ons are data files, never code. Paste the JSON below (check it first with `alvenus suggest`). Nothing is added to Venus directly: Anamorph Labs checks and reviews it, and credits you by name when it ships. This form is public; please don't include your email or anything private.
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: What the add-on is for, in a line or two.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Which videos it makes better.
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: A video it suits, or a link to one you made with it.
+  - type: textarea
+    id: addon
+    attributes:
+      label: The add-on file
+      description: The style pack or recipe JSON.
+      render: json
+    validations:
+      required: true
+  - type: input
+    id: credit
+    attributes:
+      label: Name to credit
+    validations:
+      required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Before you submit
+      options:
+        - label: This is my own work, shared under the MIT licence.
+          required: true
+        - label: There is nothing private here.
+          required: true

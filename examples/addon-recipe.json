@@ -1,0 +1,14 @@
+{
+  "about": "A before-and-after: show the problem, the change, and the result side by side.",
+  "by": "Your name here",
+  "name": "before and after",
+  "look": "editorial",
+  "aspect": "9:16",
+  "beats": [
+    ["hook", 0.12, ["split", "text"], "the before and the after together, in under 3 seconds"],
+    ["before", 0.2, ["clip", "image"], "the problem as it was"],
+    ["turn", 0.2, ["text", "compare"], "the one change that made the difference"],
+    ["after", 0.22, ["clip", "image"], "the result"],
+    ["payoff", 0.26, ["text"], "what the viewer can take from it"]
+  ]
+}

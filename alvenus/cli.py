@@ -829,6 +829,49 @@ def cmd_approve(a: argparse.Namespace) -> None:
           "(any change to the storyboard needs a new approval)")
 
 
+def cmd_suggest(a: argparse.Namespace) -> None:
+    from . import community as cm
+
+    if a.addons:
+        from .brief import RECIPES
+        from .presets import PRESETS
+
+        st = [f"  style  {n:16} {p['about']}" for n, p in PRESETS.items() if p.get("addon")]
+        rc = [f"  recipe {n:16} {r['about']}" for n, r in RECIPES.items() if r.get("addon")]
+        print("Add-ons from the community:\n" + ("\n".join(st + rc) or "  none yet"))
+        if cm.NOTES:
+            print("Skipped:\n  " + "\n  ".join(cm.NOTES))
+        return
+    if not a.idea:
+        raise SystemExit('give an idea in quotes to start one (alvenus suggest "your idea" idea.json), or a suggestion file to check it')
+    p = Path(a.idea)
+    if p.suffix == ".json" and p.exists() and a.file is None:
+        try:
+            s = json.loads(p.read_text(encoding="utf-8"))
+        except ValueError as e:
+            raise SystemExit(f"{p}: can't read it ({e})")
+        if not isinstance(s, dict) or "venus_suggestion" not in s:
+            raise SystemExit(f"{p}: not a Venus suggestion")
+        probs = cm.suggestion_problems(s)
+        if probs:
+            raise SystemExit("before it can be sent:\n  " + "\n  ".join(probs))
+        url, paste = cm.form_link(s)
+        md = p.with_suffix(".md")
+        md.write_text(f"# {s['title']}\n\n{paste}\n", encoding="utf-8")
+        print(cm.HOW_IT_WORKS + "\n")
+        print("Ready. Open this link, read it over, and press Submit yourself (Venus never sends anything for you):\n" + url)
+        if len(url) > 7000:
+            print(f"\nThe link is long; if the form opens empty, paste the text from {md} into it.")
+        print("\nWant a thank-you by email? Send it to Anamorph Labs privately (see the form); never put it in the public form.")
+        return
+    out = Path(a.file or "idea.json")
+    if out.exists() and not a.force:
+        raise SystemExit(f"{out} already exists; give a new file name (or --force)")
+    out.write_text(json.dumps(cm.new_suggestion(a.idea), indent=2), encoding="utf-8")
+    print(f"wrote {out}. Fill it in with the person (what, why, one example, the name to credit), then: alvenus suggest {out}\n\n"
+          + cm.HOW_IT_WORKS)
+
+
 def cmd_nodes(a: argparse.Namespace) -> None:
     """Work on a node file: the video as named nodes you can show, set, lock and move."""
     from . import nodes as nd
@@ -1133,6 +1176,9 @@ def cmd_doctor(a: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+    from .community import load_addons
+
+    load_addons()  # community style packs and story recipes (data only, each one checked)
     p = argparse.ArgumentParser(prog="alvenus", description="Cut a video from a script and your takes.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -1244,6 +1290,14 @@ def main(argv: list[str] | None = None) -> None:
     mk.add_argument("--template", choices=list(TEMPLATES), help="start from a proven shape with a hook in the first 2 seconds: "
                     "explainer, story, list (top-5) or ad; writes it to the storyboard file to fill in, check and approve")
     mk.set_defaults(func=cmd_make)
+
+    sg = sub.add_parser("suggest", help="suggest an idea or an add-on for Venus: written up by you or your AI, checked for "
+                        "anything private, sent by you through a GitHub form. Anamorph Labs reviews it and builds the good ones")
+    sg.add_argument("idea", nargs="?", help="the idea in quotes (starts a suggestion file), or a suggestion file to check")
+    sg.add_argument("file", nargs="?", help="where to write the suggestion (default idea.json)")
+    sg.add_argument("--force", action="store_true")
+    sg.add_argument("--addons", action="store_true", help="list the community add-ons this Venus has, and any it skipped")
+    sg.set_defaults(func=cmd_suggest)
 
     br = sub.add_parser("brief", help="start a video from an idea: write the brief (who, the one point, length, kind, mood...), "
                         "or check a filled one")

@@ -209,7 +209,7 @@ def node_hash(n: dict) -> str:
     if n.get("off"):  # (only when set, so older locks still match)
         keep["off"] = n["off"]
     blob = json.dumps(keep, sort_keys=True, default=str)
-    return hashlib.sha1(blob.encode()).hexdigest()[:10]
+    return hashlib.sha1(blob.encode(), usedforsecurity=False).hexdigest()[:10]
 
 
 def lock_hash(doc: dict, n: dict) -> str:
@@ -220,7 +220,7 @@ def lock_hash(doc: dict, n: dict) -> str:
     group = [node_hash(n)] + [p["kind"] + node_hash(p) for p in parts_of(doc, n["id"])]
     group += ["tool" + t["id"] + node_hash(t) for t in tools_of(doc, n["id"])]
     group += [node_hash(styles[s]) for s in n.get("use") or [] if s in styles]
-    return hashlib.sha1("|".join(group).encode()).hexdigest()[:10]
+    return hashlib.sha1("|".join(group).encode(), usedforsecurity=False).hexdigest()[:10]
 
 
 def _near(word: str, options) -> str:

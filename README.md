@@ -6,6 +6,11 @@ script line it is, picks the best take per line and cuts the video.
 
 Everything runs on your own computer. No accounts, no API keys, no uploads.
 
+Venus is started by Anamorph Labs and grows with the people who use it: see
+[How ideas become Venus features](CONTRIBUTING.md). Ideas are welcome from anyone
+(ask your AI to run `alvenus suggest`); code is never added directly, every
+proposal is scanned, and Anamorph Labs builds the good ones and credits you.
+
 It is meant to be driven by your own AI agent (Claude Code, Codex, ...), which
 brings the understanding and the storytelling: see [AGENTS.md](AGENTS.md).
 
