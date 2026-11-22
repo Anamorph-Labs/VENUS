@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: How ideas become Venus features
-    url: https://github.com/hemanthnagraj2-stack/AL-VENUS/blob/main/CONTRIBUTING.md
+    url: https://github.com/Anamorph-Labs/AL-VENUS/blob/main/CONTRIBUTING.md
     about: What happens to your idea, how it is checked, and how you are credited.
   - name: Report a security problem privately
-    url: https://github.com/hemanthnagraj2-stack/AL-VENUS/security/advisories/new
+    url: https://github.com/Anamorph-Labs/AL-VENUS/security/advisories/new
     about: Please never report security problems in a public issue.

@@ -29,7 +29,7 @@ import re
 import urllib.parse
 from pathlib import Path
 
-REPO = "hemanthnagraj2-stack/AL-VENUS"  # moves to the Anamorph Labs organisation; one line to change
+REPO = "Anamorph-Labs/AL-VENUS"  # moves to the Anamorph Labs organisation; one line to change
 HOW_IT_WORKS = (
     "How ideas become Venus features: Venus is started by Anamorph Labs and grows with its users. "
     "Ideas are welcome from anyone, written up by them or their AI. Code is never added to Venus directly: "
