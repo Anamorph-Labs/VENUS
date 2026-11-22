@@ -26,6 +26,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import nodes as nd
+from .approval import approve
 
 PREVIEW_SIZES = {"16:9": (960, 540), "9:16": (540, 960), "1:1": (720, 720), "4:5": (720, 900)}
 
@@ -250,6 +251,7 @@ class Studio:
         k = ids.index(sid)
         out = self.cache / f"play-{self._key(sb, k)}.mp4"
         if not out.exists():
+            approve(self.path, "you, in Studio")  # pressing play on a scene is the creator's yes to it
             subprocess.run([sys.executable, "-m", "alvenus", "make", str(self.path), "--scene", sid, "--draft", "--out", str(out)],
                            check=True, capture_output=True, cwd=str(self.path.parent))
         return out
@@ -261,6 +263,8 @@ class Studio:
             name = self.path.name[:-len(".nodes.json")] if self.path.name.endswith(".nodes.json") else self.path.stem
             out = self.path.with_name(name + ".mp4")
             self.render = {"state": "running", "started": time.time(), "video": out.name}
+
+        approve(self.path, "you, in Studio")  # pressing Render is the creator's yes to what is on screen
 
         def go():
             r = subprocess.run([sys.executable, "-m", "alvenus", "make", str(self.path), "--out", str(out)],

@@ -340,13 +340,58 @@ reel.montage.json`. Keep the sum of shot lengths the same to stay on the beat.
 ## 9. Videos from an idea (`alvenus make`)
 
 When the creator describes a video rather than handing you takes, you write a
-storyboard and Venus builds it. `alvenus make --example sb.json` writes one with
-every scene type. For the common shapes, start from a template instead:
-`alvenus make --template explainer|story|list|ad sb.json` writes a starter whose
-first scene is a hook under 2.5 seconds; keep the shape, replace the words.
+storyboard and Venus builds it. **Venus never makes a video straight from an
+idea: the storyboard is shown to the creator first, and built only after they
+say yes.** The path is always brief, storyboard, check, the creator's yes, make:
 
-1. Agree the brief in two or three sentences: who it is for, the one thing they
-   should remember, length, shape (9:16, 16:9...), mood.
+    alvenus brief "their idea, word for word" brief.json   # the questions to settle
+    alvenus brief brief.json                                # is it complete?
+    alvenus storyboard brief.json sb.json                   # beats laid out by the recipe
+    (you write the words and pick the pictures, scene by scene)
+    alvenus check sb.json                                   # the story check + sb.board.md
+    (show the creator sb.board.md; change what they ask; check again)
+    alvenus approve sb.json --by "their name"               # only on their yes
+    alvenus make sb.json --draft --out draft.mp4            # then the full build
+
+`make` refuses a storyboard that is not approved, or that changed after it was
+approved (the approval is a fingerprint of its content, in sb.approved.json).
+A change after approval means showing it and approving again: say what changed
+in one line, then approve on their yes. In Venus Studio, the creator pressing
+Render or a scene's play button is their approval of what is on screen.
+
+**The brief.** Fill every field of brief.json from what they said; ask only what
+you cannot tell (usually the one point and the length). `point` is the ONE thing
+to remember, one sentence. `facts` lists every number, date and name the video
+may state, each with its source; the story check refuses a number on screen that
+is not there. Never make one up to fill a stat scene: ask, or use another form.
+
+**The recipe.** `alvenus storyboard` lays out one scene per beat for the kind
+(`explainer`, `travel`, `story`, `list`, `ad`), with its length and its job
+(`_job`). Write each scene for its job. You may change a scene's form to one in
+`_other_forms`, split a beat in two, or add a scene, but keep the beats in order:
+- explainer: hook (a claim or number under 3 s), question, two steps (one idea
+  each, different forms), turn (what people get wrong: "but", "actually", a
+  compare), proof (one fact from the brief), payoff (the point, echoing the hook).
+- travel: hook (the best shot, before any words), place (name, country, date, or a
+  map), arrival, three moments (people, a close detail, the place at its best),
+  one quiet longer shot, payoff (a closing line: what it felt like, not what it was).
+  Use `alvenus find` on their clip folders to find each shot.
+
+**The story check** (`alvenus check`) reads the storyboard as an editor would and
+refuses it ("weak") when the hook is a greeting, too long or too wordy; a scene
+says two things or has too little time to be read; nothing turns in the middle;
+the ending doesn't say the point; a number isn't in the facts; the length is far
+from the brief; a scene runs over 8 s; or a scene is still empty. "Notes" are
+advice and never block. Fix the weak points scene by scene and check again; when
+the creator wants it as it is anyway, `approve --anyway "their reason"`.
+It writes `sb.board.md`: the brief, then one row per scene (beat, time, what is on
+screen). Show that board to the creator, not the JSON.
+
+Templates still work for a quick start (`alvenus make --template explainer|story|
+list|ad sb.json` writes a filled example of the shape); they go through the same
+check and approval. `alvenus make --example sb.json` writes every scene type.
+
+1. Settle the brief (above).
 2. Gather their material: clips, photos, a map image, a song. Run `alvenus scan`
    on clip folders to see what is in them. Never invent facts or numbers: every
    stat, chart value and date comes from the creator or a source they gave.
@@ -394,7 +439,7 @@ first scene is a hook under 2.5 seconds; keep the shape, replace the words.
    scenes sit on a dark page in these looks. A new graphic lands about every
    0.8 s, near the pace of the references these were learned from; `alvenus study`
    reports `seconds_per_graphic_beat` for any video, to compare pace.
-5. `alvenus make sb.json --draft --out draft.mp4` first: it takes seconds. Look at
+5. After the creator's yes, `alvenus make sb.json --draft --out draft.mp4` first: it takes seconds. Look at
    `draft.sheet.jpg` (one frame per scene), fix what is weak, repeat; then build
    without `--draft`. Venus reviews the result itself and fixes reading time,
    faint text and flashing on its own; read what it changed (printed, and the
@@ -508,5 +553,6 @@ scene3.words "bigger"`.
 
 - Everything stays on the creator's computer. Never upload their footage or script.
 - Never invent or reword script lines; captions show the script as written.
+- No video before the creator has seen the storyboard and said yes (`alvenus approve`).
 - Say what you are unsure about. A confident wrong cut costs the creator more than
   a question.

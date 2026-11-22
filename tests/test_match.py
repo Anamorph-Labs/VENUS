@@ -1102,5 +1102,102 @@ class Genres(unittest.TestCase):
         self.assertEqual(defaults("sepia-film")["look"], "sepia")
 
 
+class IdeaToStoryboard(unittest.TestCase):
+    """Phase 2, run 1: brief, recipe, story check, approval gate."""
+
+    def _sb(self):
+        from alvenus.brief import new, skeleton
+
+        b = new("why cold kills phone batteries")
+        b.update(audience="phone users", point="Cold slows the battery, it doesn't empty it.", kind="explainer",
+                 seconds=30, aspect="9:16", mood="curious", facts=[{"fact": "40% less at -10C", "source": "test"}])
+        sb = skeleton(b)
+        texts = ["Your battery isn't empty.", "Why phones die in the cold", None, None, "It looks empty. But it isn't.", None,
+                 "Cold slows your battery; it doesn't empty it."]
+        for sc, t in zip(sb["scenes"], texts):
+            if t:
+                sc["text"] = t
+        s = sb["scenes"]
+        s[2].update(title="Inside", items=["Liquid thickens", "Charge slows"])
+        s[3].update(left={"title": "Warm", "points": ["flows"]}, right={"title": "Cold", "points": ["crawls"]})
+        s[5].update(value="40%", label="less charge")
+        return sb
+
+    def test_brief_needs_its_answers(self):
+        from alvenus.brief import new, problems
+
+        p = problems(new("an idea"))
+        self.assertTrue(any(x.startswith("point") for x in p) and any(x.startswith("kind") for x in p))
+        b = new("x")
+        b.update(audience="a", point="one thing", kind="travel", seconds=20, aspect="9:16", mood="calm", material="none")
+        self.assertTrue(any("footage" in x for x in problems(b)))
+
+    def test_recipe_lays_out_beats_to_length(self):
+        from alvenus.brief import RECIPES, lengths
+
+        for kind in RECIPES:
+            ls = lengths(kind, 30)
+            self.assertLessEqual(ls[0], 2.8)
+            self.assertAlmostEqual(sum(ls), 30, delta=3)
+
+    def test_good_storyboard_passes(self):
+        from alvenus.storycheck import check, weak
+
+        self.assertEqual([f.line() for f in weak(check(self._sb()))], [])
+
+    def test_weak_points_are_named(self):
+        from alvenus.storycheck import check, weak
+
+        sb = self._sb()
+        s = sb["scenes"]
+        s[0]["text"] = "Hi everyone, welcome back"
+        s[4]["text"] = "Phones are bad in winter. Everyone knows that."
+        s[5]["value"] = "65%"
+        s[6]["text"] = "Keep it in your pocket."
+        found = " | ".join(f.line() for f in weak(check(sb)))
+        for bit in ("greeting", "says 2 things", "\"65%\"", "doesn't turn", "doesn't say the point"):
+            self.assertIn(bit, found)
+
+    def test_empty_and_too_long(self):
+        from alvenus.storycheck import check, weak
+
+        sb = self._sb()
+        sb["scenes"][2]["items"] = []
+        sb["scenes"][3]["seconds"] = 12
+        found = " | ".join(f.line() for f in weak(check(sb)))
+        self.assertIn("no items yet", found)
+        self.assertIn("long for one scene", found)
+
+    def test_approval_fingerprint(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        from alvenus.approval import approve, require, status
+
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "sb.json"
+            sb = self._sb()
+            p.write_text(json.dumps(sb))
+            self.assertFalse(status(p)[0])
+            with self.assertRaises(SystemExit):
+                require(p)
+            approve(p, "Asha")
+            self.assertTrue(status(p)[0])
+            sb["_how_to_fill"] = "notes for the AI don't count"
+            p.write_text(json.dumps(sb))
+            self.assertTrue(status(p)[0])
+            sb["scenes"][0]["text"] = "Changed"
+            p.write_text(json.dumps(sb))
+            ok, why = status(p)
+            self.assertFalse(ok)
+            self.assertIn("changed since Asha", why)
+
+    def test_marked_word_keeps_its_punctuation(self):
+        from alvenus.paper import parse
+
+        self.assertEqual(parse("It looks *empty*. Yes", set())[2], ("empty.", "serif"))
+
+
 if __name__ == "__main__":
     unittest.main()

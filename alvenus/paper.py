@@ -786,14 +786,11 @@ def _measure(text: str, size: float, face: tuple[str, str]) -> tuple[float, floa
 def parse(text: str, big: set[str]) -> list[tuple[str, str]]:
     """Words with their role: big, serif, light, mark (highlighted) or plain."""
     out = []
-    for tok in re.findall(r"==[^=]+==|\*[^*]+\*|_[^_]+_|\S+", text):
+    for tok in re.findall(r"(?:==[^=]+==|\*[^*]+\*|_[^_]+_)[.,;:!?)\"']*|\S+", text):
         role = "plain"
-        if tok.startswith("==") and tok.endswith("==") and len(tok) > 4:
-            role, tok = "mark", tok[2:-2]
-        elif tok.startswith("*") and tok.endswith("*") and len(tok) > 2:
-            role, tok = "serif", tok[1:-1]
-        elif tok.startswith("_") and tok.endswith("_") and len(tok) > 2:
-            role, tok = "light", tok[1:-1]
+        m = re.match(r"(==|\*|_)(.+)\1([.,;:!?)\"']*)$", tok)
+        if m and len(m.group(2).strip()) > 0:  # punctuation right after a marked word stays on it ("*empty*.")
+            role, tok = {"==": "mark", "*": "serif", "_": "light"}[m.group(1)], m.group(2) + m.group(3)
         for i, wd in enumerate(tok.split()):
             r = role
             if r == "plain" and re.sub(r"[^\w']", "", wd.lower()) in big:

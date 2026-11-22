@@ -400,6 +400,13 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         kind = sc["type"]
         if design and kind in ("title", "text", "clip", "image"):
             continue
+        if not design:  # *word* / ==word== / _word_ belong to the designed looks; elsewhere the marked words become big words
+            from .paper import parse, plain
+
+            marked = [w for k in ("text", "caption") for w, r in parse(str(sc.get(k) or ""), set()) if r in ("serif", "mark")]
+            if marked and kind == "text":
+                sc = {**sc, "big_words": list(sc.get("big_words") or []) + [re.sub(r"[^\w']", "", m) for m in marked]}
+            sc = {**sc, **{k: plain(str(sc[k])) for k in ("text", "caption") if sc.get(k)}}
         if sc.get("caption") and sb.get("captions", True):
             words += spread(sc["caption"], i, t0, t1)
         if kind == "title":

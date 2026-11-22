@@ -648,12 +648,14 @@ def cmd_make(a: argparse.Namespace) -> None:
         if p.exists():
             raise SystemExit(f"{p} already exists; give a new file name for the starter storyboard")
         p.write_text(json.dumps(TEMPLATES[a.template], indent=2), encoding="utf-8")
-        print(f"wrote the {a.template} starter to {p}: swap the words for your subject, keep the shape"
-              + ("" if a.out else ", then: alvenus make " + str(p) + " --out video.mp4"))
-        if not a.out:
-            return
+        print(f"wrote the {a.template} starter to {p}: swap the words for your subject, keep the shape, then: "
+              f"alvenus check {p}, show the creator, alvenus approve {p} --by NAME, alvenus make {p} --out video.mp4")
+        return
     if not a.storyboard or not a.out:
         raise SystemExit("make needs a storyboard file and --out (or --example FILE to see one)")
+    from .approval import require
+
+    print(f"storyboard {require(Path(a.storyboard))}")
     need_ffmpeg()
     draft_mode(a)
     t0 = time.time()
@@ -747,6 +749,84 @@ def cmd_make(a: argparse.Namespace) -> None:
         print(f"   redrew {len(redrawn)} of {len(sb['scenes'])} scenes; the rest were kept from the last build")
     print(self_review(out).strip())
     print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s; why it is cut this way: {out.with_suffix('.why.md')}")
+
+
+def cmd_brief(a: argparse.Namespace) -> None:
+    from . import brief
+
+    p = Path(a.file)
+    if a.idea is None:  # check a filled brief
+        b = brief.read(p)
+        probs = brief.problems(b)
+        if probs:
+            raise SystemExit("the brief still needs:\n  " + "\n  ".join(probs))
+        print(f"brief ready: a {b['seconds']} s {brief.NAMES[b['kind']]} for {b['audience']}; the point: {b['point']}\n"
+              f"next: alvenus storyboard {p} sb.json")
+        return
+    if p.exists() and not a.force:
+        raise SystemExit(f"{p} already exists; give a new file name (or --force to start it again)")
+    p.write_text(json.dumps(brief.new(a.idea), indent=2), encoding="utf-8")
+    print(f"wrote a brief to {p}. Fill in every field (ask the creator what you can't tell from the idea), "
+          f"then: alvenus brief {p}")
+
+
+def cmd_storyboard(a: argparse.Namespace) -> None:
+    from . import brief
+
+    b = brief.read(Path(a.brief))
+    probs = brief.problems(b)
+    if probs:
+        raise SystemExit("finish the brief first:\n  " + "\n  ".join(probs))
+    out = Path(a.out)
+    if out.exists() and not a.force:
+        raise SystemExit(f"{out} already exists; give a new file name (or --force to lay it out again)")
+    sb = brief.skeleton(b)
+    out.write_text(json.dumps(sb, indent=2), encoding="utf-8")
+    r = brief.RECIPES[b["kind"]]
+    print(f"laid out {'an' if b['kind'][0] in 'aeiou' else 'a'} {brief.NAMES[b['kind']]} storyboard in {out}: {len(sb['scenes'])} beats, {r['about']}")
+    for i, sc in enumerate(sb["scenes"], 1):
+        print(f"  {i}. {sc['beat']:9} {sc['seconds']:>4.1f} s  {sc['type']:10} {sc['_job']}")
+    print(f"write each scene's words for its beat, then: alvenus check {out}")
+
+
+def cmd_check(a: argparse.Namespace) -> None:
+    from . import storycheck
+    from .approval import content, status
+
+    p = Path(a.storyboard)
+    sb = content(p)
+    findings = storycheck.check(sb)
+    try:
+        from . import story
+
+        story.load(p, json.loads(json.dumps(sb)))
+    except SystemExit as e:  # the storyboard can't be built as written: that is weak too
+        for line in str(e).splitlines()[1:]:
+            findings.insert(0, storycheck.Finding("weak", 0, "", line.strip(), "fix the storyboard file"))
+    page = storycheck.board(sb, findings)
+    bp = p.with_name((p.name[:-5] if p.name.endswith(".json") else p.name) + ".board.md")
+    bp.write_text(page, encoding="utf-8")
+    print(page)
+    w = storycheck.weak(findings)
+    ok, why = status(p)
+    print(f"board saved as {bp}; show it to the creator.")
+    if w:
+        raise SystemExit(f"not ready: fix the {len(w)} weak point{'s' if len(w) > 1 else ''} above, then check again")
+    print(f"story check passed ({why}). When the creator says yes: alvenus approve {p} --by NAME")
+
+
+def cmd_approve(a: argparse.Namespace) -> None:
+    from . import storycheck
+    from .approval import approve, content
+
+    p = Path(a.storyboard)
+    w = storycheck.weak(storycheck.check(content(p)))
+    if w and not a.anyway:
+        raise SystemExit(f"the story check still finds {len(w)} weak point{'s' if len(w) > 1 else ''} (alvenus check {p}). "
+                         "Fix them, or if the creator wants it as it is: approve --anyway \"their reason\"")
+    rec = approve(p, a.by, a.anyway or "")
+    print(f"approved by {rec['approved_by']} at {rec['at']}. Now: alvenus make {p} --out video.mp4 "
+          "(any change to the storyboard needs a new approval)")
 
 
 def cmd_nodes(a: argparse.Namespace) -> None:
@@ -1162,8 +1242,34 @@ def main(argv: list[str] | None = None) -> None:
     from .templates import TEMPLATES
 
     mk.add_argument("--template", choices=list(TEMPLATES), help="start from a proven shape with a hook in the first 2 seconds: "
-                    "explainer, story, list (top-5) or ad; writes it to the storyboard file (and builds it if --out is given)")
+                    "explainer, story, list (top-5) or ad; writes it to the storyboard file to fill in, check and approve")
     mk.set_defaults(func=cmd_make)
+
+    br = sub.add_parser("brief", help="start a video from an idea: write the brief (who, the one point, length, kind, mood...), "
+                        "or check a filled one")
+    br.add_argument("idea", nargs="?", help="the idea in the creator's words (leave out to check FILE)")
+    br.add_argument("file", nargs="?", default="brief.json", help="the brief file (default brief.json)")
+    br.add_argument("--force", action="store_true", help="start the brief again over an existing file")
+
+    def brief_args(a):
+        if a.idea and not a.idea.strip().startswith("{") and a.file == "brief.json" and Path(a.idea).suffix == ".json" and Path(a.idea).exists():
+            a.idea, a.file = None, a.idea  # "alvenus brief my.json": check it
+        cmd_brief(a)
+
+    br.set_defaults(func=brief_args)
+    sk = sub.add_parser("storyboard", help="lay out a storyboard from a filled brief, by the story recipe for its kind")
+    sk.add_argument("brief")
+    sk.add_argument("out", nargs="?", default="sb.json")
+    sk.add_argument("--force", action="store_true")
+    sk.set_defaults(func=cmd_storyboard)
+    ck = sub.add_parser("check", help="the story check: hook, one idea per scene, turn, payoff, facts, pace; writes a board to show the creator")
+    ck.add_argument("storyboard")
+    ck.set_defaults(func=cmd_check)
+    ap = sub.add_parser("approve", help="record the creator's yes to a storyboard; videos are made only from approved storyboards")
+    ap.add_argument("storyboard")
+    ap.add_argument("--by", required=True, help="who said yes (the creator's name)")
+    ap.add_argument("--anyway", metavar="REASON", help="approve although the story check finds weak points, with the creator's reason")
+    ap.set_defaults(func=cmd_approve)
 
     nd = sub.add_parser("nodes", help="the video as named nodes your AI can point at: show, set, lock, move, and a map to look at",
                         description="Actions: init (storyboard -> node file), show, guide, set NODE.PARAM=VALUE..., lock ID..., "
