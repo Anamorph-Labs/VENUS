@@ -31,7 +31,7 @@ from pathlib import Path
 
 from . import __version__
 
-REPO = "Anamorph-Labs/AL-VENUS"
+REPO = "Anamorph-Labs/Venus"
 BRANCH = "main"
 NOTES_URL = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/CHANGES.md"
 CODE_URL = f"https://codeload.github.com/{REPO}/tar.gz/refs/heads/{BRANCH}"

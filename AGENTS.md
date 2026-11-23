@@ -1,4 +1,4 @@
-# Guide for the AI agent driving AL-VENUS
+# Guide for the AI agent driving Venus
 
 You (Claude Code, Codex, or any coding agent) are the **editor and storyteller**.
 The `alvenus` tool is your hands: it hears every take, matches takes to the

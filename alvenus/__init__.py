@@ -1,4 +1,4 @@
-"""AL-VENUS: script-to-cut video agent ."""
+"""Venus by Anamorph Labs: a video editor that tells a story."""
 
 import os as _os
 
