@@ -12,10 +12,6 @@ Describe a video, or hand it your footage. Venus lays out the story, your own AI
 you read the storyboard, and nothing is made until you press Render.
 </p>
 
-<p align="center">
-  <img src="docs/demo-paper.gif" alt="A 30 second reel Venus made from one sentence, with no footage" width="240">
-</p>
-
 - **From an idea.** Type one sentence in Studio. Venus lays it out by a story recipe (a hook, the steps, a turn, the payoff), your AI writes each scene while you watch, and Venus draws the pictures itself: no footage, no stock sites, no AI image credits.
 - **From your footage.** Give it your script and your takes: it hears every take, picks the best one per line and cuts the video, with captions and a timeline for Premiere or Resolve.
 - **From your clips and a song.** Every cut on the beat, the strongest moment on the drop, or the fast "creative edit" look with cut-outs and light.
@@ -34,10 +30,6 @@ Venus checks for new versions by itself: Studio shows a note with an Update butt
 | Describe your video | Read the story before anything is made | Three directions, one click |
 |---|---|---|
 | ![Studio's describe box](docs/studio-describe.jpg) | ![The story check before Render](docs/studio-story-check.jpg) | ![Three directions](docs/studio-directions.jpg) |
-
-Pictures without footage, drawn in each look (5,491 free icons and 19 scenes, in your colours):
-
-![Pictures in each look](docs/pictures-in-each-look.jpg)
 
 Venus is started by Anamorph Labs and grows with the people who use it: see
 [How ideas become Venus features](CONTRIBUTING.md). Ideas are welcome from anyone
