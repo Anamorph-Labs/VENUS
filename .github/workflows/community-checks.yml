@@ -2,9 +2,10 @@
 # or reach anything private (never switch this to pull_request_target).
 name: Community checks
 on:
+  workflow_dispatch:
   pull_request:
   push:
-    branches: [main, community]
+    branches: [main, community, "update/**"]
 permissions:
   contents: read
 concurrency:
