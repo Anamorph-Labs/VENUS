@@ -49,6 +49,8 @@ class ClipInfo:
     cuts: list[float] = field(default_factory=list)  # its own cuts, seconds
 
 
+BAND = 0.0  # set (e.g. 4.74) for the ultra-wide band look: each shot is fitted to the strip, not the frame
+
 def analyse(path: Path) -> ClipInfo:
     import subprocess
 
@@ -251,7 +253,10 @@ def _shot_filter(sh: Shot, src_size, w: int, h: int, fps: float, look: str, refr
         acc = (s1 - s0) / d
         timing = f"setpts=((-{s0:.4f}+sqrt({s0 * s0:.5f}+2*({acc:.5f})*(PTS-STARTPTS)*TB))/({acc:.5f}))/TB"
     sw, sh_ = src_size
-    if sw and sh_ and abs(sw / sh_ - w / h) > 0.01 and sw / sh_ > w / h and reframe:
+    if BAND:  # the ultra-wide band: the whole width of the shot in a thin strip, black above and below
+        bh = 2 * round(w / BAND / 2)
+        fit = f"scale={w}:{bh}:force_original_aspect_ratio=increase,crop={w}:{bh},pad={w}:{h}:0:(oh-ih)/2:black"
+    elif sw and sh_ and abs(sw / sh_ - w / h) > 0.01 and sw / sh_ > w / h and reframe:
         from .reframe import crop_x
 
         cw = 2 * round(sh_ * w / h / 2)

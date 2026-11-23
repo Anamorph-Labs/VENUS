@@ -76,3 +76,56 @@ def parse_opts(items: list[str] | None) -> dict:
             raise SystemExit(f"--opt {it!r}: use NAME=VALUE, e.g. --opt copies=3")
         d[k.strip()] = v.strip()
     return d
+
+
+def apply_spans(video: str | Path, spans: list[tuple[float, float, list[str], dict]], seed: int = 0) -> None:
+    """Run effects over chosen stretches of a finished video, in place:
+    [(start s, end s, effects, options)]. The rest of the picture and all the
+    sound pass through untouched. Frames stream through, so length does not matter."""
+    from .fx import apply
+    from .media import video_size
+
+    video = Path(video)
+    fps = probe_fps(video)
+    w, h = video_size(video)
+    tmp = video.with_name(video.stem + ".fx.mp4")
+    rd = subprocess.Popen(["ffmpeg", "-nostdin", "-v", "error", "-i", str(video), "-an", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                          stdout=subprocess.PIPE)
+    wr = subprocess.Popen(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
+                           "-r", f"{fps:g}", "-i", "-", "-i", str(video), "-map", "0:v", "-map", "1:a?", "-c:a", "copy",
+                           "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", str(tmp)],
+                          stdin=subprocess.PIPE)
+    size = w * h * 3
+    todo = sorted(spans)
+    i, batch, cur = 0, [], None
+    try:
+        while True:
+            buf = rd.stdout.read(size)
+            if len(buf) < size:
+                break
+            t = i / fps
+            i += 1
+            if cur is None and todo and todo[0][0] <= t < todo[0][1]:
+                cur = todo.pop(0)
+            if cur is not None and t < cur[1]:
+                batch.append(np.frombuffer(buf, np.uint8).reshape(h, w, 3))
+                continue
+            if cur is not None:  # the stretch just ended: run its effects, write it, then this frame
+                for f in apply(np.stack(batch), fps, cur[2], cur[3], seed):
+                    wr.stdin.write(np.ascontiguousarray(f).tobytes())
+                batch, cur = [], None
+                if todo and todo[0][0] <= t < todo[0][1]:
+                    cur = todo.pop(0)
+                    batch.append(np.frombuffer(buf, np.uint8).reshape(h, w, 3))
+                    continue
+            wr.stdin.write(buf)
+        if batch:
+            for f in apply(np.stack(batch), fps, cur[2], cur[3], seed):
+                wr.stdin.write(np.ascontiguousarray(f).tobytes())
+    finally:
+        wr.stdin.close()
+        rd.stdout.close()
+        rd.wait()
+    if wr.wait():
+        raise RuntimeError("could not write the effects back into the video")
+    tmp.replace(video)

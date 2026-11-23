@@ -182,6 +182,7 @@ def _blank(form: str) -> dict:
         "list": {"title": "", "items": []}, "compare": {"left": {"title": "", "points": []}, "right": {"title": "", "points": []}},
         "clip": {"file": "", "from": 0, "caption": ""}, "image": {"file": "", "caption": ""},
         "split": {"left": {"file": "", "label": ""}, "right": {"file": "", "label": ""}},
+        "slam": {"text": "", "small": ""}, "date": {"text": ""}, "scramble": {"text": "", "to": ""},
     }.get(form, {})
 
 

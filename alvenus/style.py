@@ -70,7 +70,80 @@ def chunks(words, vertical: bool) -> list[list]:
     return out
 
 
+CAPTION_MODE = "pop"  # "pop" (below), "bracket" or "keyword" (interview looks from the Venus 1 board)
+CAPTION_MODES = ("pop", "classic", "bracket", "keyword")
+GOLD = "&H004AB0E8&"  # warm gold (#E8B04A) for the keyword look
+_STOP = {"the", "a", "an", "and", "or", "but", "to", "of", "in", "on", "at", "for", "is", "it", "that", "this", "i", "you",
+         "we", "they", "he", "she", "be", "are", "was", "were", "so", "just", "with", "my", "your", "our", "as", "if", "do"}
+
+
+def _key_word(g) -> int:
+    """Which word of a phrase carries it: a highlighted one, else the longest
+    word that is not a small joining word."""
+    for j, x in enumerate(g):
+        if getattr(x, "mark", False):
+            return j
+    best = max(range(len(g)), key=lambda j: (g[j].text.strip(",.?!;:").lower() not in _STOP, len(g[j].text)))
+    return best
+
+
+def bracket_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset()) -> list[str]:
+    """Interview captions, one word at a time in small mono type inside
+    brackets ("[word]"), sitting at chest height under the face: quiet, so
+    the speaker stays the picture."""
+    vertical = h > w
+    fs = round((0.03 if vertical else 0.032) * min(w, h) * (1.3 if vertical else 1))
+    y = round(h * (0.66 if vertical else 0.78))
+    rows = []
+    ws = [x for x in words if x.line not in skip]
+    for i, x in enumerate(ws):
+        e = x.end + 0.12
+        if i + 1 < len(ws):
+            e = min(e, ws[i + 1].start) if ws[i + 1].start > x.start + 0.04 else x.end
+        if e - x.start < 0.04:
+            e = x.start + 0.04
+        word = _esc(x.text.strip(",.?!;:"))
+        col = ass_colour(accent) if getattr(x, "mark", False) else "&H00F2F2F2&"
+        rows.append(f"Dialogue: 2,{_t(x.start)},{_t(e)},Cap,,0,0,0,,{{\\an5\\pos({w // 2},{y})\\fnDM Mono\\fs{fs}\\bord0"
+                    f"\\shad{max(1, fs // 14)}\\4c&H80000000&\\1c{col}}}[{word}]")
+    return rows
+
+
+def keyword_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset()) -> list[str]:
+    """The produced-podcast look: each phrase in small clean type with its
+    one carrying word set large above it in gold italic serif, landing as it
+    is said and staying for the phrase."""
+    vertical = h > w
+    groups = chunks([x for x in words if x.line not in skip], vertical)
+    small = round((0.034 if vertical else 0.036) * min(w, h) * (1.25 if vertical else 1))
+    big = round(small * 2.8)
+    y = round(h * (0.7 if vertical else 0.8))
+    rows = []
+    for g_i, g in enumerate(groups):
+        nxt = groups[g_i + 1][0].start if g_i + 1 < len(groups) else None
+        g_end = g[-1].end + 0.25 if nxt is None else min(g[-1].end + 0.25, nxt)
+        k = _key_word(g)
+        key = g[k]
+        rest = " ".join(_esc(x.text) for j, x in enumerate(g) if j != k)
+        if key.start < g_end:
+            rows.append(f"Dialogue: 3,{_t(key.start)},{_t(g_end)},Cap,,0,0,0,,{{\\an2\\pos({w // 2},{y - round(small * 1.3)})"
+                        f"\\fnInstrument Serif\\i1\\fs{big}\\bord0\\shad{max(1, big // 24)}\\4c&H90000000&\\1c{GOLD}"
+                        f"\\fscx90\\fscy90\\t(0,160,\\fscx100\\fscy100)\\fad(60,120)}}{_esc(key.text.strip(',.?!;:'))}")
+        if rest:
+            rows.append(f"Dialogue: 2,{_t(g[0].start)},{_t(g_end)},Cap,,0,0,0,,{{\\an8\\pos({w // 2},{y - round(small * 1.1)})"
+                        f"\\fnInter SemiBold\\fs{small}\\bord0\\shad{max(1, small // 16)}\\4c&H90000000&\\fad(80,120)}}{rest}")
+    return rows
+
+
 def caption_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset()) -> list[str]:
+    if CAPTION_MODE == "bracket":
+        return bracket_events(words, w, h, accent, skip)
+    if CAPTION_MODE == "keyword":
+        return keyword_events(words, w, h, accent, skip)
+    return pop_events(words, w, h, accent, skip)
+
+
+def pop_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset()) -> list[str]:
     """One event per spoken word: the phrase stays put, the word being said
     lights up in the accent colour with a small pop, words still to come wait
     slightly dimmed. Highlighted words sit on an accent marker block (drawn

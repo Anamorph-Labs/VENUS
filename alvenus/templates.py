@@ -1,4 +1,4 @@
-"""Starter storyboards: four proven shapes of short video, ready to fill in.
+"""Starter storyboards: five proven shapes of short video, ready to fill in.
 
 Each one opens on a hook that lands inside the first two seconds (a bold
 claim, a number or a promise), because that is where viewers decide to stay.
@@ -58,6 +58,18 @@ TEMPLATES: dict[str, dict] = {
             {"type": "stat", "value": "3 hrs", "label": "at your perfect temperature", "seconds": 3},
             {"type": "list", "title": "Why people love it", "items": ["One-tap temperature", "Charges on its coaster", "Dishwasher safe"], "seconds": 5},
             {"type": "text", "text": "Every sip, still hot.", "big_words": ["hot"], "seconds": 2.5},
+        ],
+    },
+    "trailer": {
+        "_about": "A trailer or title tease: a line that drops you into the danger, credits slammed over newsprint and red paint, the key word scrambling, a date to end on.",
+        "aspect": "16:9", "style": "trailer", "end_card": None,
+        "scenes": [
+            {"type": "text", "text": "One city. One night.", "big_words": ["night"], "seconds": 2.2, "_hook": "the stakes in five words or fewer"},
+            {"type": "slam", "text": "Mara Ilić", "small": "From the writer of", "texture": "newsprint", "seconds": 3},
+            {"type": "slam", "text": "The Lantern Stall", "small": "And the makers of", "texture": "red", "seconds": 3},
+            {"type": "scramble", "text": "Trust", "to": "Nobody", "seconds": 2.5},
+            {"type": "slam", "text": "Night Market", "small": "A new original series", "texture": "charcoal", "wipe": False, "seconds": 3.5},
+            {"type": "date", "text": "This winter", "seconds": 3},
         ],
     },
 }

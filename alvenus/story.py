@@ -28,7 +28,7 @@ IMAGES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
 def _still(f: str) -> bool:
     return Path(f).suffix.lower() in IMAGES or not has_video(f)
-KINDS = {"clip", "image", "title", "text", "stat", "chart", "line_chart", "quote", "timeline", "map", "split", "list", "compare", "archive"}
+KINDS = {"clip", "image", "title", "text", "stat", "chart", "line_chart", "quote", "timeline", "map", "split", "list", "compare", "archive", "slam", "date", "scramble"}
 EXAMPLE = {
     "aspect": "16:9", "look": "natural", "accent": "#FFD23F", "music": "song.mp3", "voiceover": None,
     "transition": "crossfade", "transition_seconds": 0.4, "cut_on_beat": True, "captions": True, "progress": False,
@@ -40,11 +40,16 @@ EXAMPLE = {
         {"type": "map", "image": "city.png", "pins": [{"x": 0.3, "y": 0.6, "label": "Station"}, {"x": 0.7, "y": 0.4, "label": "Market"}], "seconds": 4},
         {"type": "chart", "bars": [["Food", 210], ["Clothes", 120], ["Repairs", 40]], "title": "What they sell", "seconds": 4},
         {"type": "line_chart", "points": [["2019", 120], ["2021", 260], ["2024", 500]], "title": "Stalls per night", "seconds": 4},
+        {"type": "line_chart", "points": [["0", 0], ["20", 300], ["40", 600]], "name": "Pay", "lines": [{"name": "Rent", "values": [0, 380, 760]}],
+         "slope": {"from": 0, "to": 1, "label": "What is slope?"}, "notes": [[2, "same hours"]], "title": "Pay vs rent", "seconds": 5},
         {"type": "timeline", "items": [["1990", "First stall"], ["2005", "Market opens"], ["2024", "500 stalls"]], "title": "How it grew", "seconds": 4},
         {"type": "split", "left": {"file": "day.mp4", "label": "By day"}, "right": {"file": "night.mp4", "label": "By night"}, "seconds": 4},
         {"type": "quote", "text": "Time is the one thing I cannot fix.", "who": "The clock repairer", "seconds": 4},
         {"type": "image", "file": "lanterns.jpg", "seconds": 3, "caption": "And everyone stays."},
         {"type": "text", "text": "Come lose track of time.", "big_words": ["time"], "seconds": 3},
+        {"type": "scramble", "text": "Cheap", "to": "Free", "seconds": 2.5},
+        {"type": "slam", "text": "The Night Market", "small": "This summer", "texture": "newsprint", "seconds": 3},
+        {"type": "date", "text": "Opens 21 June", "seconds": 3},
     ],
 }
 
@@ -102,8 +107,19 @@ def load(path: Path, data: dict | None = None) -> dict:
             problems.append(f"scene {i + 1}: a {kind} scene needs \"file\"")
         if kind == "map" and not (sc.get("image") and sc.get("pins")):
             problems.append(f"scene {i + 1}: a map scene needs \"image\" and \"pins\"")
+        if kind == "line_chart" and sc.get("lines"):
+            n_pts = len(sc.get("points") or [])
+            if not (isinstance(sc["lines"], list) and all(isinstance(x, dict) and len(x.get("values") or []) == n_pts for x in sc["lines"])):
+                problems.append(f"scene {i + 1}: lines is a list of {{\"name\": ..., \"values\": [...]}}, one value per point ({n_pts})")
         if kind == "split" and not (sc.get("left", {}).get("file") and sc.get("right", {}).get("file")):
             problems.append(f"scene {i + 1}: a split scene needs left.file and right.file")
+        if kind in ("slam", "date", "scramble") and not str(sc.get("text") or "").strip() and not sc.get("_job"):
+            problems.append(f"scene {i + 1}: a {kind} card needs \"text\"")
+        if kind in ("slam", "date", "scramble") and sc.get("texture"):
+            from .typecards import TEXTURES
+
+            if sc["texture"] not in TEXTURES:
+                problems.append(f"scene {i + 1}: texture {sc['texture']!r}: choose one of {', '.join(TEXTURES)}")
     from .storycheck import empty as unwritten
 
     for i, sc in enumerate(sb.get("scenes") or []):
@@ -207,7 +223,11 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
         from .paper import scene_video
 
         return scene_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_total", 1))
-    if sc["type"] == "archive":
+    if sc["type"] in ("slam", "date", "scramble"):
+        from .typecards import scene_video as card_video
+
+        card_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_accent", "#C0392B"))
+    elif sc["type"] == "archive":
         from .archive import scene_video as archive_video
 
         archive_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_accent", "#C0392B"))
@@ -312,7 +332,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     moving = sb.get("camera", True)
     for k, sc in enumerate(scenes):  # what a footage-free scene is drawn on, and which way its camera drifts
         sc["_bg"], sc["_accent"] = sb.get("background", "dark"), sb.get("accent", "#FFD23F")
-        footage = sc.get("file") or sc["type"] in ("clip", "image", "map", "split", "archive")
+        footage = sc.get("file") or sc["type"] in ("clip", "image", "map", "split", "archive", "slam", "date", "scramble")
         sc["_dir"] = 0 if footage or not moving else (1 if k % 2 == 0 else -1)
         sc["_verse"] = sc["type"] == "quote" and (sc.get("style") or sb.get("quote_style")) == "verse"
     design = sb.get("design")
@@ -361,16 +381,18 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         args = ["ffmpeg", "-nostdin", "-y", "-v", "error"]
         for f in files:
             args += ["-i", str(f)]
-        parts, prev = [], "0:v"
+        # every scene enters with the same pixel shape and rate, whatever drew it
+        parts = [f"[{i}:v]setsar=1,fps={fps:g},format=yuv420p[n{i}]" for i in range(len(files))]
+        prev = "n0"
         for i in range(1, len(files)):
             o = "vj" if i == len(files) - 1 else f"x{i}"
             if td:
-                parts.append(join_pair(prev, f"{i}:v", o, scenes[i].get("transition", trans), td, starts[i], f"{w}x{h}", fps, i))
+                parts.append(join_pair(prev, f"n{i}", o, scenes[i].get("transition", trans), td, starts[i], f"{w}x{h}", fps, i))
             else:
-                parts.append(f"[{prev}][{i}:v]concat=n=2:v=1[{o}]")
+                parts.append(f"[{prev}][n{i}]concat=n=2:v=1[{o}]")
             prev = o
         if len(files) == 1:
-            parts.append("[0:v]null[vj]")
+            parts.append("[n0]null[vj]")
         vo = sb.get("voiceover")
         if vo:
             args += ["-i", vo]
@@ -440,7 +462,10 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         elif kind == "chart":
             charts.append(Chart(i, [(str(a), float(b)) for a, b in sc.get("bars", [])], sc.get("title", "")))
         elif kind == "line_chart":
-            lcharts.append(Chart(i, [(str(a), float(b)) for a, b in sc.get("points", [])], sc.get("title", "")))
+            lcharts.append(Chart(i, [(str(a), float(b)) for a, b in sc.get("points", [])], sc.get("title", ""),
+                                 more=[(str(x.get("name", "")), [float(v) for v in x.get("values", [])]) for x in sc.get("lines") or []],
+                                 slope=sc.get("slope") if isinstance(sc.get("slope"), dict) else ({} if sc.get("slope") else None),
+                                 notes=[(int(a), str(b)) for a, b in sc.get("notes") or []], name=str(sc.get("name", ""))))
         elif kind == "quote" and (sc.get("style") or sb.get("quote_style")) == "verse":
             verses.append((sc.get("text", ""), sc.get("who", ""), t0 + (td * 0.8 if i else 0), t1))  # words wait for the reveal
         elif kind == "quote":
@@ -477,8 +502,19 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                     lower.append((i, side, sc[side]["label"]))
     sfx = [(starts[i] + td / 2, "whoosh") for i in range(1, len(scenes))] if trans in ("whip", "slide", "zoom", "flash", "circle", "glitch") else []
     sfx += [(t, "pop") for t in pops]
-    from . import graphics
+    from .typecards import KINDS as CARDS, moments
 
+    for i, sc in enumerate(scenes):  # the type cards bring their own sounds (boom, braam, glitch...)
+        if sc["type"] in CARDS:
+            sfx += moments(sc, *spans[i])
+        elif sc["type"] == "line_chart" and len(sc.get("points") or []) > 1:  # a soft tick as the line reaches each point
+            t0, t1 = spans[i]
+            draw = min(1.6, max(0.7, 0.55 * (t1 - t0)))
+            n = len(sc["points"])
+            sfx += [(t0 + 0.3 + draw * k / (n - 1), "tick") for k in range(1, n)]
+    from . import graphics, style as style_
+
+    style_.CAPTION_MODE = sb.get("caption_style") if sb.get("caption_style") in ("bracket", "keyword") else "pop"
     graphics.PANELS = False  # the scene's own background shows behind charts, numbers and quotes
     from . import genre
 
@@ -514,6 +550,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                         split_labels=[(spans[i], side, lab) for i, side, lab in lower])
     finally:
         graphics.PANELS = True
+        style_.CAPTION_MODE = "pop"
         genre.EXTRAS = {}
     base.unlink()
     return notes

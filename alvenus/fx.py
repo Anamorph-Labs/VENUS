@@ -47,6 +47,10 @@ Shapes
   dots        the picture becomes glowing dots that scatter and (with
               shape=infinity|heart|circle|any text) gather into a shape
   arrows      hand-drawn arrows pop in around the frame, one per beat
+Interviews
+  behind      big condensed words stacked behind the speaker (words=IDEAL MOMENT,
+              repeat=3, accent=#C8102E): the person stays in front, the words
+              land a line at a time like a poster on the wall behind them
 """
 
 from __future__ import annotations
@@ -59,11 +63,11 @@ import numpy as np
 
 FONT_DIR = Path(__file__).parent / "fonts"
 
-NEEDS_CUTOUT = {"silhouette", "glow", "solid", "speedlines", "pop", "words"}
+NEEDS_CUTOUT = {"silhouette", "glow", "solid", "speedlines", "pop", "words", "behind"}
 EFFECTS = ("silhouette", "glow", "solid", "speedlines", "pop", "words",
            "strobe-light", "burst", "starburst", "lightning", "sparks", "burn", "endstrobe",
            "sketch", "blueprint", "chalk", "flick", "negative", "xray", "poster", "pixel", "repeat", "strip", "smear",
-           "dots", "arrows")
+           "dots", "arrows", "behind")
 
 
 def hexrgb(s: str) -> np.ndarray:
@@ -377,6 +381,51 @@ def words(s: Shot) -> None:
                 d.text((x, y), word, font=_font(size), fill=accent if small else ((15, 15, 15) if light else (245, 245, 245)))
         txt = np.asarray(im, np.float32)
         img = txt * (1 - m[..., None]) + f.astype(np.float32) * m[..., None]  # the subject stays in front
+        out.append(u8(img))
+    s.frames = np.stack(out)
+
+
+def behind(s: Shot) -> None:
+    """Big condensed capitals stacked behind the speaker, filling the wall:
+    the words repeat down the frame (a poster pasted three times), each row
+    landing a beat after the last, the person cut out and kept in front."""
+    from PIL import Image, ImageDraw
+
+    text = str(s.opt("words", "IDEAL MOMENT")).upper()
+    reps = max(1, min(5, int(s.opt("repeat", 3))))
+    w, h = s.size
+    accent = tuple(int(x) for x in hexrgb(s.opt("accent", "#C8102E")))
+    f0 = _font(100, "BigShoulders-Bold.ttf")
+    lines = [text] if len(text) <= 12 or " " not in text else [text[: text.rfind(" ", 0, len(text) // 2 + 4)].strip(), text[text.rfind(" ", 0, len(text) // 2 + 4):].strip()]
+    widest = max(f0.getlength(x) for x in lines)
+    px = int(100 * min(w * 0.92 / widest, h * 0.9 / (len(lines) * reps * 0.95)))
+    f = _font(px, "BigShoulders-Bold.ttf")
+    rows = [x for _ in range(reps) for x in lines]
+    lh = px * 0.92
+    px = min(px, int(h * 0.5 / (len(rows) * 0.92)))  # the block stays in the top half: the wall behind head and shoulders
+    f = _font(px, "BigShoulders-Bold.ttf")
+    lh = px * 0.92
+    top = h * float(s.opt("top", 0.14))
+    s.opts.setdefault("cutout", "person")  # a person in front of a plain wall: the person model, not a colour key
+    step = max(1, int(s.fps * float(s.opt("beat", 0.18))))
+    layer_cache: dict[int, np.ndarray] = {}
+
+    def layer(k: int) -> np.ndarray:
+        if k not in layer_cache:
+            im = Image.new("L", (w, h), 0)
+            d = ImageDraw.Draw(im)
+            for r, line in enumerate(rows[:k]):
+                d.text(((w - f.getlength(line)) / 2, top + r * lh - px * 0.12), line, font=f, fill=255)
+            layer_cache[k] = np.asarray(im, np.float32)[..., None] / 255
+        return layer_cache[k]
+
+    out = []
+    for i, (fr, m) in enumerate(zip(s.frames, s.mask())):
+        k = min(len(rows), 1 + i // step)
+        t = layer(k)
+        img = fr.astype(np.float32)
+        img = img * (1 - t * 0.92) + t * 0.92 * np.array(accent, np.float32)
+        img = img * (1 - m[..., None]) + fr.astype(np.float32) * m[..., None]
         out.append(u8(img))
     s.frames = np.stack(out)
 
@@ -798,7 +847,7 @@ def arrows(s: Shot) -> None:
 
 
 RUN = {
-    "silhouette": silhouette, "glow": glow, "solid": solid, "speedlines": speedlines, "pop": pop, "words": words,
+    "silhouette": silhouette, "glow": glow, "solid": solid, "speedlines": speedlines, "pop": pop, "words": words, "behind": behind,
     "strobe-light": strobe_light, "burst": burst, "starburst": starburst, "lightning": lightning, "sparks": sparks,
     "burn": burn, "endstrobe": endstrobe,
     "sketch": _look("sketch"), "blueprint": _look("blueprint"), "chalk": _look("chalk"), "flick": flick,

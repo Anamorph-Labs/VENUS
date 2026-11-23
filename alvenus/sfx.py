@@ -71,12 +71,147 @@ def hit(seconds: float = 0.9) -> np.ndarray:
     return np.stack([y, y * 0.96], 1)
 
 
+def _lowpass(x: np.ndarray, cutoff) -> np.ndarray:
+    """One-pole low-pass over a (n, 2) signal; cutoff in Hz (number or per-sample array)."""
+    n = len(x)
+    c = np.broadcast_to(np.asarray(cutoff, float), (n,))
+    a = np.exp(-2 * np.pi * c / SR)
+    y = np.zeros_like(x)
+    s = np.zeros(x.shape[1])
+    for i in range(n):
+        s = (1 - a[i]) * x[i] + a[i] * s
+        y[i] = s
+    return y
+
+
+def riser(seconds: float = 2.4) -> np.ndarray:
+    """Tension before a slam: noise whose filter opens and a tone gliding up,
+    growing until it stops dead at its peak (the end of the sound)."""
+    n = int(seconds * SR)
+    t = np.linspace(0, 1, n)
+    rng = np.random.default_rng(11)
+    air = _lowpass(rng.standard_normal((n, 2)), 200 + 7000 * t ** 2.2)
+    f = 110 * 2 ** (t * 2.0)
+    tone = np.sin(2 * np.pi * np.cumsum(f) / SR) + 0.5 * np.sin(4 * np.pi * np.cumsum(f * 1.01) / SR)
+    y = air * 0.9 + np.stack([tone, tone], 1) * 0.25
+    return y * (t ** 2.4)[:, None]
+
+
+def boom(seconds: float = 2.2) -> np.ndarray:
+    """The trailer impact: a deep sub drop with a hard crack on top and a long
+    dark tail, for a word slamming onto the screen."""
+    n = int(seconds * SR)
+    t = np.arange(n) / SR
+    f = 32 + 90 * np.exp(-t / 0.05)
+    sub = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / 0.7)
+    rng = np.random.default_rng(5)
+    crack = rng.standard_normal((n, 2)) * np.exp(-t / 0.025)[:, None] * 0.8
+    tail = _lowpass(rng.standard_normal((n, 2)), 380) * np.exp(-t / 0.9)[:, None] * 2.2
+    y = np.stack([sub, sub], 1) + crack + tail
+    y[: int(0.002 * SR)] *= np.linspace(0, 1, int(0.002 * SR))[:, None]
+    return y
+
+
+def braam(seconds: float = 2.6) -> np.ndarray:
+    """A low brassy blast (many detuned saw tones through a closing filter),
+    the big dark note under a title card."""
+    n = int(seconds * SR)
+    t = np.arange(n) / SR
+    y = np.zeros((n, 2))
+    for k, det in enumerate((-0.6, -0.25, 0.0, 0.3, 0.7)):
+        for base in (55.0, 82.4, 110.0):
+            ph = (base + det) * t + 0.13 * k
+            saw = 2 * (ph - np.floor(ph + 0.5))
+            y[:, k % 2] += saw
+    y = _lowpass(y, 2400 * np.exp(-t / 0.5) + 180)
+    env = np.minimum(1, t / 0.03) * np.exp(-t / 1.1)
+    return y * env[:, None]
+
+
+def snap(seconds: float = 0.18) -> np.ndarray:
+    """A bright flash-frame snap: a click and a short burst of high noise."""
+    n = int(seconds * SR)
+    t = np.arange(n) / SR
+    rng = np.random.default_rng(3)
+    x = rng.standard_normal((n, 2))
+    hi = x - _lowpass(x, 2500)
+    return hi * np.exp(-t / 0.02)[:, None]
+
+
+def glitch(seconds: float = 0.32, seed: int = 4) -> np.ndarray:
+    """Digital stutter for scrambled letters: chopped buzz and bit-crushed
+    noise in short random slices."""
+    rng = np.random.default_rng(seed)
+    n = int(seconds * SR)
+    t = np.arange(n) / SR
+    buzz = np.sign(np.sin(2 * np.pi * 180 * t)) * 0.5 + np.round(rng.standard_normal(n) * 3) / 6
+    gate = np.repeat(rng.random(n // 600 + 1) > 0.35, 600)[:n]
+    y = buzz * gate * np.exp(-t / 0.2)
+    return np.stack([y, np.roll(y, 90)], 1)
+
+
+def tick(seconds: float = 0.05) -> np.ndarray:
+    """A tiny mechanical click, for letters typing on or a line drawing."""
+    n = int(seconds * SR)
+    t = np.arange(n) / SR
+    rng = np.random.default_rng(9)
+    y = (rng.standard_normal(n) * 0.6 + np.sin(2 * np.pi * 2200 * t)) * np.exp(-t / 0.006)
+    return np.stack([y, y], 1)
+
+
+def swell(seconds: float = 1.4) -> np.ndarray:
+    """A reversed cymbal: shimmer that grows into the next moment and cuts off."""
+    n = int(seconds * SR)
+    t = np.linspace(0, 1, n)
+    rng = np.random.default_rng(13)
+    x = rng.standard_normal((n, 2))
+    shimmer = x - _lowpass(x, 3500)
+    return shimmer * (t ** 3)[:, None]
+
+
+def shutter(seconds: float = 0.16) -> np.ndarray:
+    """A camera shutter: two quick clicks, for a photo landing."""
+    a = tick()
+    y = np.zeros((int(seconds * SR), 2))
+    y[: len(a)] += a
+    k = int(0.07 * SR)
+    y[k: k + len(a)] += a * 0.7
+    return y
+
+
 # kind -> (sound, level in dBFS at its peak, where its peak sits in seconds)
 KINDS = {
     "whoosh": (whoosh, -17.0, 0.34),
     "pop": (pop, -24.0, 0.0),
     "hit": (hit, -19.0, 0.0),
+    "riser": (riser, -20.0, 2.4),   # (peaks at its very end: the moment it leads into)
+    "boom": (boom, -15.0, 0.0),
+    "braam": (braam, -18.0, 0.03),
+    "snap": (snap, -22.0, 0.0),
+    "glitch": (glitch, -24.0, 0.0),
+    "tick": (tick, -30.0, 0.0),
+    "swell": (swell, -24.0, 1.4),
+    "shutter": (shutter, -26.0, 0.0),
 }
+
+
+def export_pack(folder: Path) -> list[Path]:
+    """Write every sound as its own WAV file (free to use: made here from
+    numbers), so a person can drop them into any editor."""
+    folder.mkdir(parents=True, exist_ok=True)
+    out = []
+    for name, (make, level, _) in KINDS.items():
+        y = make()
+        y = y / (np.abs(y).max() or 1) * 10 ** (max(level, -12.0) / 20)
+        pcm = (np.clip(y, -1, 1) * 32767).astype("<i2")
+        p = folder / f"{name}.wav"
+        with wave.open(str(p), "wb") as w:
+            w.setnchannels(2)
+            w.setsampwidth(2)
+            w.setframerate(SR)
+            w.writeframes(pcm.tobytes())
+        out.append(p)
+    return out
 
 
 def write_track(path: Path, events: list[tuple[float, str]], total: float) -> None:

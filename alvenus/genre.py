@@ -28,6 +28,9 @@ LT_STYLES = ("bar", "doc")
 
 def matte(w: int, h: int) -> int:
     """Height of each letterbox bar in pixels (0 when there is none)."""
+    if EXTRAS.get("band"):  # the ultra-wide band: a thin strip of picture across black, on any frame, even vertical
+        r = float(EXTRAS["band"])
+        return max(0, round((h - w / r) / 2))
     r = EXTRAS.get("letterbox")
     if not r or h > w:
         return 0
@@ -60,6 +63,46 @@ def events(w: int, h: int, total: float, accent: str) -> list[str]:
         rows += verse_card(text, source, t0, t1, w, h, accent)
     for k, (role, name, t0, t1) in enumerate(EXTRAS.get("credits") or []):
         rows += credit(role, name, t0, t1, w, h, k)
+    for text, t0, t1 in EXTRAS.get("band_words") or []:
+        rows += band_words(text, t0, t1, w, h)
+    if EXTRAS.get("band_end"):
+        rows += band_end(*EXTRAS["band_end"], w, h)
+    return rows
+
+
+def band_words(text: str, t0: float, t1: float, w: int, h: int) -> list[str]:
+    """A line spread across the band, one word to a column with wide gaps
+    between, each word fading in a beat after the last (the Bali film on the
+    Venus 1 board)."""
+    ws = text.upper().split()
+    if not ws:
+        return []
+    band = h - 2 * matte(w, h)
+    size = round(min(band * 0.2, w * 0.045, w * 0.8 / max(4, len(" ".join(ws)) * 0.75)))
+    rows = []
+    for k, word in enumerate(ws):
+        x = round(w * (0.1 + 0.8 * (k + 0.5) / len(ws)))
+        a = t0 + 0.18 * k
+        rows.append(f"Dialogue: 6,{_t(a)},{_t(t1)},Card,,0,0,0,,{{\\an5\\pos({x},{h // 2})\\fnInter SemiBold\\fs{size}"
+                    f"\\fsp{round(size * 0.08)}\\bord0\\shad{max(1, size // 18)}\\4c&H80000000&\\1c&H00F4F4F4&\\fad(350,400)}}{_esc(word)}")
+    return rows
+
+
+def band_end(title: str, line: str, t0: float, t1: float, w: int, h: int) -> list[str]:
+    """The closing card in the band: the picture darkens to wine-black, a
+    serif name and under it a spaced-out line."""
+    bar = matte(w, h)
+    band = h - 2 * bar
+    big = round(min(band * 0.32, w * 0.09))
+    small = round(big * 0.32)
+    rows = [_rect(5, t0, t1 + 1, 0, bar, w, band, "&H00140A1E&", "\\fad(600,0)")]
+    rows.append(f"Dialogue: 7,{_t(t0 + 0.4)},{_t(t1 + 1)},Card,,0,0,0,,{{\\an2\\pos({w // 2},{h // 2 + round(big * 0.1)})\\fnLibre Baskerville"
+                f"\\fs{big}\\bord0\\shad0\\1c&H00F0F0F0&\\fad(500,0)}}{_esc(title.upper())}")
+    ws = line.upper().split()
+    for k, word in enumerate(ws):
+        x = round(w * (0.18 + 0.64 * (k + 0.5) / max(1, len(ws))))
+        rows.append(f"Dialogue: 7,{_t(t0 + 0.8 + 0.12 * k)},{_t(t1 + 1)},Card,,0,0,0,,{{\\an8\\pos({x},{h // 2 + round(big * 0.45)})"
+                    f"\\fnInter SemiBold\\fs{small}\\bord0\\shad0\\1c&H00E0E0E0&\\fad(300,0)}}{_esc(word)}")
     return rows
 
 

@@ -113,6 +113,49 @@ PRESETS: dict[str, dict] = {
         "scene_beat": 0.3, "look": "natural", "transition": "glitch", "transition_seconds": 0.3, "music_lufs": -16.0,
         "background": "aurora", "title_style": "stamp", "accent": "#FFD54A", "creative": True,
     },
+    "trailer": {
+        "about": "Film trailer / title tease: storyboard 'slam' cards (huge cropped credit words over old newsprint or red paint, "
+                 "a light sweeping across, settling small, wiped off by a black brush stroke), a 'date' card over red smoke, "
+                 "hard cuts, booms, risers and a braam under the cards.",
+        "aspect": "16:9", "captions": False, "caption_style": "classic", "max_pause": 0.5, "beat": 0.2,
+        "scene_beat": 0.6, "look": "doc", "transition": "cut", "music_lufs": -16.0,
+        "background": "dark", "title_style": "stamp", "accent": "#C0392B",
+    },
+    "video-essay": {
+        "about": "Political or cultural video essay: grey paper, black-and-white cut-outs, one red accent; key words as "
+                 "'scramble' cards whose letters swap for symbols and glitch before they land (TAXES -> F€$Y£).",
+        "aspect": "16:9", "captions": True, "caption_style": "pop", "max_pause": 0.45, "beat": 0.15,
+        "scene_beat": 0.5, "look": "mono", "transition": "glitch", "transition_seconds": 0.3, "music_lufs": -22.0,
+        "background": "grid", "title_style": "block", "accent": "#E3101A",
+    },
+    "interview-wall": {
+        "about": "Interview / talking head on a dark set: one word at a time in small mono brackets at chest height, "
+                 "and (with cut --behind LINE=WORDS) big red condensed words stacked on the wall behind the speaker.",
+        "aspect": "9:16", "captions": True, "caption_style": "bracket", "max_pause": 0.45, "beat": 0.2,
+        "scene_beat": 0.6, "look": "natural", "transition": "cut", "music_lufs": -26.0,
+        "background": "dark", "title_style": "stamp", "accent": "#C8102E",
+    },
+    "podcast-gold": {
+        "about": "Produced podcast clip: warm grade, each phrase small with its key word set large in gold italic serif above it, straight cuts on sentences.",
+        "aspect": "9:16", "captions": True, "caption_style": "keyword", "max_pause": 0.5, "beat": 0.2,
+        "scene_beat": 0.6, "look": "warm", "transition": "cut", "music_lufs": -26.0,
+        "background": "dark", "title_style": "type", "accent": "#E8B04A",
+    },
+    "data-explainer": {
+        "about": "Data explainer (Vox-like): line charts that draw themselves with a second line to compare, a shaded "
+                 "rise-over-run with its question, notes pinned to points, map pins that keep pulsing; ticks and pops under each.",
+        "aspect": "16:9", "captions": True, "caption_style": "pop", "max_pause": 0.5, "beat": 0.2,
+        "scene_beat": 0.7, "look": "natural", "transition": "crossfade", "transition_seconds": 0.4, "music_lufs": -25.0,
+        "background": "grid", "title_style": "block", "accent": "#E06C75",
+    },
+    "wide-band": {
+        "about": "Cinematic travel or music film as an ultra-wide band: the film a thin strip across black (even on a vertical "
+                 "frame), warm film grade, lines spread word by word across the band, a serif closing card. Best with montage "
+                 "(--band-words, --band-end).",
+        "aspect": "9:16", "captions": False, "caption_style": "classic", "max_pause": 0.6, "beat": 0.3,
+        "scene_beat": 1.0, "look": "film", "transition": "crossfade", "transition_seconds": 0.6, "music_lufs": -18.0,
+        "background": "dark", "title_style": "reveal", "accent": "#E8D9B0", "band": "4.74",
+    },
 }
 
 

@@ -241,6 +241,43 @@ hook and the payoff full frame unless the payoff *is* a number.
   `alvenus cutout clip.mp4 --out subject.mov` (person, object or plain
   background; free models fetched once, run on the computer).
 
+### Trailers, video essays, interviews, data and the wide band
+
+- **Trailer** (preset `trailer`, or `make --template trailer`): storyboard
+  `"slam"` cards: a huge credit word slams in cropped by the frame over
+  `"texture"` `newsprint`, `red` (paint), `charcoal` or `paper`, a light
+  sweeps across, then it settles small under `"small"` ("From the writer
+  of"); a black brush stroke wipes it (`"wipe": false` to hold it). End on a
+  `"date"` card (a date or line over red smoke, `"small"` under it). Booms,
+  risers and a braam come with the cards. Credits are real names the
+  creator gave you, never invented ones.
+- **Video essay** (preset `video-essay`): a `"scramble"` card shows one key
+  word whose letters swap for symbols and glitch, then land on `"to"` in a
+  black stamp (TAXES -> F€$Y£, Trust -> Nobody). One per idea that turns;
+  more than two in a video wears thin.
+- **Interviews** (`cut`): `--caption-style bracket` shows one word at a time
+  in small mono brackets at chest height (preset `interview-wall`);
+  `--caption-style keyword` sets each phrase small with its key word large in
+  gold italic serif above (preset `podcast-gold`; a highlighted word wins,
+  else the longest real word). `--behind 3="IDEAL MOMENT"` stacks big red
+  condensed words on the wall behind the speaker for line 3: the person is
+  cut out and stays in front (a free person model is fetched once). Use it
+  on the one line that carries the talk, not every line.
+- **Data explainer** (preset `data-explainer`): a `"line_chart"` can carry
+  more lines to compare (`"lines": [{"name": "Rent", "values": [...]}]`, one
+  value per point, and `"name"` for the first line, shown in a key), a shaded
+  rise-over-run (`"slope": {"from": 0, "to": 2, "label": "What is slope?"}`)
+  and short notes pinned to points (`"notes": [[3, "same hours"]]`). The last
+  map pin keeps pulsing. Only the creator's numbers, never made-up data.
+- **The wide band** (preset `wide-band`, or `montage --band`): the film as a
+  thin ultra-wide strip across black (4.74:1, even on a vertical frame),
+  `--band-words "Speak louder than words.|But it feels so pure."` spreads
+  each line word by word across the band through the film, `--band-end
+  "Bali|Lives forever in the heart"` closes on a serif card.
+- **Sound effects pack**: `alvenus sfx --out folder` writes every sound
+  (whoosh, pop, hit, riser, boom, braam, snap, glitch, tick, swell, shutter)
+  as a WAV the creator can use anywhere; made by Venus, free to use.
+
 ## 3. Check the setup (first time only)
 
 ```sh

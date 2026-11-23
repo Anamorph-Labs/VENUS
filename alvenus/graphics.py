@@ -5,7 +5,7 @@ no extra software; every piece is timed to the words as they are spoken."""
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .match import words as norm
 from .style import _esc, _t, ass_colour
@@ -161,6 +161,10 @@ class Chart:
     line: int
     bars: list  # [(label, value)]
     title: str = ""
+    more: list = field(default_factory=list)  # line charts: other lines [(name, [values])], same labels
+    slope: dict | None = None  # line charts: {"from": i, "to": j, "label": "..."}: a shaded rise-over-run triangle
+    notes: list = field(default_factory=list)  # line charts: [(point index, "words")] pinned to points
+    name: str = ""  # line charts with more lines: the first line's name (for the key)
 
 
 def parse_stats(items: list[str], n_lines: int) -> list[Stat]:
@@ -358,7 +362,8 @@ def line_chart_events(ch: Chart, start: float, end: float, w: int, h: int, accen
     base = round(h * (0.7 if vertical else 0.8))
     top = round(h * (0.34 if vertical else 0.3))
     vals = [v for _, v in ch.bars]
-    lo_v, hi_v = min(0.0, min(vals)), max(vals)
+    every = vals + [v for _, vs in ch.more for v in vs]
+    lo_v, hi_v = min(0.0, min(every)), max(every)
     span = (hi_v - lo_v) or 1.0
     n = len(vals)
     xs = [left + (right - left) * i / (n - 1) for i in range(n)]
@@ -381,6 +386,50 @@ def line_chart_events(ch: Chart, start: float, end: float, w: int, h: int, accen
     stroke += "".join(_dot(x, y, th * 0.5) for x, y in zip(xs[1:-1], ys[1:-1]))  # round the joints
     rows.append(f"Dialogue: 7,{_t(start)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{hi}{reveal}"
                 f"\\fad(0,200)}}{stroke}{{\\p0}}")
+    others = ["&H00F0F0F0&", "&H00A0A0A0&", "&H0080C8F0&"]  # more lines: white, grey, warm sand
+    for k, (name, vs) in enumerate(ch.more[:3]):
+        ys2 = [base - (base - top) * (v - lo_v) / span for v in vs[:n]]
+        c2 = others[k]
+        late = f"\\clip({left - th},0,{left - th},{h})\\t({ms0 + 350 * (k + 1)},{ms0 + 350 * (k + 1) + draw_ms},0.7,\\clip({left - th},0,{right + 3 * th},{h}))"
+        st2 = "".join(_seg(x0, y0, x1, y1, th * 0.8) for x0, y0, x1, y1 in zip(xs, ys2, xs[1:], ys2[1:]))
+        rows.append(f"Dialogue: 7,{_t(start)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{c2}{late}"
+                    f"\\fad(0,200)}}{st2}{{\\p0}}")
+    if ch.more:  # a small key, top right: a short stroke in each colour and its name
+        names = [(ch.name or "This", hi)] + [(nm, others[k]) for k, (nm, _) in enumerate(ch.more[:3])]
+        for k, (nm, c) in enumerate(names):
+            ky = round(h * (0.2 if vertical else 0.13)) + k * round(lab * 1.4)
+            rows.append(_rect(8, start + 0.4 + 0.15 * k, end, right - round(lab * 6), ky - th // 2, round(lab * 1.2), th, c, "\\fad(150,200)"))
+            rows.append(f"Dialogue: 8,{_t(start + 0.4 + 0.15 * k)},{_t(end)},CardText,,0,0,0,,{{\\an4\\pos({right - round(lab * 4.5)},{ky})"
+                        f"\\fs{lab}\\fnInter SemiBold\\fad(150,200)}}{_esc(nm)}")
+    if ch.slope and n > 1:  # the rise over run, shaded, with dashed legs and its question
+        a = max(0, min(n - 2, int(ch.slope.get("from", 0))))
+        b = max(a + 1, min(n - 1, int(ch.slope.get("to", n - 1))))
+        at = start + t0 + draw_ms / 1000 * (xs[b] - left) / max(1, right - left) + 0.2
+        tri = f"m {round(xs[a])} {round(ys[a])} l {round(xs[b])} {round(ys[b])} l {round(xs[b])} {round(ys[a])}"
+        rows.append(f"Dialogue: 6,{_t(at)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{hi}\\1a&HFF&"
+                    f"\\t(0,400,\\1a&HA0&)\\fad(0,200)}}{tri}{{\\p0}}")
+        dash = max(6, round(th * 2))
+        legs = ""
+        x = xs[a]
+        while x < xs[b]:  # run: dashed along the bottom
+            legs += _seg(x, ys[a], min(xs[b], x + dash), ys[a], max(2, th // 2))
+            x += dash * 2
+        y = ys[a]
+        while y > ys[b]:  # rise: dashed up the side
+            legs += _seg(xs[b], y, xs[b], max(ys[b], y - dash), max(2, th // 2))
+            y -= dash * 2
+        rows.append(f"Dialogue: 7,{_t(at + 0.15)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c{hi}\\fad(200,200)}}{legs}{{\\p0}}")
+        if ch.slope.get("label"):
+            rows.append(f"Dialogue: 8,{_t(at + 0.35)},{_t(end)},CardText,,0,0,0,,{{\\an4\\pos({round(xs[b] + lab)},{round((ys[a] + ys[b]) / 2)})"
+                        f"\\fs{round(lab * 1.1)}\\fnInter ExtraBold\\fad(200,200)}}{_esc(str(ch.slope['label']))}")
+    for idx, words in ch.notes[:4]:  # a short note pinned above a point, with a thin leader line
+        if 0 <= idx < n:
+            at = start + t0 + draw_ms / 1000 * (xs[idx] - left) / max(1, right - left) + 0.25
+            ny = max(top - lab * 2, ys[idx] - lab * 4)
+            rows.append(f"Dialogue: 7,{_t(at)},{_t(end)},Card,,0,0,0,,{{\\an7\\pos(0,0)\\p1\\bord0\\shad0\\1c&H00C8C8C8&\\fad(150,200)}}"
+                        f"{_seg(xs[idx], ys[idx] - lab * 2.2, xs[idx], ny + lab * 0.8, max(2, th // 3))}{{\\p0}}")
+            rows.append(f"Dialogue: 8,{_t(at + 0.1)},{_t(end)},CardText,,0,0,0,,{{\\an2\\pos({round(xs[idx])},{round(ny)})"
+                        f"\\fs{lab}\\fnDM Mono\\fad(150,200)}}{_esc(str(words).upper())}")
     step = max(1, n // 8)  # at most ~8 labels under the axis
     for i, (name, v) in enumerate(ch.bars):
         at = start + t0 + draw_ms / 1000 * (xs[i] - left) / max(1, right - left)
@@ -523,6 +572,11 @@ def pin_events(pins: list, start: float, end: float, w: int, h: int, accent: str
                f"\\fscx0\\fscy0\\t(0,160,\\fscx125\\fscy125)\\t(160,260,\\fscx100\\fscy100)\\fad(0,200)}}"
                f"{_disc(r)}{{\\p0}}")
         rows += [ring, dot]
+        if i == len(pts) - 1:  # the last pin keeps pulsing, like a radar ping on "here"
+            tt = t + 1.0
+            while tt + 0.9 < end:
+                rows.append(ring.replace(f"{_t(t)},{_t(min(end, t + 0.9))}", f"{_t(tt)},{_t(tt + 0.9)}"))
+                tt += 1.2
         if p.label:
             right = x < w * 0.7
             an, lx = (4, round(x + r * 2.2)) if right else (6, round(x - r * 2.2))

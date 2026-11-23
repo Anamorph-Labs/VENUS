@@ -77,7 +77,7 @@ def empty(sc: dict) -> str | None:
     t = sc.get("type")
     need = {"text": ("text",), "title": ("text",), "stat": ("value",), "chart": ("bars",), "line_chart": ("points",),
             "quote": ("text",), "timeline": ("items",), "list": ("items",), "clip": ("file",), "image": ("file",),
-            "archive": ("file",), "map": ("image", "pins")}.get(t, ())
+            "archive": ("file",), "map": ("image", "pins"), "slam": ("text",), "date": ("text",), "scramble": ("text",)}.get(t, ())
     for k in need:
         if sc.get(k) in (None, "", []):
             return f"no {k} yet"
