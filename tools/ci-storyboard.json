@@ -1,7 +1,7 @@
 {
   "aspect": "9:16",
   "scenes": [
-    {"type": "text", "text": "A test render.", "seconds": 2},
+    {"type": "text", "text": "Can you test Venus fast?", "seconds": 2},
     {"type": "stat", "value": "3", "label": "scenes", "seconds": 2},
     {"type": "title", "text": "Venus", "seconds": 2}
   ]

@@ -255,6 +255,8 @@ def install(src: str | None = None, log=print) -> dict:
         if m:
             want = m.group(1)
         log(f"Installing Venus {want or '(new)'}...")
+        # the path is our own freshly extracted copy, passed as one list item (no shell)
+        # nosemgrep
         r = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--upgrade", "--no-input", str(code.resolve())],  # nosec B603
                            capture_output=True, text=True)
         ok, info = (r.returncode == 0, (r.stderr or r.stdout)[-400:])
