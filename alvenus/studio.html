@@ -176,10 +176,18 @@ header .logo.dk,header .logo.word,:root[data-theme="dark"] header .logo.lt{displ
 @media (max-width:1180px){.cv-title .hint{display:none}}
 @media (max-width:1100px){.status{display:none}}
 @media (max-width:900px){.app{grid-template-columns:1fr;grid-template-rows:44px minmax(0,1fr) 40vh}aside{grid-column:1;border-left:0;border-top:1px solid var(--line)}}
+.upd{border-color:var(--accent)!important;color:var(--accent)}
+.updbox{position:fixed;top:52px;right:16px;z-index:30;width:min(380px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--hair);
+border-radius:20px;padding:16px 18px;box-shadow:var(--shadow);display:none}
+.updbox.on{display:block}
+.updbox h3{font:500 19px/1.25 Newsreader,Georgia,serif;margin:0 0 6px}
+.updbox ul{margin:6px 0 10px 18px;padding:0;font-size:13px;line-height:1.45}
+.updbox .small{font-size:12px;color:var(--soft);margin:6px 0 12px}
 </style></head><body>
 <div class="app">
 <header><div class="brand"><img class="logo full lt" src="/fonts/venus-lockup-light.svg" alt="Venus, by Anamorph Labs"><img class="logo full dk" src="/fonts/venus-lockup-dark.svg" alt="Venus, by Anamorph Labs"><img class="logo word lt" src="/fonts/venus-logo-light.svg" alt="Venus"><img class="logo word dk" src="/fonts/venus-logo-dark.svg" alt="Venus"></div><span class="file" id="file"></span>
 <span class="chip ai" id="aichip" style="display:none" title="nodes your AI changed in the last few minutes"></span>
+<button class="upd" id="upd" style="display:none" title="a new version of Venus is ready">New version</button>
 <span class="status" id="status"></span>
 <button id="undo" title="Undo (Ctrl+Z)">Undo</button><button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
 <button id="vset">Video settings</button><button id="sound">Sound</button>
@@ -209,6 +217,9 @@ header .logo.dk,header .logo.word,:root[data-theme="dark"] header .logo.lt{displ
 </div>
 <aside id="insp"></aside>
 </div>
+<div class="updbox" id="updbox" role="dialog" aria-label="new version of Venus"><h3 id="updh"></h3><ul id="updnotes"></ul>
+<p class="small" id="updsmall">Your videos and node files stay as they are. The version you have now is kept, and it comes back on its own if the new one does not start.</p>
+<div class="btns"><button class="primary" id="updgo">Update now</button><button id="updlater">Later</button></div></div>
 <div class="toast" id="toast"></div><div class="wtip" id="wtip"></div>
 <script>
 const $ = s => document.querySelector(s);
@@ -926,10 +937,40 @@ $('#strip').addEventListener('dragover', e => { const c = e.target.closest('.cli
   document.querySelectorAll('.clip.drop').forEach(x => x.classList.remove('drop')); c.classList.add('drop'); });
 $('#strip').addEventListener('drop', e => { const c = e.target.closest('.clip[data-scene]'); e.preventDefault();
   if (c && dragScene && c.dataset.scene !== dragScene) op('/api/move', {scene: dragScene, before: c.dataset.scene}); dragScene = null; });
+// ---- a new Venus: a quiet note in the header, one click to update, Studio restarts itself on the new version
+let UPD = null, updWait = null;
+function showUpd(c) {
+  UPD = c; const b = $('#upd'); if (!c || !c.update) { b.style.display = 'none'; return; }
+  let later = 0; try { later = +(localStorage.getItem('venus-upd-later-' + c.latest) || 0); } catch (e) {}
+  b.style.display = Date.now() - later < 864e5 ? 'none' : ''; b.textContent = 'Venus ' + c.latest + ' is ready';
+}
+async function checkUpd() {
+  try {
+    const r = await api('/api/update');
+    if (updWait) {  // waiting for Studio to come back on the new version
+      if (r.result && !r.result.ok) { updWait = null; $('#updbox').classList.remove('on'); return toast('Could not update: ' + (r.result.why || 'unknown') + '. Your Venus is unchanged.', 'bad'); }
+      if (r.check && r.check.installed !== updWait.from) { location.reload(); }
+      return;
+    }
+    if (r.check) showUpd(r.check); else setTimeout(checkUpd, 2000);  // the first look runs in the background
+  } catch (e) { /* Studio is restarting, or offline: try again later */ }
+}
+$('#upd').addEventListener('click', () => {
+  if (!UPD) return; $('#updh').textContent = 'Venus ' + UPD.latest + ' is ready (you have ' + UPD.installed + ')';
+  $('#updnotes').innerHTML = (UPD.whats_new || []).flatMap(r => r.notes).slice(0, 8).map(n => '<li>' + esc(n) + '</li>').join('') || '<li>Fixes and improvements.</li>';
+  $('#updgo').disabled = false; $('#updgo').textContent = 'Update now'; $('#updbox').classList.toggle('on');
+});
+$('#updlater').addEventListener('click', () => { $('#updbox').classList.remove('on'); try { localStorage.setItem('venus-upd-later-' + UPD.latest, Date.now()); } catch (e) {} showUpd(UPD); });
+$('#updgo').addEventListener('click', async () => {
+  $('#updgo').disabled = true; $('#updgo').textContent = 'Updating… (about a minute)';
+  try { await api('/api/update', {}); updWait = {from: UPD.installed}; setInterval(checkUpd, 1500); }
+  catch (e) { $('#updgo').disabled = false; $('#updgo').textContent = 'Update now'; toast('Could not update: ' + e.message, 'bad'); }
+});
 window.addEventListener('resize', () => { fitFrame(); if (sel.scene) { drawWires(); applyView(); } });
 (async () => {
   SC = await api('/api/schema'); const st = await api('/api/state'); sel.scene = st.scenes[0]?.id; sel.node = 'out'; apply(st, true);
   try { if (!localStorage.getItem('venus-tips-seen')) $('#tips').style.display = ''; } catch (e) {}
   setInterval(() => refresh(false), 1000);
+  setTimeout(checkUpd, 2500); setInterval(checkUpd, 6 * 3600e3);
 })();
 </script></body></html>

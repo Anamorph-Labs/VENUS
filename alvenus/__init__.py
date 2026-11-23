@@ -1,8 +1,8 @@
-"""AL-VENUS: script-to-cut video agent (working name)."""
+"""AL-VENUS: script-to-cut video agent ."""
 
 import os as _os
 
-__version__ = "0.0.1"
+__version__ = "0.9.0"
 
 # Homebrew's plain ffmpeg on macOS has no libass, so it cannot draw words on video.
 # install.sh adds ffmpeg-full (kept apart by Homebrew); use it first when it is there.

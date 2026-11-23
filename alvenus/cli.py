@@ -1469,6 +1469,10 @@ def main(argv: list[str] | None = None) -> None:
     b.add_argument("--out-dir", help="where to write broll.json and the sheets (default: the folder scanned)")
     b.set_defaults(func=cmd_scan)
 
+    from .update import add_parser as add_update
+
+    add_update(sub)
+
     d = sub.add_parser("doctor", help="check that FFmpeg, Python packages and models are ready")
     d.set_defaults(func=cmd_doctor)
 

@@ -15,6 +15,23 @@ Venus makes three kinds of video. Pick by what the creator has:
 | A folder of clips and a song, no speaking | a music edit | `alvenus montage` (section 8) |
 | An idea, plus some clips or images (or none) | a video built scene by scene | `alvenus make` (section 9) |
 
+## 0. At the start of every session: is Venus up to date?
+
+Run `alvenus update --check --json` once, before anything else. It answers in
+a second (and quietly says so when it is offline):
+
+- `"update": false` → say nothing and carry on.
+- `"update": true` → tell the creator in one line, using the notes in
+  `whats_new` ("Venus 0.9.1 is ready: faster previews, a new paper texture.
+  Install it now?"). **Install only after they say yes**: `alvenus update --yes --json`.
+  Venus backs up the current version first, starts the new one to check it,
+  and puts the old one back on its own if it does not start (`"rolled_back": true`
+  in the answer: tell them nothing changed). Their videos and node files are never touched.
+- They regret it later → `alvenus update --rollback`.
+
+Studio shows the same note in its header with an Update button, so a creator
+working there needs nothing from you.
+
 ## 1. Understand what they want
 
 Before cutting, know these. Infer what you can from the conversation and the

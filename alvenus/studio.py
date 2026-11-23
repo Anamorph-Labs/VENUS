@@ -15,6 +15,7 @@ Nothing leaves the computer; no paid service is called.
 from __future__ import annotations
 
 import copy
+import os
 import hashlib
 import json
 import subprocess
@@ -93,6 +94,8 @@ class Studio:
         self.by_ai: dict[str, float] = {}  # node id -> when the AI (or anything outside Studio) changed it
         self.render = {"state": "idle"}
         self.playing: dict[str, str] = {}
+        self.upd: dict = {}  # new-version check and the update in progress
+        self.port = 8765
         self._load(first=True)
 
     # ------------------------------------------------------------ the file
@@ -275,6 +278,49 @@ class Studio:
 
         threading.Thread(target=go, daemon=True).start()
 
+    def update_state(self, now: bool = False) -> dict:
+        from . import update as up
+
+        u = self.upd
+        if u.get("busy"):
+            return {"busy": True, "log": list(u.get("log", []))}
+        if u.get("done"):  # report how it went once (on success Studio restarts on the new version)
+            u["done"] = False
+            return {"busy": False, "result": u.get("result"), "check": u.get("check")}
+        if now or "check" not in u:
+            def go():
+                u["check"] = up.check(quiet_cache=not now)
+            if now:
+                go()
+            elif not u.get("checking"):
+                u["checking"] = True
+                threading.Thread(target=go, daemon=True).start()
+        return {"check": u.get("check"), "busy": False}
+
+    def start_update(self) -> dict:
+        """Install the new version in the background, then restart Studio on it (the page reloads itself)."""
+        from . import update as up
+
+        u = self.upd
+        if u.get("busy"):
+            return {"busy": True}
+        u.update(busy=True, log=[], done=False)
+
+        def go():
+            try:
+                res = up.install(log=lambda m: u["log"].append(m))
+            except SystemExit as e:
+                res = {"ok": False, "why": str(e)}
+            except Exception as e:  # never leave the page waiting
+                res = {"ok": False, "why": f"{type(e).__name__}: {e}"}
+            u.update(busy=False, done=True, result=res)
+            if res.get("ok"):  # start the new Studio in place of this one, on the same file and port
+                time.sleep(1.2)
+                os.execv(sys.executable, [sys.executable, "-m", "alvenus", "studio", str(self.path),  # nosec B606
+                                          "--port", str(self.port), "--no-open"])
+        threading.Thread(target=go, daemon=True).start()
+        return {"busy": True}
+
 
 def handler(st: Studio):
     page = (Path(__file__).with_name("studio.html")).read_text(encoding="utf-8")
@@ -332,6 +378,8 @@ def handler(st: Studio):
                     kind = {".woff2": "font/woff2", ".png": "image/png", ".svg": "image/svg+xml", ".ico": "image/x-icon"}.get(f.suffix)  # type, logo and tab icon
                     if kind and f.exists():
                         return self._send(200, f.read_bytes(), kind)
+                if u.path == "/api/update":  # is a new Venus ready? (checked quietly, a few times a day)
+                    return self._json(st.update_state(q.get("now") == "1"))
                 if u.path == "/api/state":
                     st.poll()
                     return self._json(st.state())
@@ -410,6 +458,8 @@ def handler(st: Studio):
                     st.undo(redo=True)
                 elif op == "render":
                     st.start_render()
+                elif op == "update":  # the person pressed Update: back up, install, check, roll back on failure
+                    return self._json(st.start_update())
                 else:
                     return self._json({"error": "unknown"}, 404)
             except (ValueError, KeyError) as e:
@@ -431,6 +481,7 @@ def serve(path: Path, port: int = 8765, open_browser: bool = True) -> None:
             continue
     else:
         raise SystemExit("no free port for Studio")
+    st.port = p
     url = f"http://127.0.0.1:{p}/"
     print(f"Venus is open at {url} (press Ctrl+C to close it)")
     print(f"Your AI can work on the same file: alvenus nodes show {path}; descriptions you write wait in: alvenus nodes listen {path}")

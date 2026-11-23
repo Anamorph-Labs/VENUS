@@ -31,6 +31,12 @@ alvenus cut --script examples/night2/script.txt \
   --takes examples/out/clips --out examples/out/cut.mp4 --captions
 ```
 
+**Staying up to date.** `alvenus update --check` says whether a new version is
+ready and what is new; `alvenus update` installs it with one yes. The version you
+have is backed up first, and if the new one does not start, it comes back on its
+own (`alvenus update --rollback` goes back by hand). Studio shows a note with an
+Update button. What changed in each version: [CHANGES.md](CHANGES.md).
+
 Next to the MP4 you get:
 
 - `cut.xml`: the edit, for Premiere Pro (File > Import) or DaVinci Resolve (File >

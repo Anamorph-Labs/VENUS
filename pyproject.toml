@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alvenus"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Free, local script-to-cut video editing: best take per script line."
 readme = "README.md"
 license = { text = "MIT" }
@@ -13,6 +13,9 @@ dependencies = ["numpy", "onnxruntime", "pillow"]
 
 [project.scripts]
 alvenus = "alvenus.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "alvenus.__version__" }
 
 [tool.setuptools]
 packages = ["alvenus"]
