@@ -1,41 +1,64 @@
-# AL-VENUS (working name)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="alvenus/studio_fonts/venus-lockup-dark.svg">
+    <img src="alvenus/studio_fonts/venus-lockup-light.svg" alt="Venus by Anamorph Labs" width="320">
+  </picture>
+</p>
 
-A free, local video agent. Phase 1: **script-to-cut**. Give it your script and
-your raw footage (one long recording or a folder of clips); it finds each take, works out which
-script line it is, picks the best take per line and cuts the video.
+<h3 align="center">A free video editor that tells a story, on your own computer.</h3>
 
-Everything runs on your own computer. No accounts, no API keys, no uploads.
+<p align="center">
+Describe a video, or hand it your footage. Venus lays out the story, your own AI writes it,<br>
+you read the storyboard, and nothing is made until you press Render.
+</p>
+
+<p align="center">
+  <img src="docs/demo-paper.gif" alt="A 30 second reel Venus made from one sentence, with no footage" width="240">
+</p>
+
+- **From an idea.** Type one sentence in Studio. Venus lays it out by a story recipe (a hook, the steps, a turn, the payoff), your AI writes each scene while you watch, and Venus draws the pictures itself: no footage, no stock sites, no AI image credits.
+- **From your footage.** Give it your script and your takes: it hears every take, picks the best one per line and cuts the video, with captions and a timeline for Premiere or Resolve.
+- **From your clips and a song.** Every cut on the beat, the strongest moment on the drop, or the fast "creative edit" look with cut-outs and light.
+- **It checks the story, not only the pixels.** Does the hook make you stay, one idea per scene, a turn in the middle, an ending that lands, every number with its source. Then three directions to pick from at a glance.
+
+Free and private: everything runs on your computer. No account, no API keys, no uploads, no watermark. MIT licence.
+
+## Install in 3 steps
+
+1. Get the code: `git clone https://github.com/Anamorph-Labs/AL-VENUS && cd AL-VENUS` (or **Code > Download ZIP** above).
+2. Run the installer: `bash install.sh` on macOS or Linux, `powershell -ExecutionPolicy Bypass -File install.ps1` on Windows. It checks Python 3.10+, adds FFmpeg if it is missing, keeps Venus in its own folder and downloads the free models once.
+3. Start Studio: `alvenus studio`, then describe your video. Tell your AI (Claude Code, Codex...) *"Venus has a new idea for you"* and it takes it from there ([AGENTS.md](AGENTS.md) is its guide).
+
+Venus checks for new versions by itself: Studio shows a note with an Update button, and `alvenus update` installs one with a backup that comes back on its own if anything goes wrong. What changed: [CHANGES.md](CHANGES.md).
+
+| Describe your video | Read the story before anything is made | Three directions, one click |
+|---|---|---|
+| ![Studio's describe box](docs/studio-describe.jpg) | ![The story check before Render](docs/studio-story-check.jpg) | ![Three directions](docs/studio-directions.jpg) |
+
+Pictures without footage, drawn in each look (5,491 free icons and 19 scenes, in your colours):
+
+![Pictures in each look](docs/pictures-in-each-look.jpg)
 
 Venus is started by Anamorph Labs and grows with the people who use it: see
 [How ideas become Venus features](CONTRIBUTING.md). Ideas are welcome from anyone
 (ask your AI to run `alvenus suggest`); code is never added directly, every
 proposal is scanned, and Anamorph Labs builds the good ones and credits you.
 
-It is meant to be driven by your own AI agent (Claude Code, Codex, ...), which
-brings the understanding and the storytelling: see [AGENTS.md](AGENTS.md).
+## Cut your own footage
 
-## Try it
-
-One step: `bash install.sh` (macOS, Linux) or `powershell -ExecutionPolicy Bypass
--File install.ps1` (Windows). It checks Python 3.10+, installs FFmpeg if it is
-missing (Homebrew, apt or winget), puts Venus in its own folder, downloads the free
-models once (`--small` for the lighter listener, `--find` for footage search) and
-runs `alvenus doctor`. Or by hand, with Python 3.10+ and [FFmpeg](https://ffmpeg.org/download.html):
+Give it your script and your raw footage (one long recording or a folder of clips);
+it finds each take, works out which script line it is, picks the best take per line
+and cuts the video.
 
 ```sh
-pip install .                           # gives you the `alvenus` command
 alvenus doctor                          # checks FFmpeg, packages and models
-alvenus fetch-models                    # one-time ~1.5 GB download of Whisper small.en
 python examples/fakeshoot.py night2 examples/out   # fake test shoot: 5 clip files (needs FFmpeg with Flite)
 alvenus cut --script examples/night2/script.txt \
   --takes examples/out/clips --out examples/out/cut.mp4 --captions
 ```
 
-**Staying up to date.** `alvenus update --check` says whether a new version is
-ready and what is new; `alvenus update` installs it with one yes. The version you
-have is backed up first, and if the new one does not start, it comes back on its
-own (`alvenus update --rollback` goes back by hand). Studio shows a note with an
-Update button. What changed in each version: [CHANGES.md](CHANGES.md).
+By hand instead of the installer: `pip install .` (Python 3.10+ and [FFmpeg](https://ffmpeg.org/download.html)),
+then `alvenus fetch-models` (a one-time ~1.5 GB download of Whisper small.en; `--small` for a lighter one).
 
 Next to the MP4 you get:
 

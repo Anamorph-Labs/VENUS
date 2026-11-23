@@ -9,3 +9,4 @@ so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 - Describe your video in Studio: type the idea on the welcome page, Venus lays the story out at once, your AI writes each scene while you watch, and nothing is made until you press Render.
 - Three directions for every idea: your look, the opposite energy and a tighter cut, each with frames and its story check, to pick from before anything is made (`alvenus directions`, or the 3 directions button in Studio).
 - A sharper story check: does the hook pull you in, does any scene say two things, is the ending short and given time to land. The board opens with the story at a glance.
+- Easier first steps: the installer ends with `alvenus studio`, and `alvenus` on its own shows where to start.
