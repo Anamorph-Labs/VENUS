@@ -1116,9 +1116,13 @@ def _frame_at(path: str, ts: float):
 
     if _still(path):
         return Image.open(path)
-    raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-ss", f"{max(0.0, ts):.3f}", "-i", path, "-frames:v", "1",
-                          "-f", "image2pipe", "-vcodec", "png", "-"], capture_output=True, check=True).stdout
-    return Image.open(io.BytesIO(raw))
+    # a time past the clip's end gives no frame: fall back to its last frame, then its first
+    for seek in (["-ss", f"{max(0.0, ts):.3f}"], ["-sseof", "-0.5"], ["-ss", "0"]):
+        raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", *seek, "-i", path, "-frames:v", "1",
+                              "-f", "image2pipe", "-vcodec", "png", "-"], capture_output=True, check=False).stdout
+        if raw:
+            return Image.open(io.BytesIO(raw))
+    raise ValueError(f"no picture could be read from {path}")
 
 
 def still(sc: dict, w: int, h: int, d: float, t: float, out: Path) -> None:
