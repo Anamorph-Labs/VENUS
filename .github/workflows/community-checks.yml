@@ -23,7 +23,8 @@ jobs:
         with: {python-version: "3.12"}
       - run: pip install numpy pillow
       - name: Only add-on data, valid, nothing private, own work
-        if: github.event_name == 'pull_request'
+        # only proposals from outside (a fork); the team's own branches change code on purpose
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
         env:
           BASE: ${{ github.base_ref }}
         run: python tools/addon_guard.py "origin/$BASE"
