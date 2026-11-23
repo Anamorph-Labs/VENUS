@@ -7,6 +7,8 @@
 
 <h3 align="center">A free video editor that tells a story, on your own computer.</h3>
 
+<p align="center"><a href="https://anamorphlabs.com/venus/">Read the announcement</a></p>
+
 <p align="center">
 Describe a video, or hand it your footage. Venus lays out the story, your own AI writes it,<br>
 you read the storyboard, and nothing is made until you press Render.
