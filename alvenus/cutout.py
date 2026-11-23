@@ -135,7 +135,7 @@ def object_mask(frame: np.ndarray) -> np.ndarray:
     import hashlib
 
     h, w = frame.shape[:2]
-    key = (hashlib.sha1(frame[::8, ::8].tobytes()).hexdigest(), w, h)  # nosec B324 (a cache key, not security)
+    key = (hashlib.sha256(frame[::8, ::8].tobytes()).hexdigest(), w, h)  # a cache key
     if key in _CACHE:
         return _CACHE[key]
     sess = _session("object")
