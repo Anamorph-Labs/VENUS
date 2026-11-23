@@ -153,6 +153,16 @@ parts, short shots that kick on each beat in the loud parts, and the strongest
 movement with a flash and a speed ramp on the drop. The shot list is written to
 `reel.montage.json`; edit it and run `alvenus montage --plan reel.montage.json`.
 
+Creative edits: `alvenus montage --clips shots/ --music song.mp3 --out reel.mp4
+--style creative-edit` makes the surreal fast reel: a cut every half beat,
+silhouettes and glowing figures, light strobes, bursts and lightning, photos
+flickering with their sketch or blueprint, cut-outs on flipping colours, and an
+ending that turns to dots. Pictures (AI images, photos) work as clips. One clip
+at a time: `alvenus fx clip.mp4 --fx silhouette --out x.mp4` (`alvenus fx --list`
+shows all 26 effects). `alvenus cutout clip.mp4 --out subject.mov` lifts a person
+or object off the background for any editor. The cut-out models are free
+(U-2-Net and MODNet, Apache-2.0), fetched once, and run on your computer.
+
 `alvenus make storyboard.json --out video.mp4` builds a video scene by scene from
 a storyboard your AI writes from your idea: clips, images, titles, kinetic text,
 counting numbers, bar and line charts, timelines, quotes, maps with pins and

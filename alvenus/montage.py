@@ -31,6 +31,8 @@ from .media import duration, has_video, run, video_size
 
 SW, SH, AFPS = 96, 54, 4.0  # analysis frame size and samples per second
 VIDEO = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi", ".mts"}
+IMAGES = {".png", ".jpg", ".jpeg", ".webp"}  # stills (AI pictures, photos) count as clips this long:
+STILL = 3.0
 
 
 # --- 1. Looking at the clips -------------------------------------------------
@@ -50,13 +52,18 @@ class ClipInfo:
 def analyse(path: Path) -> ClipInfo:
     import subprocess
 
-    raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(path), "-an", "-vf",
+    still = path.suffix.lower() in IMAGES
+    pre = ["-loop", "1", "-t", "1"] if still else []
+    raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", *pre, "-i", str(path), "-an", "-vf",
                           f"fps={AFPS:g},scale={SW}:{SH}:flags=area", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
                          capture_output=True).stdout
     n = len(raw) // (SW * SH * 3)
     f = np.frombuffer(raw[: n * SW * SH * 3], np.uint8).reshape(n, SH, SW, 3).astype(np.float32)
+    if still and n:  # a picture: the same frame for STILL seconds, nothing moving
+        n = int(STILL * AFPS)
+        f = np.repeat(f[:1], n, axis=0)
     if n == 0:
-        return ClipInfo(str(path), duration(path), video_size(path) or (0, 0), [0.0], [0.0], [0.0], [0.0])
+        return ClipInfo(str(path), STILL if still else duration(path), video_size(path) or (0, 0), [0.0], [0.0], [0.0], [0.0])
     g = f.mean(axis=3)
     diff = np.abs(np.diff(g, axis=0, prepend=g[:1])).mean(axis=(1, 2))
     lap = np.abs(4 * g[:, 1:-1, 1:-1] - g[:, :-2, 1:-1] - g[:, 2:, 1:-1] - g[:, 1:-1, :-2] - g[:, 1:-1, 2:]).mean(axis=(1, 2))
@@ -65,7 +72,7 @@ def analyse(path: Path) -> ClipInfo:
     med = float(np.median(diff[1:])) if n > 2 else 0.0
     cuts = [round(i / AFPS, 2) for i in range(1, n) if diff[i] > max(25.0, 6 * med + 8)]
     motion = np.where(np.isin(np.arange(n), [int(c * AFPS) for c in cuts]), med, diff)
-    return ClipInfo(str(path), round(duration(path), 3), video_size(path) or (0, 0),
+    return ClipInfo(str(path), STILL if still else round(duration(path), 3), video_size(path) or (0, 0),
                     [round(float(x) / 30, 4) for x in motion], [round(float(x), 2) for x in lap],
                     [round(float(x), 1) for x in g.mean(axis=(1, 2))], [round(float(x), 1) for x in sat], cuts)
 
@@ -74,8 +81,8 @@ def find_clips(items: list[str]) -> list[Path]:
     files: list[Path] = []
     for it in items:
         p = Path(it)
-        files += sorted(x for x in p.iterdir() if x.suffix.lower() in VIDEO) if p.is_dir() else [p]
-    return [f for f in files if f.exists() and has_video(f)]
+        files += sorted(x for x in p.iterdir() if x.suffix.lower() in VIDEO | IMAGES) if p.is_dir() else [p]
+    return [f for f in files if f.exists() and (f.suffix.lower() in IMAGES or has_video(f))]
 
 
 # --- 2. Listening to the song -------------------------------------------------
@@ -119,6 +126,8 @@ class Shot:
     pulse: float = 0.0  # a quick zoom bump on every beat (loud parts), this much bigger
     beat: float = 0.5  # seconds per beat, for the pulse
     frame: list | None = None  # [zoom, x, y]: reframed to line up with the shot before (a match cut)
+    fx: list = field(default_factory=list)  # creative effects, in order (see fx.py), e.g. ["solid", "speedlines"]
+    fxo: dict = field(default_factory=dict)  # their settings, e.g. {"copies": 3, "size": 0.22}
 
     def source_length(self) -> float:
         s1 = self.speed if self.speed_end is None else self.speed_end
@@ -135,8 +144,15 @@ def _quality(ci: ClipInfo, a: int, b: int) -> float:
 
 
 def plan(clips: list[ClipInfo], beats: list[float], energy: list[float], down: int,
-         total: float, seed: int = 0) -> list[Shot]:
+         total: float, seed: int = 0, fast: bool = False, in_order: bool = False) -> list[Shot]:
+    """fast: the creative-edit rhythm. Cuts land on beats and half-beats, a
+    shot lasts one beat in quiet parts and half a beat when it's loud."""
     rng = np.random.default_rng(seed)
+    if fast and len(beats) > 1:
+        half = [(a + b) / 2 for a, b in zip(beats, beats[1:])]
+        beats = sorted(beats + half)
+        energy = [e for e in energy for _ in (0, 1)][: len(beats)]
+        down *= 2
     all_motion = np.concatenate([np.array(c.motion) for c in clips]) if clips else np.array([0.0])
     m_lo, m_hi = np.percentile(all_motion, 10), np.percentile(all_motion, 90)
     lum_target = float(np.median(np.concatenate([np.array(c.luma) for c in clips])))
@@ -153,6 +169,8 @@ def plan(clips: list[ClipInfo], beats: list[float], energy: list[float], down: i
         n = 4 if e < 0.4 else 2 if e < 0.75 else (1 if (len(shots) % 3 == 2) else 2)
         if n == 4 and (i - down) % 2:  # long shots start on the stronger beats
             n = 3
+        if fast:
+            n = 2 if e < 0.5 else 1
         if drop:
             n = max(n, 2)
         j = min(i + n, len(cuts) - 1)
@@ -169,6 +187,8 @@ def plan(clips: list[ClipInfo], beats: list[float], energy: list[float], down: i
         best, best_score = None, -1e9
         for ci in clips:
             if ci.path == last_clip and len(clips) > 1:
+                continue
+            if in_order and ci is not clips[len(shots) % len(clips)]:  # the clips' own order tells the story
                 continue
             for s in np.arange(0.0, max(0.0, ci.seconds - need) + 1e-6, 0.25):
                 e_ = s + need
@@ -278,12 +298,22 @@ def render(shots: list[Shot], music: Path, out: Path, size: str, fps: float = 30
         need = sh.source_length() + 0.2
         track = None
         sw, shh = sizes[sh.clip]
-        if reframe_wide and sw / max(shh, 1) > 1.15 * w / h:
+        still = Path(sh.clip).suffix.lower() in IMAGES
+        if reframe_wide and not still and sw / max(shh, 1) > 1.15 * w / h:
             from .reframe import track as follow
             track = follow(Path(sh.clip), sh.start, sh.start + need)
-        run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-ss", f"{sh.start:.3f}", "-t", f"{need:.3f}", "-i", sh.clip, "-an",
+        src = ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{need:.3f}", "-i", sh.clip] if still else \
+              ["-ss", f"{sh.start:.3f}", "-t", f"{need:.3f}", "-i", sh.clip]
+        dest = tmp / f"s{k:04d}.mp4"
+        run(["ffmpeg", "-nostdin", "-y", "-v", "error", *src, "-an",
              "-vf", _shot_filter(sh, sizes[sh.clip], w, h, fps, look, track),
-             "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", str(tmp / f"s{k:04d}.mp4")])
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", str(dest)])
+        if sh.fx:  # creative effects work on the finished frames of the shot
+            from .fxrender import apply_file
+
+            raw = tmp / f"r{k:04d}.mp4"
+            dest.rename(raw)
+            apply_file(raw, dest, sh.fx, sh.fxo, seed=k)
 
     try:
         with ThreadPoolExecutor(max(1, min(3, (os.cpu_count() or 2) - 1))) as pool:
@@ -315,7 +345,8 @@ def save_plan(path: Path, shots: list[Shot], settings: dict) -> None:
     path.write_text(json.dumps({
         "_how_to_use": "Change any shot (clip, start second, length, speed, speed_end for a ramp, push, flash) or "
                        "the settings, then run: alvenus montage --plan THIS_FILE. Shot lengths follow the music's beat; "
-                       "keep their sum the same to stay on the beat.",
+                       "keep their sum the same to stay on the beat. Creative edits: each shot's fx lists its effects in order and "
+                       "fxo their settings (see: alvenus fx --list).",
         **settings, "shots": [asdict(s) for s in shots]}, indent=2), encoding="utf-8")
 
 

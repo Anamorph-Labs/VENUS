@@ -105,6 +105,14 @@ PRESETS: dict[str, dict] = {
         "scene_beat": 0.45, "look": "travel", "transition": "leak", "transition_seconds": 0.6, "music_lufs": -18.0,
         "background": "aurora", "title_style": "place", "accent": "#FFB347",
     },
+    "creative-edit": {
+        "about": "Creative edit: surreal fast music reel. A cut every half beat; silhouettes (glowing, black on a rim of red light), "
+                 "light strobes, bursts and lightning; photos flickering with their sketch or blueprint; cut-outs on flipping "
+                 "colours; ends in dots and a black-and-white strobe. Best with montage (stills and AI pictures welcome).",
+        "aspect": "9:16", "captions": False, "caption_style": "pop", "max_pause": 0.3, "beat": 0.1,
+        "scene_beat": 0.3, "look": "natural", "transition": "glitch", "transition_seconds": 0.3, "music_lufs": -16.0,
+        "background": "aurora", "title_style": "stamp", "accent": "#FFD54A", "creative": True,
+    },
 }
 
 

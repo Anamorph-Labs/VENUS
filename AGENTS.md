@@ -206,6 +206,23 @@ hook and the payoff full frame unless the payoff *is* a number.
   another and lined up, the later shot pushed in and moved so the subject
   stays put. Suggest it when the clips repeat a subject: faces, eyes, hands,
   silhouettes, the same object in many places.
+- **Creative edit** (preset `creative-edit`, or `montage --creative`): the
+  surreal fast reel. A cut every half beat; silhouettes (a black figure on a
+  rim of red light, glowing yellow figures with copies popping in), light
+  strobes, bursts, lightning, a photo flickering with its sketch or
+  blueprint, negative and x-ray frames, cut-outs on a colour that flips
+  every two frames, and an ending that turns to dots and strobes. Stills and
+  AI pictures work as clips. `--in-order` keeps the clips in the order given
+  (seed, sprout, plant; stone, wheel, tyre: a thing changing step by step).
+  `--words "HIGHS AND LOWS"` sets words behind the subject of one shot;
+  `--shape infinity` (or heart, circle, any short text) is what the final
+  dots gather into. Every shot's effects are in the plan (`fx`, `fxo`): read
+  `alvenus fx --list`, change them, and render again with `--plan`. It
+  flashes a lot: tell the creator to add a flashing-lights warning when they
+  post it. One shot alone: `alvenus fx clip.mp4 --fx glow --opt copies=3
+  --out x.mp4`; a subject lifted off its background for any editor:
+  `alvenus cutout clip.mp4 --out subject.mov` (person, object or plain
+  background; free models fetched once, run on the computer).
 
 ## 3. Check the setup (first time only)
 

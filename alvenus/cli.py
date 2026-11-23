@@ -535,6 +535,34 @@ def montage_extras(a, shots) -> dict:
     return ex
 
 
+def cmd_fx(a: argparse.Namespace) -> None:
+    from . import fx
+    from .fxrender import apply_file, parse_opts
+
+    if a.list:
+        print(fx.__doc__)
+        return
+    if not a.input or not a.fx or not a.out:
+        raise SystemExit("fx needs an input, --fx and --out (or --list)")
+    need_ffmpeg()
+    t0 = time.time()
+    effects = fx.parse(a.fx)
+    size = tuple(int(x) for x in ASPECTS[a.aspect].split("x")) if a.aspect else None
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    n = apply_file(a.input, out, effects, parse_opts(a.opt), seed=a.seed, size=size, seconds=a.seconds)
+    print(f"wrote {out} ({n} frames, {', '.join(effects)}) in {time.time() - t0:.0f}s")
+
+
+def cmd_cutout(a: argparse.Namespace) -> None:
+    from .cutout import cutout_file
+
+    need_ffmpeg()
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    print("wrote " + cutout_file(Path(a.input), out, a.kind))
+
+
 def cmd_montage(a: argparse.Namespace) -> None:
     from . import montage as mt
 
@@ -564,7 +592,9 @@ def cmd_montage(a: argparse.Namespace) -> None:
         total = min(a.length or duration(music), duration(music))
         tempo = 60 / (beats[1] - beats[0]) if len(beats) > 1 else 0
         print(f"   {tempo:.0f} beats a minute, {len(beats)} beats; quiet parts {sum(e < 0.4 for e in energy)}, loud {sum(e >= 0.75 for e in energy)}")
-        shots = mt.plan(infos, beats, energy, down, total, seed=a.seed)
+        creative = bool(getattr(a, "creative", False) or (a.style and preset_defaults(a.style).get("creative")))
+        shots = mt.plan(infos, beats, energy, down, total, seed=a.seed, fast=creative,
+                         in_order=getattr(a, "in_order", False))
         if getattr(a, "match_cut", False):
             from .matchcut import order_shots
 
@@ -575,6 +605,12 @@ def cmd_montage(a: argparse.Namespace) -> None:
         if getattr(a, "place", None):
             shots = by_place(shots, a.place)
             print(f"   shots grouped by place, in the order given: {', '.join(p.partition('=')[2].split('|')[0] for p in a.place)}")
+        if creative:
+            from .creative import dress
+
+            dress(shots, words=getattr(a, "words", None), shape=getattr(a, "shape", None), seed=a.seed)
+            print(f"   creative edit: {sum(1 for s in shots if s.fx)} of {len(shots)} shots dressed "
+                  f"({', '.join(sorted({x for s in shots for x in s.fx}))})")
     from . import genre
 
     for k in ("place", "datestamp", "letterbox"):
@@ -584,7 +620,7 @@ def cmd_montage(a: argparse.Namespace) -> None:
     print(f"3/3 cutting {len(shots)} shots")
     mt.render(shots, music, out, ASPECTS[a.aspect], look=a.look, title=a.title, accent=a.accent,
               title_style=a.title_style or sty.get("title_style", "stamp"))
-    if not a.draft:  # flashing found? calm the shots there (no white flash, no zoom kick) and cut again
+    if not a.draft and not any(s.fx for s in shots):  # flashing found? calm the shots there (no white flash, no zoom kick) and cut again
         try:
             from .selfcheck import review
 
@@ -606,7 +642,8 @@ def cmd_montage(a: argparse.Namespace) -> None:
                                     "place": a.place or [], "datestamp": a.datestamp, "letterbox": a.letterbox})
     genre.EXTRAS = {}
     for k, s in enumerate(shots):
-        print(f"   {k + 1:>2} {Path(s.clip).name[:22]:22} {s.start:6.2f}s  {s.length:4.2f}s on screen  {s.why}")
+        fxs = f"  [{', '.join(s.fx)}]" if s.fx else ""
+        print(f"   {k + 1:>2} {Path(s.clip).name[:22]:22} {s.start:6.2f}s  {s.length:4.2f}s on screen  {s.why}{fxs}")
     pos = [sum(x.length for x in shots[:k]) for k in range(len(shots))]
     write_sheet(out, [(p + s.length / 2, f"{k + 1} {Path(s.clip).stem[:18]}") for k, (p, s) in enumerate(zip(pos, shots))])
     print(self_review(out).strip())
@@ -1270,8 +1307,34 @@ def main(argv: list[str] | None = None) -> None:
     mo.add_argument("--style", choices=list(PRESETS), help="a style pack: sets aspect, look, title animation and colour (flags still win)")
     mo.add_argument("--match-cut", action="store_true", help="put shots with the same framing (an eye, a figure on the horizon, "
                     "one object) one after another and line them up, so the cut matches")
+    mo.add_argument("--in-order", action="store_true", help="use the clips in the order given (file names in a folder), "
+                    "for a story or a thing changing step by step (seed, sprout, plant)")
+    mo.add_argument("--creative", action="store_true", help="the creative-edit cut: a shot every half beat, silhouettes, "
+                    "light strobes, sketch and x-ray looks, cut-outs on flipping colours (also: --style creative-edit)")
+    mo.add_argument("--words", help="creative edit: words set behind the subject of one shot, e.g. \"HIGHS AND LOWS\"")
+    mo.add_argument("--shape", help="creative edit: the last shot turns to dots that gather into this shape "
+                    "(infinity, heart, circle, or any short text)")
     mo.add_argument("--seed", type=int, default=0, help="a different number gives a different edit of the same material")
     mo.set_defaults(func=cmd_montage)
+
+    fxp = sub.add_parser("fx", help="creative effects on one clip or picture: silhouettes, light strobes, cut-outs, looks")
+    fxp.add_argument("input", nargs="?", help="a video clip or a picture")
+    fxp.add_argument("--fx", help="effects in order, e.g. glow or solid,speedlines (see --list)")
+    fxp.add_argument("--opt", action="append", metavar="NAME=VALUE", help="a setting, e.g. copies=3, words=\"HIGHS AND LOWS\", "
+                     "shape=infinity, colour=#E3101A, cutout=person (repeatable)")
+    fxp.add_argument("--out", help="output MP4")
+    fxp.add_argument("--aspect", choices=sorted(ASPECTS), help="reframe to this shape (default: the input's own)")
+    fxp.add_argument("--seconds", type=float, default=2.0, help="how long a picture lasts (default 2)")
+    fxp.add_argument("--seed", type=int, default=0)
+    fxp.add_argument("--list", action="store_true", help="list the effects and what they do")
+    fxp.set_defaults(func=cmd_fx)
+
+    co = sub.add_parser("cutout", help="lift the person or object off the background: a PNG or a MOV with see-through background")
+    co.add_argument("input", help="a video clip or a picture")
+    co.add_argument("--out", required=True, help="output path (.png for a picture, .mov for a video)")
+    co.add_argument("--kind", default="auto", choices=["auto", "plain", "person", "object"],
+                    help="plain: background of one colour (no model); person: people, fast; object: any main subject")
+    co.set_defaults(func=cmd_cutout)
 
     mk = sub.add_parser("make", help="build a video from a storyboard (scenes of clips, images, titles, numbers, charts, maps...)")
     mk.add_argument("storyboard", nargs="?", help="storyboard JSON or node file (see: alvenus make --example sb.json; alvenus nodes init)")
