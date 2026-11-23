@@ -1238,7 +1238,7 @@ class Community(unittest.TestCase):
         from alvenus.community import private_bits
 
         self.assertEqual(private_bits("a lyric overlay on the beat"), [])
-        for bad in ("mail me at a.b@c.com", "key sk-abcdefghijklmnopqrstuv", "ghp_" + "a" * 30, "/Users/hemanth/clips/x.mov",
+        for bad in ("mail me at a.b@c.com", "key sk-abcdefghijklmnopqrstuv", "ghp_" + "a" * 30, "/Users/sam/clips/x.mov",
                     "password: hunter2"):
             self.assertTrue(private_bits(bad), bad)
 
