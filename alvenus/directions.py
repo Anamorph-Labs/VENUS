@@ -199,6 +199,10 @@ def write(path: Path, frames: bool = True) -> tuple[list[dict], Path, Path | Non
 
     path = Path(path)
     sb = content(path)
+    todo = [i + 1 for i, sc in enumerate(sb.get("scenes") or []) if storycheck.empty(sc)]
+    if todo:
+        raise SystemExit(f"write the scenes first (not written yet: scene {', '.join(map(str, todo))}); "
+                         "then the three directions can show them")
     dirs = make(sb)
     stem = path.name[:-len(".nodes.json")] if path.name.endswith(".nodes.json") else path.stem
     folder = path.with_name(stem + ".directions")

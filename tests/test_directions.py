@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from alvenus import directions as dr
@@ -34,6 +35,16 @@ class DirectionsTest(unittest.TestCase):
     def test_calm_goes_punchy(self):
         _, b, _ = dr.make({**SB, "style": "editorial", "aspect": "16:9"})
         self.assertEqual(b["style"], "reels-punchy")
+
+    def test_unwritten_story_waits(self):
+        import tempfile
+        from pathlib import Path
+
+        p = Path(tempfile.mkdtemp()) / "sb.json"
+        p.write_text(json.dumps({"aspect": "9:16", "scenes": [{"type": "text", "text": "", "beat": "hook", "_job": "a hook"}]}))
+        with self.assertRaises(SystemExit) as e:
+            dr.write(p, frames=False)
+        self.assertIn("write the scenes first", str(e.exception))
 
     def test_key_frames(self):
         self.assertEqual(dr.key_scenes(7), [0, 3, 6])
