@@ -181,6 +181,13 @@ header .logo.dk,header .logo.word,:root[data-theme="dark"] header .logo.lt{displ
 .idea .q{font:italic 15px/1.3 Newsreader,Georgia,serif;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .idea .st{font-size:11px;text-transform:uppercase;letter-spacing:.14em;font-weight:600;color:var(--accent);white-space:nowrap}
 .storybox ul{font-size:13px}
+.dirbox{position:fixed;inset:64px 24px auto;z-index:31;max-width:1100px;margin:0 auto;background:var(--panel);border:1px solid var(--hair);border-radius:24px;
+padding:18px 20px;box-shadow:var(--shadow);display:none;max-height:calc(100vh - 90px);overflow:auto}
+.dirbox.on{display:block}
+.dirbox .dirhead{display:flex;align-items:center;justify-content:space-between}
+.dirbox h3{font:500 22px/1.2 Newsreader,Georgia,serif;margin:0}
+.dirbox img{width:100%;border-radius:12px;margin:8px 0 12px;display:none}
+.dirbox .btns button{padding:8px 16px}
 .clip.todo img{opacity:.85}
 .upd{border-color:var(--accent)!important;color:var(--accent)}
 .updbox{position:fixed;top:52px;right:16px;z-index:30;width:min(380px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--hair);
@@ -196,7 +203,7 @@ border-radius:20px;padding:16px 18px;box-shadow:var(--shadow);display:none}
 <button class="upd" id="upd" style="display:none" title="a new version of Venus is ready">New version</button>
 <span class="status" id="status"></span>
 <button id="undo" title="Undo (Ctrl+Z)">Undo</button><button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
-<button id="newv" title="describe a new video">New video</button><button id="vset">Video settings</button><button id="sound">Sound</button>
+<button id="newv" title="describe a new video">New video</button><button id="dirs" title="the same story three ways: your look, the opposite energy, tighter">3 directions</button><button id="vset">Video settings</button><button id="sound">Sound</button>
 <button id="theme" title="light or dark">Theme</button>
 <button class="primary" id="render">Render video</button></header>
 <div class="left">
@@ -229,6 +236,10 @@ border-radius:20px;padding:16px 18px;box-shadow:var(--shadow);display:none}
 <div class="updbox storybox" id="storybox" role="dialog" aria-label="story check"><h3>Before it is made: the story check</h3><ul id="storylist"></ul>
 <p class="small">Your AI can fix these (tell it “fix the story check”), or you can make it as it is.</p>
 <div class="btns"><button id="storyfix" class="primary">I'll fix them first</button><button id="storyany">Make it anyway</button></div></div>
+<div class="dirbox" id="dirbox" role="dialog" aria-label="three directions"><div class="dirhead"><h3>Three directions for this story</h3><button id="dirclose">Close</button></div>
+<p class="small" id="dirsmall">Venus lays the same story out three ways and draws a few frames of each. Nothing is made into a video.</p>
+<img id="dirimg" alt="frames of the three directions">
+<div class="btns" id="dirbtns"></div></div>
 <div class="toast" id="toast"></div><div class="wtip" id="wtip"></div>
 <script>
 const $ = s => document.querySelector(s);
@@ -984,6 +995,29 @@ $('#updgo').addEventListener('click', async () => {
   $('#updgo').disabled = true; $('#updgo').textContent = 'Updating… (about a minute)';
   try { await api('/api/update', {}); updWait = {from: UPD.installed}; setInterval(checkUpd, 1500); }
   catch (e) { $('#updgo').disabled = false; $('#updgo').textContent = 'Update now'; toast('Could not update: ' + e.message, 'bad'); }
+});
+// ---- three directions: the same story three ways, frames of each, pick one (Undo brings the old one back)
+let dirPoll = null;
+async function showDirs() {
+  const d = await api('/api/directions');
+  if (d.state === 'running') { $('#dirsmall').textContent = `Laying it out three ways and drawing frames… ${Math.round(Date.now() / 1000 - d.started)} s`; return; }
+  clearInterval(dirPoll); dirPoll = null;
+  if (d.state === 'failed') { $('#dirsmall').textContent = 'Could not make the directions: ' + d.why; return; }
+  if (d.state !== 'done') return;
+  $('#dirsmall').textContent = 'The same story three ways. Pick one; Undo brings back what you had.';
+  $('#dirimg').src = '/api/directions.jpg?t=' + Date.now(); $('#dirimg').style.display = 'block';
+  $('#dirbtns').innerHTML = d.list.map(x => `<button data-tag="${x.tag}" class="${x.tag === 'A' ? '' : 'primary'}" title="${esc(x.why)}">Use ${x.tag}: ${esc(x.name)} (${x.seconds} s)</button>`).join('');
+}
+$('#dirs').addEventListener('click', async () => {
+  $('#dirbox').classList.add('on'); $('#dirimg').style.display = 'none'; $('#dirbtns').innerHTML = '';
+  try { await api('/api/directions', {}); } catch (e) { $('#dirsmall').textContent = e.message; return; }
+  if (!dirPoll) dirPoll = setInterval(showDirs, 1200); showDirs();
+});
+$('#dirclose').addEventListener('click', () => $('#dirbox').classList.remove('on'));
+$('#dirbtns').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-tag]'); if (!b) return;
+  const r = await op('/api/direction_pick', {tag: b.dataset.tag}, `Direction ${b.dataset.tag} is in. Undo brings back what you had.`);
+  if (r) $('#dirbox').classList.remove('on');
 });
 // ---- an idea typed on the welcome page: say where it stands, and what to tell the AI
 const IDEA_ASK = 'Venus has a new idea for you: run "alvenus ideas" and write it.';

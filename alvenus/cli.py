@@ -1567,6 +1567,30 @@ def main(argv: list[str] | None = None) -> None:
 
     idp.set_defaults(func=run_ideas)
 
+    dp = sub.add_parser("directions", help="three directions for one storyboard (your look, the opposite energy, tighter), "
+                        "with frames and the story check of each, to pick from before anything is made")
+    dp.add_argument("storyboard", help="a storyboard or node file")
+    dp.add_argument("--pick", choices=("A", "B", "C", "a", "b", "c"), help="use this direction")
+    dp.add_argument("--no-frames", action="store_true", help="skip the page of frames (quicker)")
+
+    def run_directions(a: argparse.Namespace) -> None:
+        from . import directions as dr
+
+        if a.pick:
+            dr.pick(Path(a.storyboard), a.pick)
+            print(f"{a.storyboard} is now direction {a.pick.upper()}. Show the creator the board (alvenus check {a.storyboard}) "
+                  "and get their yes again before making it.")
+            return
+        if not a.no_frames:
+            need_ffmpeg()
+        dirs, md, jpg = dr.write(Path(a.storyboard), frames=not a.no_frames)
+        for d in dirs:
+            ok = sum(1 for _, g in d["glance"] if g)
+            print(f"{d['tag']}. {d['name']:20} {d['style']:15} {d['seconds']:>5g} s  story {ok}/4  {d['why']}")
+        print(f"show the creator {jpg or md} (reasons in {md}); then: alvenus directions {a.storyboard} --pick A|B|C")
+
+    dp.set_defaults(func=run_directions)
+
     from .update import add_parser as add_update
 
     add_update(sub)

@@ -158,6 +158,18 @@ def check(sb: dict) -> list[Finding]:
         add("weak", 1, f"the hook has {len(fw)} words", "cut it to 7 words or fewer; one sharp line")
     if first.get("type") == "title" and not first.get("file"):
         add("note", 1, "a plain title is a slow way to start", "put the claim or a shot first, the title second")
+    # does the hook land? it needs a reason to keep watching: a number, a turn, a question, "you", or a picture
+    hook_txt = " ".join(fw)
+    pull = (bool(_NUM.search(hook_txt)) or bool(CONTRAST.search(hook_txt)) or "?" in hook_txt
+            or bool(re.search(r"\b(you|your)\b", hook_txt, re.I)) or first.get("type") in PICTURE | {"stat"})
+    if fw and not pull:
+        add("weak", 1, f"the hook states without pulling (\"{' '.join(fw[:7])}\"): no number, no surprise, no question, no \"you\"",
+            "give the viewer a reason to stay: a surprising number, a \"but\", a question, or speak to them (\"your phone...\")")
+    point = str(b.get("point") or "")
+    if len(scenes) > 3 and point and fw:
+        pc = _content(point)
+        if pc and len(pc & _content(fw)) >= max(2, (len(pc) * 2 + 2) // 3):
+            add("note", 1, "the hook already gives away the ending", "keep the answer back: open on the problem or the surprise, pay it off at the end")
     if kind == "travel" and first.get("type") not in PICTURE:
         add("note", 1, "a travel reel usually opens on its best shot, before any words", "make the hook a clip")
 
@@ -174,6 +186,14 @@ def check(sb: dict) -> list[Finding]:
                     "keep one sentence here; give the next one a scene of its own")
             elif len(w) > 14 and sc.get("type") == "text":
                 add("weak", i, f"{len(w)} words is a paragraph, not a line", "cut to about 10 words, or split into two scenes")
+        cap = re.sub(r"[*_=]", "", str(sc.get("caption") or "")).strip()
+        if cap and sc.get("type") in PICTURE | {"title"}:  # a picture's caption is one idea too
+            parts = [x for x in re.split(r"(?<=[.!?])\s+", cap) if x.strip()]
+            if len(parts) > 1 and not (len(parts) == 2 and CONTRAST.match(parts[1].split()[0] if parts[1].split() else "")):
+                add("weak", i, f"the caption says {len(parts)} things (\"{parts[0][:40]}\" and more)",
+                    "keep one sentence under the picture; give the other a scene of its own")
+            elif len(cap.split()) > 12:
+                add("note", i, f"a {len(cap.split())}-word caption competes with the picture", "cut it to about 8 words")
         for it in sc.get("items") or []:
             if isinstance(it, str) and len(it.split()) > 7:
                 add("note", i, f"the point \"{it[:40]}\" is long for a list", "keep list points to 6 words or fewer")
@@ -211,6 +231,13 @@ def check(sb: dict) -> list[Finding]:
         if pc and said < max(1, (len(pc) + 1) // 2):
             add("weak", len(scenes), f"the ending doesn't say the point to remember (\"{point}\")",
                 "say it plainly in the last scene, in a few words")
+    if lw and len(lw) > 12 and last.get("type") in ("text", "title", "image", "clip"):
+        add("weak", len(scenes), f"the last line has {len(lw)} words; a payoff people remember is short",
+            "say the point in 8 words or fewer")
+    if lw and " ".join(lw).rstrip().endswith("?") and kind != "ad":
+        add("note", len(scenes), "the video ends on a question", "end on the answer; a question at the end feels unfinished")
+    if lw and float(last.get("seconds") or 3) < need_seconds(last) + 1.0:
+        add("note", len(scenes), "the last line leaves no time to sink in", f"hold it about {need_seconds(last) + 1.2:.1f} s")
     if kind in ("explainer", "story", "ad") and len(scenes) > 2 and lw:
         if not (_content(fw) & _content(lw)) and not (point and _content(point) & _content(lw)):
             add("note", len(scenes), "the ending doesn't echo the hook", "repeat one word or image from the first scene, so it feels closed")
@@ -301,6 +328,26 @@ def board(sb: dict, findings: list[Finding] | None = None) -> str:
         w = weak(findings)
         n = [f for f in findings if f.level == "note"]
         lines.append("**Story check:** " + ("ready to approve." if not w else f"{len(w)} thing{'s' if len(w) > 1 else ''} to fix first."))
+        lines.append("")
+        for label, ok in glance(sb, findings):
+            lines.append(f"- {'✓' if ok else '✗'} {label}")
+        lines.append("")
         lines += [f"- {f.line()}" for f in w + n]
         lines.append("")
     return "\n".join(lines)
+
+
+def glance(sb: dict, findings: list[Finding]) -> list[tuple[str, bool]]:
+    """The story at a glance, for the creator: the four things a good editor asks."""
+    n = len(sb.get("scenes") or [])
+    w = weak(findings)
+
+    def bad(test) -> bool:
+        return any(test(f) for f in w)
+
+    return [
+        ("The hook makes you stay (first 3 seconds)", not bad(lambda f: f.scene == 1)),
+        ("One idea per scene", not bad(lambda f: "says" in f.what and "things" in f.what or "paragraph" in f.what)),
+        ("Something turns in the middle", not bad(lambda f: "turn" in f.what or "nothing changes" in f.what)),
+        ("The ending lands the point", not bad(lambda f: f.scene == n and n > 1 or "payoff" in f.what)),
+    ]

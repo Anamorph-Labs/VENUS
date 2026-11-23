@@ -503,6 +503,25 @@ check and approval. `alvenus make --example sb.json` writes every scene type.
    `video-versions.jpg` to compare and `video-versions.md` with why each exists.
    They pick one; build it in full from its saved `.storyboard.json`.
 
+### Three directions, before anything is made (`alvenus directions`)
+
+Once the storyboard passes the check, offer the creator three directions:
+`alvenus directions FILE` lays the same story out as **A** their look, **B** the
+opposite energy (calm and designed if theirs is punchy, quick and bold if it is
+calm) and **C** tighter (each scene only as long as its words need, one
+optional scene gone). It writes `NAME.directions.jpg` (frames of the hook, the
+middle and the payoff of each, the reason and the story at a glance) and
+`NAME.directions.md`. Show them the page, say in one line which you would pick
+and why, and use their choice: `alvenus directions FILE --pick B`. The picked
+storyboard needs their yes again before it is made. In Studio this is the
+**3 directions** button (Undo brings back what they had).
+
+The story check (`alvenus check`) also asks: does the hook pull (a number, a
+"but", a question or "you"; not a plain statement), does it give the ending
+away, does any caption say two things, is the last line short (8 words or
+fewer), and does it sit long enough to land. The board opens with the story at
+a glance: hook, one idea per scene, the turn, the ending.
+
 ### Ideas typed in Studio (`alvenus ideas`)
 
 The creator can also start in Studio: `alvenus studio` with no file opens a

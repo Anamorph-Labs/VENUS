@@ -95,6 +95,7 @@ class Studio:
         self.render = {"state": "idle"}
         self.playing: dict[str, str] = {}
         self.upd: dict = {}  # new-version check and the update in progress
+        self.dirs: dict = {}  # the three directions, when asked for
         self.port = 8765
         self._load(first=True)
 
@@ -300,6 +301,33 @@ class Studio:
                            "seconds": round(time.time() - self.render["started"])}
 
         threading.Thread(target=go, daemon=True).start()
+
+    def start_directions(self) -> dict:
+        """Lay the storyboard out three ways (your look, the opposite energy, tighter) with frames of each."""
+        from . import directions as dr
+
+        if self.dirs.get("state") == "running":
+            return {"state": "running"}
+        self.dirs = {"state": "running", "started": time.time()}
+
+        def go():
+            try:
+                dirs, md, jpg = dr.write(self.path)
+                self.dirs = {"state": "done", "sheet": str(jpg), "list": [
+                    {"tag": d["tag"], "name": d["name"], "why": d["why"], "style": d["style"], "seconds": d["seconds"],
+                     "scenes": len(d["storyboard"]["scenes"]), "glance": d["glance"]} for d in dirs]}
+            except (Exception, SystemExit) as e:  # never leave the page waiting
+                self.dirs = {"state": "failed", "why": str(e)[-300:]}
+        threading.Thread(target=go, daemon=True).start()
+        return {"state": "running"}
+
+    def pick_direction(self, tag: str) -> None:
+        stem = self.path.name[:-len(".nodes.json")] if self.path.name.endswith(".nodes.json") else self.path.stem
+        f = self.path.with_name(stem + ".directions") / f"{tag.upper()}.json"
+        if tag.upper() not in ("A", "B", "C") or not f.exists():
+            raise ValueError("make the three directions first")
+        v = json.loads(f.read_text(encoding="utf-8"))
+        self.change(lambda d: d.update(nodes=nd.to_nodes(v)["nodes"]))  # one step: Undo brings the old one back
 
     def update_state(self, now: bool = False) -> dict:
         from . import update as up
@@ -511,6 +539,10 @@ def handler(st: Studio):
                         return self._send(200, f.read_bytes(), kind)
                 if u.path == "/api/update":  # is a new Venus ready? (checked quietly, a few times a day)
                     return self._json(st.update_state(q.get("now") == "1"))
+                if u.path == "/api/directions":
+                    return self._json(st.dirs or {"state": "none"})
+                if u.path == "/api/directions.jpg" and st.dirs.get("sheet") and Path(st.dirs["sheet"]).exists():
+                    return self._file(Path(st.dirs["sheet"]), "image/jpeg")
                 if u.path == "/api/state":
                     st.poll()
                     return self._json(st.state())
@@ -589,6 +621,10 @@ def handler(st: Studio):
                     st.undo(redo=True)
                 elif op == "render":
                     st.start_render(bool(body.get("anyway")))
+                elif op == "directions":
+                    return self._json(st.start_directions())
+                elif op == "direction_pick":
+                    st.pick_direction(str(body.get("tag", "")))
                 elif op == "check":
                     return self._json(st.story_check())
                 elif op == "home":  # "New video": back to the welcome page, in the folder Studio was started from
