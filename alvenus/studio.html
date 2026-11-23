@@ -176,6 +176,12 @@ header .logo.dk,header .logo.word,:root[data-theme="dark"] header .logo.lt{displ
 @media (max-width:1180px){.cv-title .hint{display:none}}
 @media (max-width:1100px){.status{display:none}}
 @media (max-width:900px){.app{grid-template-columns:1fr;grid-template-rows:44px minmax(0,1fr) 40vh}aside{grid-column:1;border-left:0;border-top:1px solid var(--line)}}
+.idea{display:none;align-items:center;gap:12px;padding:9px 14px;background:var(--panel);border-bottom:1px solid var(--line);font-size:13px}
+.idea.on{display:flex}
+.idea .q{font:italic 15px/1.3 Newsreader,Georgia,serif;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idea .st{font-size:11px;text-transform:uppercase;letter-spacing:.14em;font-weight:600;color:var(--accent);white-space:nowrap}
+.storybox ul{font-size:13px}
+.clip.todo img{opacity:.85}
 .upd{border-color:var(--accent)!important;color:var(--accent)}
 .updbox{position:fixed;top:52px;right:16px;z-index:30;width:min(380px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--hair);
 border-radius:20px;padding:16px 18px;box-shadow:var(--shadow);display:none}
@@ -190,11 +196,11 @@ border-radius:20px;padding:16px 18px;box-shadow:var(--shadow);display:none}
 <button class="upd" id="upd" style="display:none" title="a new version of Venus is ready">New version</button>
 <span class="status" id="status"></span>
 <button id="undo" title="Undo (Ctrl+Z)">Undo</button><button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
-<button id="vset">Video settings</button><button id="sound">Sound</button>
+<button id="newv" title="describe a new video">New video</button><button id="vset">Video settings</button><button id="sound">Sound</button>
 <button id="theme" title="light or dark">Theme</button>
 <button class="primary" id="render">Render video</button></header>
 <div class="left">
-<div class="viewer"><div class="screen" id="screen"><div class="frame" id="frame"><img id="pv" alt="preview of the selected scene"><img class="a" id="pa" alt="" style="display:none"><div class="wipe" id="wl" style="display:none"></div></div>
+<div class="viewer"><div class="idea" id="idea"><span class="st" id="ideast"></span><span class="q" id="ideaq"></span><span class="small" id="ideahelp"></span><button id="ideacopy" style="display:none">Copy what to tell your AI</button></div><div class="screen" id="screen"><div class="frame" id="frame"><img id="pv" alt="preview of the selected scene"><img class="a" id="pa" alt="" style="display:none"><div class="wipe" id="wl" style="display:none"></div></div>
 <video id="vid" controls playsinline style="display:none"></video><div class="busy" id="busy">drawing…</div></div>
 <div class="vbar"><button id="play">▶ Play scene</button><span class="lab">moment</span><input type="range" id="scrub" min="0.05" max="0.98" step="0.01" value="0.75" aria-label="moment in the scene">
 <button id="holdA" title="keep this frame as A, to compare with your next changes">Hold as A</button>
@@ -220,6 +226,9 @@ border-radius:20px;padding:16px 18px;box-shadow:var(--shadow);display:none}
 <div class="updbox" id="updbox" role="dialog" aria-label="new version of Venus"><h3 id="updh"></h3><ul id="updnotes"></ul>
 <p class="small" id="updsmall">Your videos and node files stay as they are. The version you have now is kept, and it comes back on its own if the new one does not start.</p>
 <div class="btns"><button class="primary" id="updgo">Update now</button><button id="updlater">Later</button></div></div>
+<div class="updbox storybox" id="storybox" role="dialog" aria-label="story check"><h3>Before it is made: the story check</h3><ul id="storylist"></ul>
+<p class="small">Your AI can fix these (tell it “fix the story check”), or you can make it as it is.</p>
+<div class="btns"><button id="storyfix" class="primary">I'll fix them first</button><button id="storyany">Make it anyway</button></div></div>
 <div class="toast" id="toast"></div><div class="wtip" id="wtip"></div>
 <script>
 const $ = s => document.querySelector(s);
@@ -520,10 +529,10 @@ function drawMini() {
 function drawStrip() {
   $('#strip').innerHTML = S.scenes.map((s, i) => {
     const inn = node(s.id + '.in')?.params?.transition;
-    return `<div class="clip ${s.id === sel.scene ? 'sel' : ''} ${S.byAI.some(x => x === s.id || x.startsWith(s.id + '.')) ? 'ai' : ''}" draggable="true" data-scene="${esc(s.id)}" title="${esc(s.label)}">
+    return `<div class="clip ${s.unwritten ? 'todo' : ''} ${s.id === sel.scene ? 'sel' : ''} ${S.byAI.some(x => x === s.id || x.startsWith(s.id + '.')) ? 'ai' : ''}" draggable="true" data-scene="${esc(s.id)}" title="${esc(s.label)}">
       <img loading="lazy" alt="" src="/api/preview?scene=${encodeURIComponent(s.id)}&at=0.75&k=${s.key}">
       ${i ? `<span class="tr">${esc(inn || S.transition)}</span>` : ''}
-      <div class="t"><b>${i + 1}</b> ${esc(typeName(s.type))} <span>${s.seconds} s${node(s.id).locked ? ' · locked' : ''}</span></div></div>`;
+      <div class="t"><b>${i + 1}</b> ${esc(s.unwritten ? (s.beat || 'beat') + ' · to write' : typeName(s.type))} <span>${s.seconds} s${node(s.id).locked ? ' · locked' : ''}</span></div></div>`;
   }).join('') + `<div class="clip" style="width:auto;justify-content:center;padding:0 12px;cursor:default;color:var(--soft)">${S.scenes.length} scenes · drag to reorder</div>`;
 }
 function setPreview(force) {
@@ -689,6 +698,15 @@ async function flush() {
   try { const r = await api('/api/set', {changes}); apply(r.state, true); }
   catch (e) { toast(e.message, 'bad'); refresh(true); }
 }
+async function render(anyway) {
+  try { const r = await api('/api/render', {anyway}); apply(r.state, true); $('#storybox').classList.remove('on'); toast('Rendering the full video. Keep working; it shows here when done.'); }
+  catch (e) {
+    if (e.message.startsWith('STORY:')) {
+      $('#storylist').innerHTML = JSON.parse(e.message.slice(6)).map(x => '<li>' + esc(x.replace(/^\[weak\] /, '')) + '</li>').join('');
+      $('#storybox').classList.add('on');
+    } else toast(e.message, 'bad');
+  }
+}
 async function op(path, body, msg) {
   try { const r = await api(path, body); apply(r.state, true); if (msg) toast(msg); return r; } catch (e) { toast(e.message, 'bad'); }
 }
@@ -705,6 +723,7 @@ function apply(state, mine) {
   $('#status').textContent = rs + (S.asks.length ? ` · ${S.asks.length} description${S.asks.length > 1 ? 's' : ''} for your AI` : '');
   $('#full').style.display = r.state === 'done' ? '' : 'none';
   $('#render').disabled = r.state === 'running';
+  showIdea(S.idea, S.scenes.filter(s => s.unwritten).length);
   if (!mine && before && before.version !== S.version && S.byAI.length) toast('Your AI changed: ' + S.byAI.slice(0, 4).map(friendly).join(', '), 'ai');
   const keepFocus = document.activeElement && $('#insp').contains(document.activeElement) && mine;
   fitFrame(); drawStrip(); drawCanvas(); if (!keepFocus) drawInspector();
@@ -765,7 +784,7 @@ document.addEventListener('click', async e => {
     case 'vset': sel.node = 'settings'; return drawInspector();
     case 'sound': sel.node = 'sound'; return drawInspector();
     case 'theme': { const r = document.documentElement, n = r.dataset.theme === 'dark' ? 'light' : 'dark'; r.dataset.theme = n; try { localStorage.setItem('venus-theme2', n); } catch (er) {} return drawCanvas(); }
-    case 'render': return op('/api/render', {}, 'Rendering the full video. Keep working; it shows here when done.');
+    case 'render': return render(false);
     case 'full': return showVideo('/api/video?t=' + Date.now());
     case 'play': { $('#busy').classList.add('on'); $('#busy').textContent = 'making a quick draft…';
       const s = S.scenes[i]; try { const r = await fetch(`/api/play?scene=${encodeURIComponent(s.id)}&k=${s.key}`); if (!r.ok) throw new Error((await r.json()).error);
@@ -965,6 +984,23 @@ $('#updgo').addEventListener('click', async () => {
   $('#updgo').disabled = true; $('#updgo').textContent = 'Updating… (about a minute)';
   try { await api('/api/update', {}); updWait = {from: UPD.installed}; setInterval(checkUpd, 1500); }
   catch (e) { $('#updgo').disabled = false; $('#updgo').textContent = 'Update now'; toast('Could not update: ' + e.message, 'bad'); }
+});
+// ---- an idea typed on the welcome page: say where it stands, and what to tell the AI
+const IDEA_ASK = 'Venus has a new idea for you: run "alvenus ideas" and write it.';
+function showIdea(idea, todo) {
+  const b = $('#idea'); b.classList.toggle('on', !!idea);
+  if (!idea) return;
+  const st = idea.status === 'ready' && !todo ? 'ready to read' : idea.status === 'writing' || (todo && todo < S.scenes.length) ? 'your AI is writing' : 'waiting for your AI';
+  $('#ideast').textContent = st; $('#ideaq').textContent = '“' + idea.text + '”';
+  $('#ideahelp').textContent = st === 'ready to read' ? 'Read each scene, change anything, then press Render.' : st === 'your AI is writing' ? (todo ? `${todo} scene${todo === 1 ? '' : 's'} still to write; they fill in as it goes.` : 'Every scene is written; your AI is checking the story.') : 'In your AI’s chat, say:';
+  $('#ideacopy').style.display = st === 'waiting for your AI' ? '' : 'none';
+}
+$('#ideacopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(IDEA_ASK); toast('Copied. Paste it in your AI’s chat.'); } catch (e) { toast(IDEA_ASK); } });
+$('#storyfix').addEventListener('click', () => $('#storybox').classList.remove('on'));
+$('#storyany').addEventListener('click', () => render(true));
+$('#newv').addEventListener('click', async () => {
+  try { await api('/api/home', {}); } catch (e) {}
+  const t = setInterval(async () => { try { const j = await (await fetch('/api/state')).json(); if (j.home) { clearInterval(t); location.reload(); } } catch (e) {} }, 700);
 });
 window.addEventListener('resize', () => { fitFrame(); if (sel.scene) { drawWires(); applyView(); } });
 (async () => {

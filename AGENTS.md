@@ -451,7 +451,22 @@ check and approval. `alvenus make --example sb.json` writes every scene type.
    `cut_on_beat` (scene changes snap to the music's beat), `captions`, `progress`,
    `end_card`, `background` (aurora, orbs, grid, ink, spotlight, dark; also per
    scene). With no footage at all, a storyboard of title, text, stat, chart,
-   timeline and quote scenes on a background is a complete video. Footage-free
+   timeline and quote scenes on a background is a complete video.
+   **Pictures without footage.** Any picture slot (`file` of an image, clip,
+   title or text scene, or `left`/`right` of a split) can name a drawing instead
+   of a file, drawn in the video's own look (cream on dark, ink on paper with a
+   hand-made wobble for vox-paper, archive and sepia, ink on grey grid for mono):
+   `"icon:battery"` (one icon on an accent shape), `"icon:device-mobile+snowflake"`
+   (a main icon with a badge: the phone, and the cold), `"icon:bulb>pencil>rocket"`
+   (steps with arrows), `"icon:car/bike"` (one against the other),
+   `"icon:sun,cloud,cloud-rain"` (a row), or `"scene:city"` (a small drawn scene:
+   `alvenus icons scenes` lists them). 5,491 free icons are bundled (Tabler, MIT):
+   find names with `alvenus icons search WORDS`, look at them with
+   `alvenus icons sheet NAMES --out sheet.png`, try one with
+   `alvenus picture SPEC --style STYLE --out p.png`. Pick the picture that shows
+   the scene's ONE idea literally (a phone and a snowflake, not "technology");
+   `alvenus check` draws every one onto `NAME.pictures.jpg`: show it beside the
+   board so the creator sees the pictures before saying yes. Footage-free
    scenes drift with a slow camera move (type over a background that moves less,
    for depth); `"camera": false` keeps them still.
    **Designed looks** (`"style": "mono-editorial"` or `"vox-paper"`, or `"design":
@@ -487,6 +502,29 @@ check and approval. `alvenus make --example sb.json` writes every scene type.
    side by side (their style, the opposite energy, a tighter pace), with
    `video-versions.jpg` to compare and `video-versions.md` with why each exists.
    They pick one; build it in full from its saved `.storyboard.json`.
+
+### Ideas typed in Studio (`alvenus ideas`)
+
+The creator can also start in Studio: `alvenus studio` with no file opens a
+welcome page with a **Describe your video** box (and kind, length, shape and
+look to pick). Venus writes the brief, lays the video out by the story recipe
+(one empty scene per beat, its `_job` written on it) in a new folder, opens it
+in Studio and puts the idea in an inbox for you:
+
+1. When the creator says "Venus has a new idea for you" (or at session start),
+   run `alvenus ideas`. It prints each waiting idea with its files and steps.
+   (`alvenus ideas --wait` waits for the next one.)
+2. Fill `brief.json` (audience, point, mood; fix kind, seconds, aspect or look
+   if the idea says otherwise; ask the creator only what you can't tell), then
+   `alvenus ideas start ID`. Studio shows "your AI is writing".
+3. Write the scenes **one at a time** with `alvenus nodes set FILE
+   sceneN.words.text="..."` (a picture: `sceneN.type=image
+   sceneN.picture.file="icon:..."`). Each one appears in the creator's strip
+   as you go, so they watch the video take shape.
+4. `alvenus check FILE` until it passes, then `alvenus ideas ready ID`, and tell
+   the creator it is ready to read. **Never render it yourself**: the creator
+   reads it in Studio and presses Render. Render runs the story check first and
+   shows anything weak, with "Make it anyway" as their choice.
 
 ### Nodes: precise control (`alvenus nodes`)
 

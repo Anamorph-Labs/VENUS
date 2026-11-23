@@ -175,6 +175,8 @@ class Studio:
         return sb
 
     def state(self) -> dict:
+        from .storycheck import empty
+
         with self.lock:
             doc = self.doc
             sb = nd.effective(nd.to_storyboard(doc))
@@ -193,9 +195,10 @@ class Studio:
                                "seconds": float(sc.get("seconds", 3.0)), "use": sn.get("use") or [],
                                "graph": nd.graph(doc, sn["id"]),
                                "key": self._key(sb, k), "label": (sc.get("caption") or sc.get("text") or sc.get("title")
-                                                                  or sc.get("value") or "")[:60]})
+                                                                  or sc.get("value") or "")[:60],
+                               "beat": sc.get("beat"), "unwritten": bool(sc.get("_job")) and bool(empty(sc))})
             now = time.time()
-            return {"version": self.version, "file": self.path.name, "doc": doc, "scenes": scenes,
+            return {"version": self.version, "file": self.path.name, "doc": doc, "scenes": scenes, "idea": sb.get("_idea"),
                     "aspect": sb.get("aspect", "16:9"), "design": sb.get("design"), "transition": sb.get("transition", "crossfade"),
                     "byAI": [k for k, t in self.by_ai.items() if now - t < 600], "changed": changed,
                     "built": last.get("built"), "canUndo": bool(self.history), "canRedo": bool(self.future),
@@ -230,6 +233,11 @@ class Studio:
         if out.exists():
             return out
         w, h = PREVIEW_SIZES.get(sb.get("aspect", "16:9"), (960, 540))
+        from .storycheck import empty
+
+        if sc.get("_job") and empty(sc):  # laid out by the recipe, not written yet: show what this beat is for
+            placeholder(sc, k + 1, w, h, out)
+            return out
         design = sb.get("design")
         if design and sc["type"] in ("title", "text", "clip", "image"):
             from .paper import plain, still
@@ -259,7 +267,22 @@ class Studio:
                            check=True, capture_output=True, cwd=str(self.path.parent))
         return out
 
-    def start_render(self) -> None:
+    def story_check(self) -> dict:
+        """The story check on what is on screen, for the creator to read before Render."""
+        from . import storycheck
+        from .approval import content
+
+        f = storycheck.check(content(self.path))
+        return {"weak": [x.line() for x in storycheck.weak(f)], "notes": [x.line() for x in f if x.level == "note"],
+                "unwritten": [x.scene for x in f if x.level == "weak" and x.what.startswith("no ") and x.what.endswith(" yet")]}
+
+    def start_render(self, anyway: bool = False) -> None:
+        chk = self.story_check()
+        if chk["unwritten"]:
+            raise ValueError("not written yet: scene " + ", ".join(map(str, chk["unwritten"])) +
+                             ". Your AI fills them in; then press Render.")
+        if chk["weak"] and not anyway:
+            raise ValueError("STORY:" + json.dumps(chk["weak"]))
         with self.lock:
             if self.render.get("state") == "running":
                 raise ValueError("a render is already running")
@@ -316,10 +339,118 @@ class Studio:
             u.update(busy=False, done=True, result=res)
             if res.get("ok"):  # start the new Studio in place of this one, on the same file and port
                 time.sleep(1.2)
-                os.execv(sys.executable, [sys.executable, "-m", "alvenus", "studio", str(self.path),  # nosec B606
-                                          "--port", str(self.port), "--no-open"])
+                restart([str(self.path)])
         threading.Thread(target=go, daemon=True).start()
         return {"busy": True}
+
+
+def restart(args: list[str]) -> None:
+    """Start Studio again in place of this process, on the same port (the page reloads itself)."""
+    os.execv(sys.executable, [sys.executable, "-m", "alvenus", "studio", *args, "--port", str(_PORT[0]), "--no-open"])  # nosec B606
+
+
+_PORT = [8765]
+
+
+def placeholder(sc: dict, n: int, w: int, h: int, out: Path) -> None:
+    """A beat the AI has not written yet: its name and its job, on ivory, so the creator sees the shape of the video."""
+    from PIL import Image, ImageDraw
+
+    from .paper import _font
+
+    img = Image.new("RGB", (w, h), (246, 242, 234))
+    d = ImageDraw.Draw(img)
+    u = min(w, h)
+    m = round(u * 0.08)
+    d.rounded_rectangle((m // 2, m // 2, w - m // 2, h - m // 2), radius=round(u * 0.04), outline=(201, 193, 181), width=2)
+    small = _font("DMMono-Regular.ttf", round(u * 0.035))
+    big = _font("InstrumentSerif-Italic.ttf", round(u * 0.085))
+    body = _font("LibreBaskerville-Regular.ttf", round(u * 0.036))
+    d.text((m, m), f"SCENE {n} · {str(sc.get('beat') or '').upper()} · {float(sc.get('seconds', 3)):g} s", fill=(43, 74, 120), font=small)
+    d.text((m, m + round(u * 0.07)), str(sc.get("beat") or "scene").capitalize(), fill=(34, 32, 29), font=big)
+    words, line, y = str(sc.get("_job") or "").split(), "", m + round(u * 0.2)
+    for wd in words + [None]:
+        trial = (line + " " + wd).strip() if wd else line
+        if wd is None or d.textlength(trial, font=body) > w - 2 * m:
+            d.text((m, y), line, fill=(94, 88, 80), font=body)
+            y += round(u * 0.055)
+            line = wd or ""
+        else:
+            line = trial
+    d.text((m, h - m - round(u * 0.04)), "waiting for your AI to write it", fill=(140, 131, 120), font=small)
+    img.save(out, quality=90)
+
+
+def home_handler(folder: Path):
+    """Studio with no file open: the welcome page, with the "Describe your video" box and the videos in this folder."""
+    page = (Path(__file__).with_name("studio_home.html")).read_text(encoding="utf-8")
+
+    def projects() -> list[dict]:
+        out = []
+        for p in sorted(list(folder.glob("*.nodes.json")) + list(folder.glob("*/*.nodes.json")),
+                        key=lambda p: p.stat().st_mtime, reverse=True)[:30]:
+            out.append({"path": str(p.relative_to(folder)), "name": p.name[:-len(".nodes.json")],
+                        "at": time.strftime("%d %b, %H:%M", time.localtime(p.stat().st_mtime))})
+        return out
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _send(self, code, body: bytes, kind: str):
+            self.send_response(code)
+            self.send_header("Content-Type", kind)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _json(self, obj, code=200):
+            self._send(code, json.dumps(obj).encode(), "application/json")
+
+        def do_GET(self):
+            u = urlparse(self.path)
+            if u.path == "/":
+                return self._send(200, page.encode(), "text/html; charset=utf-8")
+            if u.path.startswith("/fonts/"):
+                f = Path(__file__).with_name("studio_fonts") / Path(u.path).name
+                kind = {".woff2": "font/woff2", ".png": "image/png", ".svg": "image/svg+xml", ".ico": "image/x-icon"}.get(f.suffix)
+                if kind and f.exists():
+                    return self._send(200, f.read_bytes(), kind)
+            if u.path == "/api/home":
+                from . import brief as br
+                from .presets import PRESETS
+
+                return self._json({"home": True, "folder": str(folder), "projects": projects(),
+                                   "kinds": [[k, br.NAMES[k], br.RECIPES[k]["about"]] for k in br.KINDS],
+                                   "looks": [[k, v.get("about", "")] for k, v in PRESETS.items() if not v.get("talk")]})
+            if u.path == "/api/state":
+                return self._json({"home": True})
+            self._json({"error": "not found"}, 404)
+
+        def do_POST(self):
+            u = urlparse(self.path)
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            try:
+                if u.path == "/api/idea":
+                    from . import ideas
+
+                    e = ideas.create(body.get("text", ""), folder, body.get("kind") or "", body.get("seconds") or None,
+                                     body.get("aspect") or "", body.get("look") or "")
+                    threading.Timer(0.6, lambda: restart([e["nodes"]])).start()
+                    return self._json({"opening": e["nodes"], "id": e["id"]})
+                if u.path == "/api/open":
+                    known = {p["path"] for p in projects()}
+                    if body.get("path") not in known:
+                        raise ValueError("that video is not in this folder")
+                    threading.Timer(0.6, lambda: restart([str(folder / body["path"])])).start()
+                    return self._json({"opening": body["path"]})
+            except (ValueError, OSError) as e:
+                return self._json({"error": str(e)}, 400)
+            self._json({"error": "unknown"}, 404)
+
+    return H
 
 
 def handler(st: Studio):
@@ -457,7 +588,12 @@ def handler(st: Studio):
                 elif op == "redo":
                     st.undo(redo=True)
                 elif op == "render":
-                    st.start_render()
+                    st.start_render(bool(body.get("anyway")))
+                elif op == "check":
+                    return self._json(st.story_check())
+                elif op == "home":  # "New video": back to the welcome page, in the folder Studio was started from
+                    threading.Timer(0.6, lambda: restart([])).start()
+                    return self._json({"restarting": True})
                 elif op == "update":  # the person pressed Update: back up, install, check, roll back on failure
                     return self._json(st.start_update())
                 else:
@@ -469,22 +605,36 @@ def handler(st: Studio):
     return H
 
 
-def serve(path: Path, port: int = 8765, open_browser: bool = True) -> None:
-    if not nd.is_nodes(path):
+def serve(path: Path | None, port: int = 8765, open_browser: bool = True) -> None:
+    if path is not None and not nd.is_nodes(path):
         raise SystemExit(f"{path} is not a node file; make one with: alvenus nodes init STORYBOARD.json")
-    st = Studio(path)
+    st = Studio(path) if path is not None else None
+    h = handler(st) if st else home_handler(Path.cwd())
     for p in range(port, port + 20):
         try:
-            srv = ThreadingHTTPServer(("127.0.0.1", p), handler(st))
+            # (after a restart the old socket may linger for a moment: try the same port a few times first)
+            for _ in range(20 if p == port else 1):
+                try:
+                    srv = ThreadingHTTPServer(("127.0.0.1", p), h)
+                    break
+                except OSError:
+                    time.sleep(0.15)
+            else:
+                raise OSError
             break
         except OSError:
             continue
     else:
         raise SystemExit("no free port for Studio")
-    st.port = p
+    _PORT[0] = p
+    if st:
+        st.port = p
     url = f"http://127.0.0.1:{p}/"
     print(f"Venus is open at {url} (press Ctrl+C to close it)")
-    print(f"Your AI can work on the same file: alvenus nodes show {path}; descriptions you write wait in: alvenus nodes listen {path}")
+    if st is None:
+        print("Describe a video on the welcome page; your AI picks it up with: alvenus ideas")
+    else:
+        print(f"Your AI can work on the same file: alvenus nodes show {path}; descriptions you write wait in: alvenus nodes listen {path}")
     if open_browser:
         import webbrowser
 

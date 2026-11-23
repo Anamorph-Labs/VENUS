@@ -66,6 +66,22 @@ def load(path: Path, data: dict | None = None) -> dict:
             sb[key] = str((base / sb[key]).resolve()) if not Path(sb[key]).is_absolute() else sb[key]
             if not Path(sb[key]).exists():
                 problems.append(f"{key}: {sb[key]} not found")
+    from . import pictures
+
+    def drawn(spec: str, i: int, where: str) -> str | None:
+        """A picture named instead of a file ("icon:...", "scene:..."): draw it once, in this video's look."""
+        if why := pictures.problem(spec):
+            problems.append(f"scene {i + 1}: {where} {why}")
+            return None
+        return str(pictures.materialise(spec, sb, base.resolve() / ".venus-cache" / "pictures", seed=7 + i))
+
+    for i, sc in enumerate(sb.get("scenes") or []):
+        if pictures.is_picture(sc.get("file")):
+            sc["_picture"] = sc["file"]  # kept, so a note or the AI can say what was drawn
+            sc["file"] = drawn(sc["file"], i, "file")
+        for side in ("left", "right"):
+            if isinstance(sc.get(side), dict) and pictures.is_picture(sc[side].get("file")):
+                sc[side]["file"] = drawn(sc[side]["file"], i, f"{side}.file")
     for i, sc in enumerate(sb.get("scenes") or []):
         kind = sc.get("type")
         if kind not in KINDS:
@@ -82,13 +98,17 @@ def load(path: Path, data: dict | None = None) -> dict:
                 sc[side]["file"] = str((base / f).resolve()) if not Path(f).is_absolute() else f
                 if not Path(sc[side]["file"]).exists():
                     problems.append(f"scene {i + 1}: {sc[side]['file']} not found")
-        if kind in ("clip", "image", "archive") and not sc.get("file"):
+        if kind in ("clip", "image", "archive") and not sc.get("file") and not sc.get("_job"):  # (a laid-out beat not written yet waits)
             problems.append(f"scene {i + 1}: a {kind} scene needs \"file\"")
         if kind == "map" and not (sc.get("image") and sc.get("pins")):
             problems.append(f"scene {i + 1}: a map scene needs \"image\" and \"pins\"")
         if kind == "split" and not (sc.get("left", {}).get("file") and sc.get("right", {}).get("file")):
             problems.append(f"scene {i + 1}: a split scene needs left.file and right.file")
+    from .storycheck import empty as unwritten
+
     for i, sc in enumerate(sb.get("scenes") or []):
+        if sc.get("_job") and unwritten(sc):
+            continue  # a laid-out beat the AI has not written yet: the story check reports it, nothing is built from it
         if sc.get("type") == "list" and not (isinstance(sc.get("items"), list) and 1 <= len(sc["items"]) <= 6):
             problems.append(f"scene {i + 1}: a list scene needs \"items\": 1 to 6 short lines")
         if sc.get("type") == "compare" and not all(isinstance(sc.get(k), dict) and sc[k].get("title") for k in ("left", "right")):

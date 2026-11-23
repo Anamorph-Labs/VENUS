@@ -836,7 +836,11 @@ def cmd_check(a: argparse.Namespace) -> None:
     try:
         from . import story
 
-        story.load(p, json.loads(json.dumps(sb)))
+        loaded = story.load(p, json.loads(json.dumps(sb)))
+        from .pictures import board_sheet
+
+        if sheet := board_sheet(loaded, p.with_name((p.name[:-5] if p.name.endswith(".json") else p.name) + ".pictures.jpg")):
+            print(f"the drawn pictures, to show with the board: {sheet}")
     except SystemExit as e:  # the storyboard can't be built as written: that is weak too
         for line in str(e).splitlines()[1:]:
             findings.insert(0, storycheck.Finding("weak", 0, "", line.strip(), "fix the storyboard file"))
@@ -1416,7 +1420,8 @@ def main(argv: list[str] | None = None) -> None:
     nd.set_defaults(func=run_nodes)
 
     so = sub.add_parser("studio", help="open Venus in your browser: a node editor for a node file, in your browser, on this computer")
-    so.add_argument("file", help="a node file (make one with: alvenus nodes init storyboard.json)")
+    so.add_argument("file", nargs="?", help="a node file (make one with: alvenus nodes init storyboard.json); "
+                    "leave it out for the welcome page, where you describe a new video")
     so.add_argument("--port", type=int, default=8765)
     so.add_argument("--no-open", action="store_true", help="don't open the browser")
 
@@ -1424,7 +1429,7 @@ def main(argv: list[str] | None = None) -> None:
         from .studio import serve
 
         need_ffmpeg()
-        serve(Path(a.file), a.port, not a.no_open)
+        serve(Path(a.file) if a.file else None, a.port, not a.no_open)
 
     so.set_defaults(func=run_studio)
 
@@ -1468,6 +1473,99 @@ def main(argv: list[str] | None = None) -> None:
     b.add_argument("clips", nargs="+", help="B-roll folder(s) or file(s)")
     b.add_argument("--out-dir", help="where to write broll.json and the sheets (default: the folder scanned)")
     b.set_defaults(func=cmd_scan)
+
+    ic = sub.add_parser("icons", help="pictures without footage: find icons and drawn scenes to use as \"file\": \"icon:NAME\" or \"scene:NAME\"")
+    ic.add_argument("what", choices=("search", "sheet", "scenes"), help="search WORDS, sheet NAMES (a page to look at), or scenes (the drawn scenes)")
+    ic.add_argument("words", nargs="*")
+    ic.add_argument("--out", default="icons.png", help="where sheet saves the page")
+    ic.add_argument("-n", type=int, default=12, help="how many search results")
+
+    def run_icons(a: argparse.Namespace) -> None:
+        from . import pictures as pic
+
+        if a.what == "scenes":
+            print("Drawn scenes (use as \"file\": \"scene:NAME\"):")
+            for k, v in pic.SCENES.items():
+                print(f"  {k:9} {v['about']}")
+            return
+        if not a.words:
+            raise SystemExit(f"alvenus icons {a.what} needs words or names")
+        if a.what == "search":
+            hits = pic.search(" ".join(a.words), a.n)
+            if not hits:
+                raise SystemExit("no icon matches; try a simpler word (\"phone\", \"money\", \"cold\")")
+            for name, cat, tags in hits:
+                print(f"  {name:28} {cat:14} {tags[:60]}")
+            print("use one as \"file\": \"icon:NAME\" (or icon:A+B badge, icon:A>B>C flow, icon:A/B versus, icon:A,B,C row)")
+            return
+        for n in a.words:
+            if not pic.known(n):
+                raise SystemExit(f"no icon called {n!r}; close ones: {pic.suggest(n)}")
+        print(f"saved {pic.sheet(a.words, Path(a.out))}")
+
+    ic.set_defaults(func=run_icons)
+
+    pc = sub.add_parser("picture", help="draw one picture without footage (icon:... or scene:...) in a style, to look at it")
+    pc.add_argument("spec", help='e.g. "icon:device-mobile+snowflake", "icon:bulb>pencil>rocket", "scene:city"')
+    pc.add_argument("--style", default="explainer", help="a style pack (alvenus presets): sets the paper, ink and accent")
+    pc.add_argument("--accent", help="#RRGGBB instead of the style's accent")
+    pc.add_argument("--aspect", default="16:9", choices=("16:9", "9:16", "1:1", "4:5"))
+    pc.add_argument("--out", default="picture.png")
+
+    def run_picture(a: argparse.Namespace) -> None:
+        from . import pictures as pic
+
+        paint, accent = pic.paint_for({"style": a.style, "accent": a.accent})
+        w, h = pic.size_for(a.aspect)
+        pic.render(a.spec, w, h, paint, accent).save(a.out)
+        print(f"saved {a.out} ({paint} paper, accent {accent})")
+
+    pc.set_defaults(func=run_picture)
+
+    idp = sub.add_parser("ideas", help="ideas typed into Studio's \"Describe your video\" box, waiting for you (the AI) to write them")
+    idp.add_argument("action", nargs="?", default="list", choices=("list", "start", "ready", "show"))
+    idp.add_argument("id", nargs="?", help="the idea's id (its folder name)")
+    idp.add_argument("--wait", action="store_true", help="wait until an idea arrives, then show it (for an AI that listens)")
+    idp.add_argument("--json", action="store_true")
+
+    def run_ideas(a: argparse.Namespace) -> None:
+        from . import ideas
+
+        if a.action == "list":
+            got = ideas.entries("waiting") + ideas.entries("writing")
+            while not got and a.wait:
+                time.sleep(2)
+                got = ideas.entries("waiting")
+            if a.json:
+                print(json.dumps(got, indent=1))
+                return
+            if not got:
+                print("No ideas waiting. When the creator types one in Studio's \"Describe your video\" box, it shows up here "
+                      "(alvenus ideas --wait waits for it).")
+                return
+            for e in got:
+                print(ideas.instructions(e) + "\n")
+            return
+        if not a.id:
+            raise SystemExit(f"alvenus ideas {a.action} needs the idea's id (see: alvenus ideas)")
+        if a.action == "show":
+            print(ideas.instructions(ideas.find(a.id)))
+        elif a.action == "start":
+            e = ideas.start(a.id)
+            print(f"brief OK; {e['id']} is laid out as a {e['kind']} of {e['seconds']:g} s. Studio shows it as being written.\n"
+                  f"Now write each scene: alvenus nodes show {e['nodes']}")
+        elif a.action == "ready":
+            from . import storycheck
+            from .approval import content
+
+            e = ideas.find(a.id)
+            weak = storycheck.weak(storycheck.check(content(Path(e["nodes"]))))
+            if weak:
+                raise SystemExit("not ready yet:\n  " + "\n  ".join(f.line() for f in weak))
+            ideas.set_status(e, "ready")
+            print(f"{e['id']} is ready: Studio tells the creator to read it and press Render when they like it.")
+
+    idp.set_defaults(func=run_ideas)
 
     from .update import add_parser as add_update
 

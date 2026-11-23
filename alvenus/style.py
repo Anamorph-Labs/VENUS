@@ -57,7 +57,8 @@ def chunks(words, vertical: bool) -> list[list]:
     max_chars, max_words = (18, 4) if vertical else (32, 7)
     out, cur = [], []
     for w in words:
-        if cur and (len(" ".join(x.text for x in cur + [w])) > max_chars or len(cur) >= max_words):
+        if cur and (len(" ".join(x.text for x in cur + [w])) > max_chars or len(cur) >= max_words
+                    or getattr(w, "line", None) != getattr(cur[-1], "line", None)):  # a new line (scene) is a new phrase
             out.append(cur)
             cur = []
         cur.append(w)

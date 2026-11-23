@@ -137,9 +137,14 @@ def check(sb: dict) -> list[Finding]:
 
     if not scenes:
         return [Finding("weak", 0, "", "there are no scenes", "write the scenes")]
+    from . import pictures
+
     for i, sc in enumerate(scenes, 1):
         if why := empty(sc):
             add("weak", i, f"{why}", f"write it: {sc.get('_job') or 'what this scene is for'}")
+        for f in [sc.get("file")] + [(sc.get(k) or {}).get("file") for k in ("left", "right") if isinstance(sc.get(k), dict)]:
+            if pictures.is_picture(f) and (why := pictures.problem(f)):
+                add("weak", i, f"the drawn picture can't be made ({why})", "pick names from: alvenus icons search WORDS")
 
     # hook
     first, fw = scenes[0], words_of(scenes[0])
@@ -285,7 +290,8 @@ def board(sb: dict, findings: list[Finding] | None = None) -> str:
         d = float(sc.get("seconds") or 3)
         what = " ".join(words_of(sc)) or (str(sc.get("file") or "").rsplit("/", 1)[-1])
         if sc.get("type") in PICTURE and sc.get("file"):
-            what = f"[{str(sc['file']).rsplit('/', 1)[-1]}] " + " ".join(words_of(sc))
+            f = str(sc["file"])
+            what = f"[{'drawn: ' + f if f.startswith(('icon:', 'scene:')) else f.rsplit('/', 1)[-1]}] " + " ".join(words_of(sc))
         what = what.replace("|", "/")
         lines.append(f"| {i} | {sc.get('beat', '')} | {t:.1f}-{t + d:.1f} s | {what[:90] or '(empty)'} | {WHAT.get(sc.get('type'), sc.get('type'))} |")
         t += d

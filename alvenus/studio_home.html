@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Venus · Anamorph Labs</title>
+<link rel="icon" href="/fonts/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/fonts/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/fonts/apple-touch-icon-180.png">
+<style>
+@font-face{font-family:"Hanken Grotesk";src:url(/fonts/HankenGrotesk-normal.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-normal.woff2) format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
+@font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-italic.woff2) format("woff2");font-weight:200 800;font-style:italic;font-display:swap}
+/* the brand palette: mostly ivory, then panels, ink for text, deep blue rare so it always means something */
+:root{--bg:#F6F2EA;--panel:#FFFEFB;--panel2:#F5F1EA;--ink:#22201D;--soft:#5E5850;--faint:#8C8378;--line:#E8E4DD;--hair:rgba(34,32,29,.10);
+--wire:#8C8378;--accent:#2B4A78;--onaccent:#F6F2EA;--soft-accent:#9DB7D9;--ai:#9DB7D9;--sel:#2B4A78;--off:#C9C1B5;--ok:#22201D;--bad:#22201D;
+--node:#FFFEFB;--nodeHead:#F5F1EA;--input:#FFFFFF;--view:#ECE6DB;--shadow:0 10px 30px rgba(34,32,29,.05);--chipbg:#F5F1EA;
+--l-shape:#C9C1B5;--l-picture:#9DB7D9;--l-words:#22201D;--l-marks:#8C8378;--l-graphic:#5E5850;--trunk:#5E5850}
+:root[data-theme="dark"]{--bg:#22201D;--panel:#2A2825;--panel2:#33302C;--ink:#F6F2EA;--soft:#C9C1B5;--faint:#8C8378;--line:#3B3833;--hair:rgba(246,242,234,.10);
+--wire:#8C8378;--accent:#9DB7D9;--onaccent:#22201D;--soft-accent:#9DB7D9;--ai:#9DB7D9;--sel:#F6F2EA;--off:#5E5850;--ok:#F6F2EA;--bad:#F6F2EA;
+--node:#2A2825;--nodeHead:#33302C;--input:#22201D;--view:#1B1A18;--shadow:0 10px 30px rgba(0,0,0,.18);--chipbg:#33302C;
+--l-shape:#8C8378;--l-picture:#9DB7D9;--l-words:#F6F2EA;--l-marks:#C9C1B5;--l-graphic:#C9C1B5;--trunk:#C9C1B5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Hanken Grotesk",ui-sans-serif,system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--hair);border-radius:999px;padding:7px 16px;cursor:pointer}
+button:hover{border-color:var(--faint)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--onaccent);font-weight:600}
+header{display:flex;align-items:center;gap:8px;padding:0 16px;height:56px;border-bottom:1px solid var(--line);background:var(--panel)}
+header img{height:32px;display:block}
+header .dk,:root[data-theme="dark"] header .lt{display:none}
+:root[data-theme="dark"] header .dk{display:block}
+header .sp{flex:1}
+main{max-width:760px;margin:0 auto;padding:40px 16px 60px}
+h1{font:400 38px/1.15 Newsreader,Georgia,serif;margin:0 0 6px;letter-spacing:-.01em}
+h1 em{font-style:italic}
+.lead{color:var(--soft);margin:0 0 22px;font-size:15px}
+.card{background:var(--panel);border:1px solid var(--hair);border-radius:24px;padding:22px;box-shadow:var(--shadow)}
+textarea{width:100%;min-height:110px;resize:vertical;background:var(--input);border:1px solid var(--line);border-radius:16px;padding:14px 16px;
+font:18px/1.45 Newsreader,Georgia,serif}
+textarea:focus,select:focus{outline:2px solid var(--soft-accent);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 4px;align-items:center}
+.pick{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--faint);text-transform:uppercase;letter-spacing:.12em;font-weight:600}
+select{background:var(--input);border:1px solid var(--line);border-radius:999px;padding:7px 12px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink);font-size:14px}
+.go{display:flex;align-items:center;gap:14px;margin-top:16px}
+.small{font-size:12.5px;color:var(--soft)}
+.examples{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.examples button{font-size:12.5px;padding:4px 12px;background:var(--panel2);color:var(--soft)}
+h2{font:400 22px/1.2 Newsreader,Georgia,serif;margin:36px 0 10px}
+.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.proj{text-align:left;border-radius:18px;padding:12px 16px;display:flex;flex-direction:column;gap:2px}
+.proj b{font-weight:600}
+.proj span{font-size:12px;color:var(--faint)}
+.how{margin:28px 0 0;padding:0 0 0 20px;color:var(--soft)}
+.how li{margin:4px 0}
+.err{color:var(--ink);background:var(--panel2);border-radius:12px;padding:8px 12px;margin-top:10px;display:none}
+.wait{display:none;margin-top:12px;color:var(--soft)}
+@media (max-width:600px){h1{font-size:30px}main{padding-top:24px}}
+</style></head><body>
+<header><img class="lt" src="/fonts/venus-lockup-light.svg" alt="Venus, by Anamorph Labs"><img class="dk" src="/fonts/venus-lockup-dark.svg" alt="Venus, by Anamorph Labs"><span class="sp"></span><button id="theme">Theme</button></header>
+<main>
+<h1>Describe your <em>video</em></h1>
+<p class="lead">Say what it is about and who it is for. Venus lays out the story; your own AI writes each scene, and you watch them appear. Nothing is made until you have read it and pressed Render.</p>
+<div class="card">
+<textarea id="idea" placeholder="A 30 second reel on why cold weather drains phone batteries, for people who live somewhere cold" aria-label="describe your video"></textarea>
+<div class="examples" id="examples"></div>
+<div class="row">
+<label class="pick">Kind<select id="kind"><option value="">Let Venus choose</option></select></label>
+<label class="pick">Length<select id="seconds"><option value="">From the idea</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="45">45 seconds</option><option value="60">1 minute</option><option value="90">90 seconds</option></select></label>
+<label class="pick">Shape<select id="aspect"><option value="">From the idea</option><option value="16:9">Wide 16:9 (YouTube)</option><option value="9:16">Tall 9:16 (Reels, Shorts)</option><option value="1:1">Square 1:1</option><option value="4:5">4:5 (Instagram feed)</option></select></label>
+<label class="pick">Look<select id="look"><option value="">Let Venus choose</option></select></label>
+</div>
+<div class="go"><button class="primary" id="start">Lay out my video</button><span class="small">No footage needed: Venus draws pictures in your look.</span></div>
+<div class="err" id="err"></div>
+<div class="wait" id="wait">Laying it out and opening it…</div>
+</div>
+<ol class="how">
+<li>Venus lays the video out by a story recipe: a hook, the steps, a turn, the payoff.</li>
+<li>Your AI (Claude, Codex…) writes each scene. Tell it: <b>“Venus has a new idea for you”</b>.</li>
+<li>You read it, change anything, and press Render when you like it.</li>
+</ol>
+<h2 id="ph" style="display:none">Your videos here</h2>
+<div class="list" id="projects"></div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+try { const t = localStorage.getItem('venus-theme2'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+$('#theme').onclick = () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; try { localStorage.setItem('venus-theme2', t); } catch (e) {} };
+const EX = ['Why cold weather drains your phone, in 30 seconds', 'The story of the first bicycle, for curious kids', 'Top 5 habits that save money, as a reel', 'Launch video for a hand-made coffee mug'];
+$('#examples').innerHTML = EX.map(x => `<button type="button">${esc(x)}</button>`).join('');
+$('#examples').onclick = e => { if (e.target.tagName === 'BUTTON') { $('#idea').value = e.target.textContent; $('#idea').focus(); } };
+async function post(path, body) {
+  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || 'something went wrong'); return j;
+}
+function waitForEditor() {  // Studio restarts on the new video; reload once it answers
+  const t = setInterval(async () => { try { const r = await fetch('/api/state'); const j = await r.json(); if (!j.home) { clearInterval(t); location.reload(); } } catch (e) {} }, 700);
+}
+$('#start').onclick = async () => {
+  $('#err').style.display = 'none';
+  try {
+    $('#start').disabled = true; $('#wait').style.display = 'block';
+    await post('/api/idea', {text: $('#idea').value, kind: $('#kind').value, seconds: $('#seconds').value, aspect: $('#aspect').value, look: $('#look').value});
+    waitForEditor();
+  } catch (e) { $('#start').disabled = false; $('#wait').style.display = 'none'; $('#err').textContent = e.message; $('#err').style.display = 'block'; }
+};
+$('#idea').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('#start').click(); });
+(async () => {
+  const h = await (await fetch('/api/home')).json();
+  $('#kind').innerHTML += h.kinds.map(([k, n, about]) => `<option value="${k}" title="${esc(about)}">${esc(n[0].toUpperCase() + n.slice(1))}</option>`).join('');
+  $('#look').innerHTML += h.looks.map(([k, about]) => `<option value="${k}" title="${esc(about)}">${esc(k)}</option>`).join('');
+  if (h.projects.length) {
+    $('#ph').style.display = '';
+    $('#projects').innerHTML = h.projects.map(p => `<button class="proj" data-p="${esc(p.path)}"><b>${esc(p.name)}</b><span>${esc(p.at)}</span></button>`).join('');
+    $('#projects').onclick = async e => { const b = e.target.closest('.proj'); if (!b) return; b.disabled = true; try { await post('/api/open', {path: b.dataset.p}); waitForEditor(); } catch (er) { b.disabled = false; $('#err').textContent = er.message; $('#err').style.display = 'block'; } };
+  }
+  $('#idea').focus();
+})();
+</script></body></html>

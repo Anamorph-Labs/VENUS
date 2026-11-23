@@ -21,4 +21,4 @@ version = { attr = "alvenus.__version__" }
 packages = ["alvenus"]
 
 [tool.setuptools.package-data]
-alvenus = ["fonts/*.otf", "fonts/*.ttf", "fonts/OFL.txt", "studio.html", "studio_fonts/*.woff2", "studio_fonts/*.txt", "studio_fonts/*.png", "studio_fonts/*.svg", "studio_fonts/*.ico", "addons/README.md", "addons/styles/*.json", "addons/recipes/*.json"]
+alvenus = ["fonts/*.otf", "fonts/*.ttf", "fonts/OFL.txt", "studio.html", "studio_home.html", "studio_fonts/*.woff2", "studio_fonts/*.txt", "studio_fonts/*.png", "studio_fonts/*.svg", "studio_fonts/*.ico", "addons/README.md", "addons/styles/*.json", "addons/recipes/*.json", "icons/*.json.gz", "icons/*.txt"]

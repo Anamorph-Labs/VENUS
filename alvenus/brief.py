@@ -198,6 +198,10 @@ def skeleton(b: dict) -> dict:
             sc["file"] = ""  # words over one of their shots
         if len(forms) > 1:
             sc["_other_forms"] = list(forms[1:])
+        if forms[0] in ("image", "clip") and str(b.get("material") or "none").strip().lower() in ("", "none"):
+            sc["type"] = "image"  # no footage: a drawn picture fills the slot
+            sc["_picture_hint"] = ("no footage: draw it, \"file\": \"icon:NAME\" (or icon:A+B, icon:A>B>C, icon:A/B, "
+                                   "scene:NAME); find names with: alvenus icons search WORDS")
         scenes.append(sc)
     look = b.get("look") if b.get("look") not in (None, "", "any") else r["look"]
     sb = {
