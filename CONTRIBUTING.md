@@ -6,7 +6,7 @@ Ideas are welcome from anyone, written up by you or by your AI.
 **The short version:** you suggest, we check, Anamorph Labs builds the good ones,
 and you are thanked by name.
 
-1. **Suggest.** Describe the idea to your AI (Claude, Codex or any other) and ask it
+1. **Suggest.** Describe the idea to your AI and ask it
    to run `alvenus suggest "your idea"`. It writes the idea up with you (what, why,
    one example, the name to credit) and checks that nothing private is in it. Then it
    gives you a link to a filled-in form on GitHub. You read it and press Submit

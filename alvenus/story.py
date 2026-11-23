@@ -1,6 +1,6 @@
 """Prompt-to-video: build a finished video from a storyboard.
 
-The person describes the video to their own AI (Claude, Codex...). Following
+The person describes the video to their own AI. Following
 AGENTS.md, that AI writes a storyboard: a JSON list of scenes, each one a
 clip, an image, a title, a big statement, a number, a chart, a quote, a
 timeline, a map or a side-by-side comparison, with on-screen captions and

@@ -25,7 +25,7 @@ Free and private: everything runs on your computer. No account, no API keys, no 
 
 1. Get the code: `git clone https://github.com/Anamorph-Labs/Venus && cd Venus` (or **Code > Download ZIP** above).
 2. Run the installer: `bash install.sh` on macOS or Linux, `powershell -ExecutionPolicy Bypass -File install.ps1` on Windows. It checks Python 3.10+, adds FFmpeg if it is missing, keeps Venus in its own folder and downloads the free models once.
-3. Start Studio: `alvenus studio`, then describe your video. Tell your AI (Claude Code, Codex...) *"Venus has a new idea for you"* and it takes it from there ([AGENTS.md](AGENTS.md) is its guide, and [CRAFT.md](CRAFT.md) teaches it to read a cut like an editor).
+3. Start Studio: `alvenus studio`, then describe your video. Tell your AI *"Venus has a new idea for you"* and it takes it from there ([AGENTS.md](AGENTS.md) is its guide, and [CRAFT.md](CRAFT.md) teaches it to read a cut like an editor).
 
 Venus checks for new versions by itself: Studio shows a note with an Update button, and `alvenus update` installs one with a backup that comes back on its own if anything goes wrong. What changed: [CHANGES.md](CHANGES.md).
 

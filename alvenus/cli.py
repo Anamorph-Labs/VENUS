@@ -1312,7 +1312,7 @@ START = """Venus: a free video agent on your own computer.
   alvenus doctor                 check that everything is ready
   alvenus update --check         is there a new version?
 
-Every command: alvenus -h. Your AI (Claude, Codex...) can drive all of it: see AGENTS.md."""
+Every command: alvenus -h. Your AI can drive all of it: see AGENTS.md."""
 
 
 def main(argv: list[str] | None = None) -> None:

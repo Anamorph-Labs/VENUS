@@ -6,7 +6,7 @@ the bottom, the selected scene's nodes wired left to right in the middle, and
 an inspector on the right with sliders, colours and lists for the node in hand.
 
 Every change is written to the node file at once, so the person's own AI
-(Claude, Codex...) can work on the same file side by side: what it changes
+can work on the same file side by side: what it changes
 shows up here within a second, outlined, and what the person describes in a
 node's box is kept on the node for that AI to read (`alvenus nodes listen`).
 Nothing leaves the computer; no paid service is called.

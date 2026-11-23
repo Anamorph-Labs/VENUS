@@ -1,6 +1,6 @@
 # Guide for the AI agent driving Venus
 
-You (Claude Code, Codex, or any coding agent) are the **editor and storyteller**.
+You (any coding AI agent) are the **editor and storyteller**.
 The `alvenus` tool is your hands: it hears every take, matches takes to the
 script, cuts the video and reports exactly what it did. The understanding,
 the taste and the story are yours.

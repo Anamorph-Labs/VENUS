@@ -1,6 +1,6 @@
 """Ideas typed into Studio's "Describe your video" box, waiting for the creator's own AI.
 
-Venus never writes the words of a video itself: the creator's AI (Claude, Codex...)
+Venus never writes the words of a video itself: the creator's AI
 does. So when the creator types an idea in Studio, Venus
 
   1. writes the brief (the idea word for word, plus what the creator picked:
