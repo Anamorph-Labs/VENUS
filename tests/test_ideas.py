@@ -38,6 +38,16 @@ class IdeasTest(unittest.TestCase):
         self.assertEqual(sb["_idea"]["status"], "writing")
         self.assertLess(sum(s["seconds"] for s in sb["scenes"]), 25)  # laid out again at the new length
 
+    def test_facts_added_to_the_brief_later_are_seen_by_the_check(self):
+        from alvenus.approval import content
+
+        e = ideas.create("a 30 second reel on why cold kills phone batteries", self.tmp / "videos")
+        bp = Path(e["brief"])
+        b = json.loads(bp.read_text())
+        b["facts"] = [{"fact": "batteries lose 20% at 0 C", "source": "the creator"}]
+        bp.write_text(json.dumps(b))
+        self.assertEqual(content(Path(e["nodes"]))["brief"]["facts"], b["facts"])
+
     def test_names_and_guesses(self):
         self.assertEqual(ideas.slug("Why cold weather drains your phone, in 30 seconds"), "cold-weather-drains-your")
         self.assertEqual(ideas._guess("top 5 habits that save money as a reel")["kind"], "list")

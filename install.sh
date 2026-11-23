@@ -84,4 +84,4 @@ fi
 say "Check"
 "$HOME_DIR/bin/alvenus" doctor || true
 echo
-echo "Done. Try:  alvenus make --template explainer idea.json --out idea.mp4"
+echo "Done. Start with:  alvenus studio    (describe your video, read the storyboard, press Render)"

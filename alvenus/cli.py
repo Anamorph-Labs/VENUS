@@ -1216,6 +1216,17 @@ def cmd_doctor(a: argparse.Namespace) -> None:
     raise SystemExit(0 if ok else 1)
 
 
+START = """Venus: a free video agent on your own computer.
+
+  alvenus studio                 open Studio: describe your video, read the storyboard, press Render
+  alvenus cut --script S --takes CLIPS --out cut.mp4     your script + your takes -> the best cut
+  alvenus make --template explainer idea.json            a starter storyboard to fill in
+  alvenus doctor                 check that everything is ready
+  alvenus update --check         is there a new version?
+
+Every command: alvenus -h. Your AI (Claude, Codex...) can drive all of it: see AGENTS.md."""
+
+
 def main(argv: list[str] | None = None) -> None:
     from .community import load_addons
 
@@ -1552,7 +1563,7 @@ def main(argv: list[str] | None = None) -> None:
             print(ideas.instructions(ideas.find(a.id)))
         elif a.action == "start":
             e = ideas.start(a.id)
-            print(f"brief OK; {e['id']} is laid out as a {e['kind']} of {e['seconds']:g} s. Studio shows it as being written.\n"
+            print(f"brief OK; {e['id']} is laid out as {'an' if e['kind'][0] in 'aeiou' else 'a'} {e['kind']} of {e['seconds']:g} s. Studio shows it as being written.\n"
                   f"Now write each scene: alvenus nodes show {e['nodes']}")
         elif a.action == "ready":
             from . import storycheck
@@ -1598,6 +1609,9 @@ def main(argv: list[str] | None = None) -> None:
     d = sub.add_parser("doctor", help="check that FFmpeg, Python packages and models are ready")
     d.set_defaults(func=cmd_doctor)
 
+    if not args:
+        print(START)
+        return
     a = p.parse_args(args)
     if a.cmd == "cut" and getattr(a, "formats", None):
         # One cut in several shapes. What was heard is remembered, so each

@@ -54,4 +54,4 @@ if (-not $NoModels) {
 
 Write-Host "`n== Check"
 & $Venus doctor
-Write-Host "`nDone. Try:  alvenus make --template explainer idea.json --out idea.mp4"
+Write-Host "`nDone. Start with:  alvenus studio    (describe your video, read the storyboard, press Render)"

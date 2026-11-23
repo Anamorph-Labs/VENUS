@@ -33,7 +33,17 @@ def content(path: Path) -> dict:
 
     path = Path(path)
     if nd.is_nodes(path):
-        return nd.to_storyboard(nd.read(path))
+        sb = nd.to_storyboard(nd.read(path))
+        side = path.with_name("brief.json")
+        if sb.get("_idea") and side.exists():  # an idea from Studio: the brief file is where the AI keeps it up to date
+            try:
+                from .brief import QUESTIONS
+
+                b = json.loads(side.read_text(encoding="utf-8"))
+                sb["brief"] = {**(sb.get("brief") or {}), **{k: b[k] for k in QUESTIONS if k in b}}
+            except (OSError, ValueError):
+                pass
+        return sb
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
