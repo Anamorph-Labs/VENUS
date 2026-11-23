@@ -233,7 +233,7 @@ border-radius:20px;padding:16px 18px;box-shadow:var(--shadow);display:none}
 <div class="updbox" id="updbox" role="dialog" aria-label="new version of Venus"><h3 id="updh"></h3><ul id="updnotes"></ul>
 <p class="small" id="updsmall">Your videos and node files stay as they are. The version you have now is kept, and it comes back on its own if the new one does not start.</p>
 <div class="btns"><button class="primary" id="updgo">Update now</button><button id="updlater">Later</button></div></div>
-<div class="updbox storybox" id="storybox" role="dialog" aria-label="story check"><h3>Before it is made: the story check</h3><ul id="storylist"></ul>
+<div class="updbox storybox" id="storybox" role="dialog" aria-label="story check"><h3>Before it is made: the story check</h3><p id="storyq" style="font-weight:600"></p><ul id="storylist"></ul>
 <p class="small">Your AI can fix these (tell it “fix the story check”), or you can make it as it is.</p>
 <div class="btns"><button id="storyfix" class="primary">I'll fix them first</button><button id="storyany">Make it anyway</button></div></div>
 <div class="dirbox" id="dirbox" role="dialog" aria-label="three directions"><div class="dirhead"><h3>Three directions for this story</h3><button id="dirclose">Close</button></div>
@@ -713,7 +713,10 @@ async function render(anyway) {
   try { const r = await api('/api/render', {anyway}); apply(r.state, true); $('#storybox').classList.remove('on'); toast('Rendering the full video. Keep working; it shows here when done.'); }
   catch (e) {
     if (e.message.startsWith('STORY:')) {
-      $('#storylist').innerHTML = JSON.parse(e.message.slice(6)).map(x => '<li>' + esc(x.replace(/^\[weak\] /, '')) + '</li>').join('');
+      const c = JSON.parse(e.message.slice(6)), w = Array.isArray(c) ? c : c.weak;
+      $('#storyq').textContent = c.question || '';
+      $('#storylist').innerHTML = w.map(x => '<li>' + esc(x.replace(/^\[weak\] /, '')) + '</li>').join('') +
+        (c.openings || []).map((o, i) => '<li>Opening idea ' + (i + 1) + ': start on scene ' + o.scene + ' (\u201c' + esc(o.open_on.slice(0, 50)) + '\u201d), ' + esc(o.why) + '.</li>').join('');
       $('#storybox').classList.add('on');
     } else toast(e.message, 'bad');
   }

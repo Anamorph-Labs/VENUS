@@ -1143,7 +1143,7 @@ class IdeaToStoryboard(unittest.TestCase):
     def test_good_storyboard_passes(self):
         from alvenus.storycheck import check, weak
 
-        self.assertEqual([f.line() for f in weak(check(self._sb()))], [])
+        self.assertEqual([f.line() for f in weak(check(self._sb(), learn=False))], [])
 
     def test_weak_points_are_named(self):
         from alvenus.storycheck import check, weak
@@ -1154,7 +1154,7 @@ class IdeaToStoryboard(unittest.TestCase):
         s[4]["text"] = "Phones are bad in winter. Everyone knows that."
         s[5]["value"] = "65%"
         s[6]["text"] = "Keep it in your pocket."
-        found = " | ".join(f.line() for f in weak(check(sb)))
+        found = " | ".join(f.line() for f in weak(check(sb, learn=False)))
         for bit in ("greeting", "says 2 things", "\"65%\"", "doesn't turn", "doesn't say the point"):
             self.assertIn(bit, found)
 
@@ -1164,7 +1164,7 @@ class IdeaToStoryboard(unittest.TestCase):
         sb = self._sb()
         sb["scenes"][2]["items"] = []
         sb["scenes"][3]["seconds"] = 12
-        found = " | ".join(f.line() for f in weak(check(sb)))
+        found = " | ".join(f.line() for f in weak(check(sb, learn=False)))
         self.assertIn("no items yet", found)
         self.assertIn("long for one scene", found)
 

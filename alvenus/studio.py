@@ -274,7 +274,10 @@ class Studio:
         from .approval import content
 
         f = storycheck.check(content(self.path))
+        sb = content(self.path)
         return {"weak": [x.line() for x in storycheck.weak(f)], "notes": [x.line() for x in f if x.level == "note"],
+                "question": storycheck.question(sb, f), "promise": storycheck.promise(sb),
+                "openings": storycheck.openings(sb, f),
                 "unwritten": [x.scene for x in f if x.level == "weak" and x.what.startswith("no ") and x.what.endswith(" yet")]}
 
     def start_render(self, anyway: bool = False) -> None:
@@ -283,7 +286,8 @@ class Studio:
             raise ValueError("not written yet: scene " + ", ".join(map(str, chk["unwritten"])) +
                              ". Your AI fills them in; then press Render.")
         if chk["weak"] and not anyway:
-            raise ValueError("STORY:" + json.dumps(chk["weak"]))
+            raise ValueError("STORY:" + json.dumps({"weak": chk["weak"], "question": chk["question"],
+                                                    "openings": chk["openings"]}))
         with self.lock:
             if self.render.get("state") == "running":
                 raise ValueError("a render is already running")
@@ -292,6 +296,14 @@ class Studio:
             self.render = {"state": "running", "started": time.time(), "video": out.name}
 
         approve(self.path, "you, in Studio")  # pressing Render is the creator's yes to what is on screen
+        try:
+            from . import storycheck, taste
+            from .approval import content
+
+            sb = content(self.path)
+            taste.approved(self.path, sb, storycheck.check(sb))  # what still stands is how this creator likes it
+        except Exception:  # nosec B110 - learning is a bonus and must never stop a render
+            pass
 
         def go():
             r = subprocess.run([sys.executable, "-m", "alvenus", "make", str(self.path), "--out", str(out)],

@@ -15,6 +15,10 @@ Venus makes three kinds of video. Pick by what the creator has:
 | A folder of clips and a song, no speaking | a music edit | `alvenus montage` (section 8) |
 | An idea, plus some clips or images (or none) | a video built scene by scene | `alvenus make` (section 9) |
 
+**Read [CRAFT.md](CRAFT.md) first.** It is the craft guide: how a good editor
+reads a cut, gives notes and respects the creator's taste. Everything below is
+how Venus helps you follow it.
+
 ## 0. At the start of every session: is Venus up to date?
 
 Run `alvenus update --check --json` once, before anything else. It answers in
@@ -31,6 +35,11 @@ a second (and quietly says so when it is offline):
 
 Studio shows the same note in its header with an Update button, so a creator
 working there needs nothing from you.
+
+Then run `alvenus taste --json` once: what this creator usually leaves as it is
+(`quiet`), the advice they usually take (`takes`) and what they like (`likes`:
+styles, kinds, openings). Shape your suggestions by it; don't argue again for
+something they keep setting aside. It lives only on their computer.
 
 ## 1. Understand what they want
 
@@ -458,6 +467,27 @@ the creator wants it as it is anyway, `approve --anyway "their reason"`.
 It writes `sb.board.md`: the brief, then one row per scene (beat, time, what is on
 screen). Show that board to the creator, not the JSON.
 
+It also reads the cut by the craft guide ([CRAFT.md](CRAFT.md)): an opening
+question the ending never answers, "3 reasons" with only 2 delivered, a cut that
+lands mid-sentence, a point made twice, a word like "REM" the viewer may not know,
+"he" before we know who, the same shot held 8 s or more, a scene that serves
+neither the promise nor its neighbours. Every finding names its moment
+(`at 0:15-0:18`). The board opens with **The promise** (`brief.promise`, else
+`point`) and **One question**: ask the creator that question first, not the
+whole list. When the first 3 seconds are weak it lists **up to 3 better
+openings** from their own scenes, each with a reason: offer them, let them pick,
+then `alvenus taste pick opening-KIND` (number, turn, picture, flash-forward).
+The board shows only the 3 notes that matter most (`--all` for every one);
+`alvenus check FILE --json` gives you everything, with each finding's `code`.
+
+**Learning their taste.** Venus learns on its own: a note gone at the next check
+was taken; notes still standing when they approve were set aside. When the
+creator says no to a note in words, record it: `alvenus taste aside CODE --why
+"their words"` (or `keep CODE` when they take one). A kind of note set aside at
+least twice, more often than taken, goes quiet for this creator. Notes about
+facts, empty scenes and missing pictures never go quiet. `alvenus taste forget`
+starts over.
+
 Templates still work for a quick start (`alvenus make --template explainer|story|
 list|ad sb.json` writes a filled example of the shape); they go through the same
 check and approval. `alvenus make --example sb.json` writes every scene type.
@@ -706,5 +736,7 @@ ships, its author is thanked and credited by name (CONTRIBUTING.md has the detai
 - Never invent or reword script lines; captions show the script as written.
 - Never send a suggestion, email or post for the creator: give them the link and let them submit it.
 - No video before the creator has seen the storyboard and said yes (`alvenus approve`).
+- Ask one question that unlocks the edit, not ten notes; point to the exact moment;
+  suggest a fix and let the creator decide (CRAFT.md).
 - Say what you are unsure about. A confident wrong cut costs the creator more than
   a question.

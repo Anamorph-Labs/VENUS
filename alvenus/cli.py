@@ -891,7 +891,18 @@ def cmd_check(a: argparse.Namespace) -> None:
     except SystemExit as e:  # the storyboard can't be built as written: that is weak too
         for line in str(e).splitlines()[1:]:
             findings.insert(0, storycheck.Finding("weak", 0, "", line.strip(), "fix the storyboard file"))
-    page = storycheck.board(sb, findings)
+    from . import taste
+
+    taste.seen(p, findings)
+    if a.json:
+        print(json.dumps({"promise": storycheck.promise(sb), "question": storycheck.question(sb, findings),
+                          "openings": storycheck.openings(sb, findings),
+                          "findings": [{"level": f.level, "scene": f.scene, "at": f.at, "code": f.code, "what": f.what, "fix": f.fix}
+                                       for f in findings]}, indent=1, ensure_ascii=False))
+        if storycheck.weak(findings):
+            raise SystemExit(1)
+        return
+    page = storycheck.board(sb, findings, every=a.all)
     bp = p.with_name((p.name[:-5] if p.name.endswith(".json") else p.name) + ".board.md")
     bp.write_text(page, encoding="utf-8")
     print(page)
@@ -908,13 +919,43 @@ def cmd_approve(a: argparse.Namespace) -> None:
     from .approval import approve, content
 
     p = Path(a.storyboard)
-    w = storycheck.weak(storycheck.check(content(p)))
+    sb = content(p)
+    found = storycheck.check(sb)
+    w = storycheck.weak(found)
     if w and not a.anyway:
         raise SystemExit(f"the story check still finds {len(w)} weak point{'s' if len(w) > 1 else ''} (alvenus check {p}). "
                          "Fix them, or if the creator wants it as it is: approve --anyway \"their reason\"")
     rec = approve(p, a.by, a.anyway or "")
+    from . import taste
+
+    taste.approved(p, sb, found)  # what still stands is how this creator likes it
     print(f"approved by {rec['approved_by']} at {rec['at']}. Now: alvenus make {p} --out video.mp4 "
           "(any change to the storyboard needs a new approval)")
+
+
+def cmd_taste(a: argparse.Namespace) -> None:
+    from . import taste
+
+    if a.action in ("keep", "aside", "pick") and not a.name:
+        raise SystemExit(f"alvenus taste {a.action} needs a name (a note's code from alvenus check --json, or a pick like opening-turn)")
+    if a.action == "keep":
+        taste.mark(a.name, True, a.why)
+    elif a.action == "aside":
+        taste.mark(a.name, False, a.why)
+    elif a.action == "pick":
+        taste.pick(a.name)
+    elif a.action == "forget":
+        taste.forget(a.name)
+    s = taste.summary()
+    if a.json:
+        print(json.dumps(s, indent=1, ensure_ascii=False))
+        return
+    if a.action != "show":
+        print("noted.")
+    print("Venus keeps this on this computer only: " + s["file"])
+    print("Quiet now (this creator usually leaves these as they are): " + (", ".join(s["quiet"]) or "nothing yet"))
+    print("Advice they usually take: " + (", ".join(s["takes"]) or "nothing yet"))
+    print("What they like: " + (", ".join(s["likes"]) or "nothing yet"))
 
 
 def cmd_suggest(a: argparse.Namespace) -> None:
@@ -1453,7 +1494,15 @@ def main(argv: list[str] | None = None) -> None:
     sk.set_defaults(func=cmd_storyboard)
     ck = sub.add_parser("check", help="the story check: hook, one idea per scene, turn, payoff, facts, pace; writes a board to show the creator")
     ck.add_argument("storyboard")
+    ck.add_argument("--all", action="store_true", help="list every small note too (by default only the ones that matter most)")
+    ck.add_argument("--json", action="store_true", help="the promise, the one question, better openings and every finding, for the AI")
     ck.set_defaults(func=cmd_check)
+    tg = sub.add_parser("taste", help="what Venus has learned from the notes this creator keeps or sets aside (kept on this computer only)")
+    tg.add_argument("action", nargs="?", default="show", choices=["show", "keep", "aside", "pick", "forget"])
+    tg.add_argument("name", nargs="?", help="a note's code (from alvenus check --json), or a pick such as opening-number")
+    tg.add_argument("--why", default="", help="the creator's reason, in their words")
+    tg.add_argument("--json", action="store_true")
+    tg.set_defaults(func=cmd_taste)
     ap = sub.add_parser("approve", help="record the creator's yes to a storyboard; videos are made only from approved storyboards")
     ap.add_argument("storyboard")
     ap.add_argument("--by", required=True, help="who said yes (the creator's name)")

@@ -27,6 +27,7 @@ QUESTIONS: dict[str, str] = {
     "idea": "the idea as the creator typed it, word for word",
     "audience": "who will watch it, in a few words (\"first-year students\", \"people planning a Kyoto trip\")",
     "point": "the ONE thing they should remember afterwards, as one short sentence",
+    "promise": "what the video promises the viewer for watching, in one line (\"you'll see why your phone dies in the cold\"); every scene must serve it",
     "kind": "explainer, travel, story, list or ad",
     "seconds": "how long, in seconds (15 to 90 works best for these shapes)",
     "aspect": "16:9 (YouTube), 9:16 (Reels, Shorts), 1:1 or 4:5",

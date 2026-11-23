@@ -15,4 +15,7 @@ so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 - Describe your video in Studio: type the idea on the welcome page, Venus lays the story out at once, your AI writes each scene while you watch, and nothing is made until you press Render.
 - Three directions for every idea: your look, the opposite energy and a tighter cut, each with frames and its story check, to pick from before anything is made (`alvenus directions`, or the 3 directions button in Studio).
 - A sharper story check: does the hook pull you in, does any scene say two things, is the ending short and given time to land. The board opens with the story at a glance.
+- The Venus craft guide (CRAFT.md): your AI reads a cut the way a good editor does, asks one question that unlocks the edit, points to the exact moment and lets you decide.
+- The story check reads like an editor: the promise in one line, up to 3 better openings when the first 3 seconds are weak, an opening the ending never answers, "3 reasons" with only 2 given, cuts mid-sentence, a point made twice, the same shot held too long.
+- Venus learns your taste on your computer: advice you keep setting aside goes quiet, openings come in the order you pick them (`alvenus taste`). Facts are always checked.
 - Easier first steps: the installer ends with `alvenus studio`, and `alvenus` on its own shows where to start.
