@@ -180,8 +180,11 @@ input[type=range]::-moz-range-progress{background:var(--ink);height:4px;border-r
 .menu .mr button{height:26px;padding:0 10px;font-size:12px}
 .menu .mi{display:flex;width:100%;justify-content:flex-start;height:auto;border:0;background:none;padding:8px 10px;border-radius:10px;font-weight:400}
 .menu .mi:hover{background:var(--chip)}
-.tips{position:absolute;left:50%;top:52px;transform:translateX(-50%);z-index:8;width:min(440px,calc(100% - 32px));background:var(--panel);border:1px solid var(--hair2);
+.tips{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 48px);display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--hair2);
 border-radius:24px;box-shadow:var(--pop);padding:18px 22px 16px}
+.tips .tbody{overflow:auto;min-height:0;flex:1 1 auto;margin-right:-8px;padding-right:8px}
+.tips .tfoot{flex:none;padding-top:12px}
+.tips .tx{position:absolute;top:12px;right:12px;width:32px;height:32px;padding:0;border-radius:50%;font-size:18px;line-height:1;display:grid;place-items:center;z-index:1}
 .tips h4{font:400 22px/1.2 Newsreader,Georgia,serif;margin:0 0 10px}
 .tips h4 em{font-style:italic}
 .tips ol{margin:0 0 14px;padding-left:20px;color:var(--mut);font-size:13px}
@@ -421,12 +424,12 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <div id="world"><svg id="wires"></svg><div id="nodes"></div></div>
 <div class="cv-ask"><input id="gask" placeholder="Describe a change to this scene, for example “words behind the picture”" aria-label="describe a change to this scene"><button class="primary" id="gaskgo">Change</button></div>
 <canvas id="mini" width="256" height="144" title="map of the graph: click to go there"></canvas>
-<div class="tips" id="tips" style="display:none"><img class="mark lt" src="/fonts/venus-logo-light.svg" alt="Venus"><img class="mark dk" src="/fonts/venus-logo-dark.svg" alt="Venus"><h4>How the <em>scene</em> is built</h4><ol>
+<div class="tips" id="tips" style="display:none" role="dialog" aria-label="Tips"><button class="tx" id="tipsx" title="close (Esc)" aria-label="close tips">×</button><div class="tbody"><img class="mark lt" src="/fonts/venus-logo-light.svg" alt="Venus"><img class="mark dk" src="/fonts/venus-logo-dark.svg" alt="Venus"><h4>How the <em>scene</em> is built</h4><ol>
 <li><b>Each box is one part of the scene</b>: the paper, the photo, the words. Click one to change it on the right. Drag a box to move it.</li>
 <li><b>Lines show what goes where.</b> Hover a line to read what it carries. Right-click it to add a tool, such as a blur or a glow.</li>
 <li><b>Or describe it in your words</b> in the box at the bottom: “soft glow on the words”, “blur the paper”.</li></ol>
-<p class="community">Venus is started by Anamorph Labs and grows with the people who use it. Have an idea? Ask your AI to <b>suggest it</b> (alvenus suggest). Anamorph Labs reviews every idea, builds the good ones, and thanks you by name.</p>
-<button class="primary" id="tipsok">Got it</button></div></div>
+<p class="community">Venus is started by Anamorph Labs and grows with the people who use it. Have an idea? Ask your AI to <b>suggest it</b> (alvenus suggest). Anamorph Labs reviews every idea, builds the good ones, and thanks you by name.</p></div>
+<div class="tfoot"><button class="primary" id="tipsok">Got it</button></div></div></div>
 <div class="strip" id="strip"></div>
 </div>
 <aside id="insp"></aside>
@@ -813,7 +816,10 @@ function control(target, name, spec, value, locked, inherited) {
     const on = v === true;
     return `<div class="row"><div class="inline"><label>${esc(labelOf(name))} ${reset}</label><button ${dis} class="tog ${on ? 'on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(labelOf(name))}" data-set="${esc(target)}" data-p="${esc(name)}" data-v="${!on}"></button></div>${why}</div>`;
   } else if (spec.type === 'select') {
-    input = `<select ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str"><option value="">${v == null ? '(design default)' : '(reset)'}</option>${spec.options.map(o => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+    // a list with its own default (such as "auto") shows that default when nothing is set; the reset link clears a choice
+    const own = spec.default != null && spec.options.includes(spec.default);
+    const blank = own ? '' : `<option value="">${value == null ? '(design default)' : '(reset)'}</option>`;
+    input = `<select ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">${blank}${spec.options.map(o => `<option ${o === (own ? v : value) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
   } else if (spec.type === 'colour') {
     const hex = /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#888888';
     input = `<div class="col"><input type="color" ${dis} id="${id}" value="${hex}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">
@@ -1097,7 +1103,7 @@ document.addEventListener('click', async e => {
       if (sel.node === 'st:look' || sel.node === 'st:in' || (simple && sel.node?.startsWith('merge:'))) sel.node = sel.node === 'st:look' ? 'st:picture' : 'out';
       view = {}; drawCanvas(); drawInspector(); return toast(simple ? 'Simple view: the look sits inside the photo, the transition inside the scene' : 'Every node is showing');
     case 'tipsbtn': $('#tips').style.display = ''; return;
-    case 'tipsok': $('#tips').style.display = 'none'; try { localStorage.setItem('venus-tips-seen', '1'); } catch (er) {} return;
+    case 'tipsok': case 'tipsx': closeTips(); return;
   }
 });
 let rmArmed = 0;
@@ -1109,11 +1115,14 @@ async function describe(id, text, stage) {
     toast(r.did.length ? 'Done now: ' + r.did.join('; ') + (node(id)?.ask?.left?.length ? ' · the rest is waiting for your AI' : '') : 'Saved for your AI to read'); }
   catch (e) { toast(e.message, 'bad'); }
 }
+function closeTips() { $('#tips').style.display = 'none'; try { localStorage.setItem('venus-tips-seen', '1'); } catch (er) {} }
+// a click anywhere outside the tips card closes it too
+document.addEventListener('pointerdown', e => { const t = $('#tips'); if (t.style.display !== 'none' && !t.contains(e.target) && !e.target.closest('#tipsbtn')) closeTips(); }, true);
 document.addEventListener('keydown', e => {
   if (e.target.dataset?.desc && e.key === 'Enter') { describe(e.target.dataset.desc, e.target.value, e.target.dataset.stage); e.target.value = ''; return; }
   if ((e.target.dataset?.gdesc || e.target.id === 'gask') && e.key === 'Enter') { describe(sel.scene, e.target.value); e.target.value = ''; return; }
   if (e.target.id === 'dtext' && e.key === 'Enter') { $('#dgo').click(); return; }
-  if (e.key === 'Escape') $('#moremenu').classList.remove('on');
+  if (e.key === 'Escape') { $('#moremenu').classList.remove('on'); if ($('#tips').style.display !== 'none') closeTips(); }
   if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); op(e.shiftKey ? '/api/redo' : '/api/undo', {}); }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); if (sel.node?.startsWith('tool:')) dupTool(sel.node.slice(5)); return; }
