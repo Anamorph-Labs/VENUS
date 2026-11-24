@@ -1,0 +1,40 @@
+# Venus
+
+> Venus is a free video editor by Anamorph Labs that tells a story. It runs entirely on your own computer, and you steer it in plain words through the AI you already use (Claude, ChatGPT, Codex, Gemini or any other assistant that can run commands). Describe a video, or hand it your footage: Venus lays out the story, your AI writes it, you read the storyboard, and nothing is made until you press Render.
+
+Venus is made by Anamorph Labs (https://anamorphlabs.com). It is free to use for any purpose, including paid client work, under the Business Source License 1.1 (each version becomes MIT four years after release). No account, no API keys, no uploads, no credits. Finished videos end with a small "Made with Venus" mark for their last two seconds, which the creator can switch off.
+
+## What Venus does
+
+- **Video from an idea:** type one sentence in Venus Studio. Venus lays it out by a story recipe (a hook, the steps, a turn, the payoff), your AI writes each scene while you watch, and Venus draws the pictures itself in a designed look. No footage, stock sites or AI image credits needed.
+- **Edits your own footage:** give it a script and your takes. It listens to every take with a local speech model, picks the best take for each line, explains why, and cuts the video with captions, music that dips under speech, B-roll and titles.
+- **Music edits:** cuts a folder of clips to a song, every cut on the beat and the strongest moment on the drop, calm or punchy, including a fast "creative edit" look with cut-outs and light.
+- **Cuts like a reference:** reads reference videos shot by shot (cut rhythm, pace, colour, parts of the edit) and cuts your clips the same way on your song's beat, showing a sheet before anything is rendered.
+- **Checks the story, not only the pixels:** before rendering, a story check asks whether the hook makes you stay, there is one idea per scene, a turn in the middle, an ending that lands, and a source for every number. Then three story directions to pick from at a glance.
+- **Venus Studio:** a visual editor in the browser on your computer. Every scene is a set of plain nodes (paper, photo, words, marks, tools such as blur, glow, colour and dark edges) you can change by hand or by describing the change in your words. What you set always wins over the AI. Locks, undo, before/after wipe, real render progress, Day and Night themes.
+- **Brand kit first:** your colours and fonts are used first, and every render is checked against them.
+- **Finds shots in your footage:** ask "someone laughing" and it returns the matching moments with times and pictures, using a free local model.
+- **Hands off to pro editors:** every cut comes with a timeline for Premiere Pro and DaVinci Resolve (XML, EDL), media linked and unused takes kept.
+- **Styles:** explainers with animated numbers and charts, talking heads, documentary, travel, archive and sepia film, trailers, video essays, quotes, maps and lower thirds, in 16:9, 9:16, 1:1 and 4:5.
+- **Private and local:** everything runs on the creator's own computer with FFmpeg and small open models (Whisper for speech, CLIP for footage search). Nothing is uploaded.
+
+## How it works with your AI
+
+- Venus is driven by the creator's own AI assistant. The assistant reads Venus's guide (AGENTS.md) and craft guide (CRAFT.md), which teach it to read a cut like an editor and a story like a second reader.
+- The AI never guesses context: it asks, and marks guesses as guesses.
+- The creator reads and approves the storyboard before any video is made.
+
+## Get started
+
+- [Install and quick start](https://github.com/Anamorph-Labs/Venus#install-in-3-steps): clone, run the installer, then `alvenus studio`.
+- [Guide for AI assistants](https://github.com/Anamorph-Labs/Venus/blob/main/AGENTS.md): how an assistant drives Venus.
+- [Craft guide](https://github.com/Anamorph-Labs/Venus/blob/main/CRAFT.md): the editing taste Venus follows.
+- [What changed](https://github.com/Anamorph-Labs/Venus/blob/main/CHANGES.md)
+- [Announcement](https://anamorphlabs.com/venus/)
+
+## Optional
+
+- [Licence](https://github.com/Anamorph-Labs/Venus/blob/main/LICENSE): Business Source License 1.1; free use including paid client work; not to be resold or offered as a hosted service.
+- [Names and logos](https://github.com/Anamorph-Labs/Venus/blob/main/TRADEMARKS.md)
+- [How ideas become features](https://github.com/Anamorph-Labs/Venus/blob/main/CONTRIBUTING.md): ideas are welcome; Anamorph Labs builds the good ones and credits the person.
+- Contact: creative@anamorphlabs.com
