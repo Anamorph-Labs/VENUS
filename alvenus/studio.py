@@ -322,7 +322,7 @@ class Studio:
             tail = [x for x in text.strip().splitlines() if x.strip()][-6:]
             stopped = self.render.get("stopping")
             self.render = {"state": "stopped" if stopped else "done" if p.returncode == 0 else "failed", "video": out.name, "log": tail,
-                           "seconds": round(time.time() - self.render["started"])}
+                           "started": self.render["started"], "seconds": round(time.time() - self.render["started"])}
             self.proc = None
 
         threading.Thread(target=go, daemon=True).start()

@@ -880,6 +880,20 @@ class Studio(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Studio.stop_render(SimpleNamespace(render={"state": "idle"}, proc=None))
 
+    def test_studio_pages_carry_every_screen(self):
+        from pathlib import Path
+        import alvenus
+        here = Path(alvenus.__file__).parent
+        page = (here / "studio.html").read_text(encoding="utf-8")
+        for bit in ('id="done"', 'id="watch"', 'id="scrim"', 'id="storybox"', 'id="dirbox"', 'function dirCards', 'TOOL_ICON', 'class="stk"'):
+            self.assertIn(bit, page)
+        home = (here / "studio_home.html").read_text(encoding="utf-8")
+        for bit in ('id="idea"', 'id="seconds"', 'id="aspect"', 'id="kind"', 'id="look"', 'id="start"', 'id="projects"'):
+            self.assertIn(bit, home)
+        # brand kit: no warm greys, browns or light blue
+        for bad in ("#5E5850", "#8C8378", "#C9C1B5", "#E8E4DD", "#9DB7D9"):
+            self.assertNotIn(bad.lower(), (page + home).lower())
+
     def test_studio_schema_covers_every_stage(self):
         from alvenus import nodes as nd
         from alvenus.studio import schema

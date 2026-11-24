@@ -9,10 +9,10 @@
 @font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-normal.woff2) format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
 @font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-italic.woff2) format("woff2");font-weight:200 800;font-style:italic;font-display:swap}
 /* Studio brand kit. Day: ivory ground, ink text, neutral greys made from #17181B (never warm or brown).
-   Deep blue only for the AI's own words; light blue only for "changed by your AI". Night: the approved Night tokens. */
+   Deep blue for the AI: its words and what it changed (no light blue in the kit). In Night its words are white. Night: the approved Night tokens. */
 :root{--ground:#F6F2EA;--panel:#FFFEFB;--canvas:#FFFEFB;--chip:rgba(23,24,27,.045);--chipsolid:#F3F1EC;
 --ink:#22201D;--mut:rgba(23,24,27,.70);--q:rgba(23,24,27,.56);--faint:rgba(23,24,27,.42);--taupe:rgba(23,24,27,.22);
---hair:rgba(23,24,27,.09);--hair2:rgba(23,24,27,.14);--blue:#2B4A78;--lb:#9DB7D9;
+--hair:rgba(23,24,27,.09);--hair2:rgba(23,24,27,.14);--blue:#2B4A78;--lb:#2B4A78;
 --fill:#22201D;--filltx:#F6F2EA;--sel:#22201D;--frame:#17181B;--input:#FFFEFB;--field:#F6F2EA;
 --trunk:#22201D;--l-shape:rgba(23,24,27,.40);--l-picture:rgba(23,24,27,.55);--l-words:#22201D;--l-marks:rgba(23,24,27,.40);--l-graphic:rgba(23,24,27,.55);
 --shadow:0 10px 30px rgba(23,24,27,.05);--pop:0 10px 30px rgba(23,24,27,.08);--insp:#FFFEFB;
@@ -21,7 +21,7 @@
 --view:var(--ground);--ai:var(--lb);--wire:var(--q);--off:var(--taupe);--bad:var(--ink)}
 :root[data-theme="dark"]{--ground:#0C0D0F;--panel:#16171A;--canvas:#111214;--chip:#212226;--chipsolid:#212226;
 --ink:#ECEAE6;--mut:#9A9893;--q:#9A9893;--faint:#9A9893;--taupe:#2C2D31;
---hair:rgba(236,234,230,.08);--hair2:rgba(236,234,230,.13);--blue:#9DB7D9;--lb:#9DB7D9;
+--hair:rgba(236,234,230,.08);--hair2:rgba(236,234,230,.13);--blue:#FFFFFF;--lb:#2B4A78;
 --fill:#ECEAE6;--filltx:#0C0D0F;--sel:#ECEAE6;--frame:#17181B;--input:#16171A;--field:#212226;
 --trunk:#ECEAE6;--l-shape:#6B6A66;--l-picture:#9A9893;--l-words:#ECEAE6;--l-marks:#9A9893;--l-graphic:#9A9893;
 --shadow:none;--pop:0 10px 30px rgba(0,0,0,.35);--insp:rgba(22,23,26,.85)}
@@ -273,6 +273,107 @@ padding:18px 20px;box-shadow:var(--pop);display:none;max-height:calc(100vh - 90p
 .dirbox .dirhead{display:flex;align-items:center;justify-content:space-between}
 .dirbox h3{font:400 22px/1.2 Newsreader,Georgia,serif;margin:0}
 .dirbox img{width:100%;border-radius:12px;margin:8px 0 12px;display:none}
+/* pop-ups, one family: a centred sheet over a soft scrim; caps label, Newsreader title, hairline list, pills */
+.scrim{position:fixed;inset:0;z-index:40;background:rgba(23,24,27,.22);backdrop-filter:blur(2px);display:none}
+:root[data-theme="dark"] .scrim{background:rgba(0,0,0,.5)}
+body:has(.updbox.on) .scrim,body:has(.dirbox.on) .scrim{display:block}
+.updbox{top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 32px));border-radius:24px;padding:24px 28px 22px;max-height:calc(100vh - 48px);overflow:auto}
+.updbox>.lab,.dirbox .lab{display:block;margin-bottom:10px}
+.updbox h3{font-size:26px;line-height:1.15;margin:0 0 4px}
+.updbox .q{font:italic 400 17px/1.4 Newsreader,Georgia,serif;margin:6px 0 0;color:var(--ink)}
+.updbox ul{list-style:none;margin:16px 0 14px;padding:0;border-top:1px solid var(--hair);font-size:13.5px;line-height:1.45}
+.updbox li{position:relative;padding:10px 0 10px 20px;border-bottom:1px solid var(--hair)}
+.updbox li::before{content:"";position:absolute;left:3px;top:17px;width:6px;height:6px;border-radius:50%;background:var(--ink)}
+.updbox li b{font-weight:600}
+.updbox .small,.dirbox .small{font-size:12.5px;color:var(--q);margin:0 0 16px;line-height:1.5}
+.xb{width:32px;padding:0;flex:0 0 auto}
+.dirbox{inset:auto;top:50%;left:50%;position:fixed;margin:0;transform:translate(-50%,-50%);width:min(980px,calc(100vw - 48px));padding:24px 28px 24px;max-height:calc(100vh - 48px)}
+.dirbox .dirhead{align-items:flex-start}
+.dirbox h3{font-size:26px;line-height:1.15}
+.dirbox .small{margin:6px 0 14px}
+.dirbox img{max-height:42vh;object-fit:contain;background:var(--frame);border-radius:14px;margin:0 0 14px}
+.dirbox .wait{display:flex;align-items:center;gap:10px;color:var(--q);font-size:13px;padding:30px 0}
+.dopts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dopt{border:1px solid var(--hair2);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;background:var(--panel)}
+.dopt.cur{background:var(--chip);border-color:transparent}
+.dopt .dt{display:flex;align-items:center;gap:10px}
+.dopt .tg{width:28px;height:28px;border-radius:50%;border:1px solid var(--hair2);display:grid;place-items:center;font:400 16px/1 Newsreader,Georgia,serif;flex:0 0 auto}
+.dopt.cur .tg{border-color:var(--taupe)}
+.dopt .nm{font:400 18px/1.2 Newsreader,Georgia,serif}
+.dopt .why{font-size:12.5px;color:var(--q);flex:1}
+.dopt button{align-self:flex-start;margin-top:4px}
+@media (max-width:760px){.dopts{grid-template-columns:1fr}}
+/* toast: a dot says who is speaking (ink: Venus, deep blue: your AI, ring: something went wrong) */
+.toast{align-items:center;gap:10px;padding:10px 18px 10px 14px;box-shadow:var(--pop)}
+.toast.on{display:flex}
+.toast::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.55;flex:0 0 auto}
+.toast.ai{box-shadow:var(--pop)}
+.toast.ai::before{background:var(--lb);opacity:1}
+.toast.bad::before{content:"!";width:18px;height:18px;box-sizing:border-box;border:1.5px solid currentColor;background:none;opacity:1;font:700 11px/15px "Hanken Grotesk",sans-serif;text-align:center}
+/* right-click menu */
+.menu{width:360px;padding:6px 6px 8px}
+.menu .mh{padding:10px 10px 6px}
+.menu .mt{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:12px}
+.menu .mt:hover{background:var(--chip)}
+.menu .ti{width:30px;height:30px;border-radius:50%;background:var(--chip);display:grid;place-items:center;flex:0 0 auto}
+.menu .mt:hover .ti{background:var(--panel)}
+.menu .ti svg,.node .ti svg{width:14px;height:14px;stroke:var(--ink);fill:none;stroke-width:1.5;stroke-linecap:round}
+.menu .mtx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.menu .mtx b{font-weight:600;font-size:13px}
+.menu .mtx small{font-size:11.5px;color:var(--q);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.menu .mto{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:150px}
+.menu .mto button{height:24px;padding:0 9px;font-size:11.5px;font-weight:400;color:var(--mut)}
+.menu .mto button.primary{color:var(--filltx);font-weight:600}
+.menu hr{border:0;border-top:1px solid var(--hair);margin:6px 8px}
+.menu .mi{justify-content:space-between;align-items:center}
+.menu .mi kbd{font-size:10.5px}
+/* special cards: tools carry their mark, styles are dashed with a caps tag, the stack is a pill */
+.node .ti{width:20px;height:20px;border-radius:50%;background:var(--chip);display:grid;place-items:center;flex:0 0 auto;margin-left:-2px}
+.node .ti svg{width:11px;height:11px}
+.node.style{border:1.5px dashed var(--taupe);background:var(--panel)}
+.node.style.sel{border:1.5px dashed var(--sel)}
+.node.style .hd{font:400 16px/1.2 Newsreader,Georgia,serif}
+.node .tag{font:600 9.5px/1 "Hanken Grotesk",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--q);border:1px solid var(--hair2);border-radius:999px;padding:3px 7px}
+.node.merge .hd{font:600 9.5px/1 "Hanken Grotesk",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--q)}
+.node.merge .bd{color:var(--ink);font-size:11.5px;margin-top:4px}
+/* the stack in the inspector: one row per layer, top first */
+.stk{display:flex;flex-direction:column;gap:6px}
+.stk .sr{display:flex;align-items:center;gap:10px;height:40px;padding:0 6px 0 12px;border:1px solid var(--hair2);border-radius:999px;background:var(--panel);font-size:13px}
+.stk .sr.me{border-color:var(--sel);box-shadow:0 0 0 3px var(--hair)}
+.stk .sr i{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.stk .sr span{flex:1}
+.stk .sr small{color:var(--q);font-size:11px}
+.stk .sr button{width:28px;height:28px;padding:0;border:0;background:none}
+.stk .sr button:hover:not(:disabled){background:var(--chip)}
+.stk .sr button svg{width:12px;height:12px}
+.stk .base{border-style:dashed;color:var(--q)}
+/* selects: pills with a quiet chevron; style switches as rows */
+.row select,aside select{appearance:none;-webkit-appearance:none;padding-right:32px;cursor:pointer;
+background-image:linear-gradient(45deg,transparent 50%,var(--q) 50%),linear-gradient(135deg,var(--q) 50%,transparent 50%);
+background-position:calc(100% - 17px) 15px,calc(100% - 12px) 15px;background-size:5px 5px;background-repeat:no-repeat}
+aside select{width:100%;height:34px;background-color:var(--input);border:1px solid var(--hair2);border-radius:999px;padding-left:12px;font-size:13px}
+.swr{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--hair);font-size:13px}
+.swr:first-of-type{border-top:1px solid var(--hair)}
+.swr span{font:400 15px/1.2 Newsreader,Georgia,serif}
+.swr small{color:var(--q);font-size:11.5px;margin-left:6px;font-family:"Hanken Grotesk",sans-serif}
+.mkst{display:flex;gap:6px;margin-top:10px}
+.mkst input{flex:1}
+/* the finished video */
+.done{display:none;margin-top:auto;padding:14px 16px;border-radius:16px;background:var(--panel);border:1px solid var(--hair);gap:14px;align-items:center}
+.done.on{display:flex}
+.done .dtx{flex:1;min-width:0}
+.done .lab{display:block;margin-bottom:6px}
+.done h4{margin:0;font:400 20px/1.2 Newsreader,Georgia,serif}
+.done .small{font-size:12px;color:var(--q);margin-top:3px}
+.done .tick{width:36px;height:36px;border-radius:50%;background:var(--fill);color:var(--filltx);display:grid;place-items:center;flex:0 0 auto}
+.done .tick svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.done .btns{flex:0 0 auto}
+.done.on~.idea{display:none}
+#vid{border-radius:12px;background:var(--frame)}
+.viewer.watching .vrow,.viewer.watching .slider{display:none}
+.tips ol{list-style:none;padding:0;counter-reset:t}
+.tips li{counter-increment:t;position:relative;padding-left:34px;margin-bottom:10px}
+.tips li::before{content:counter(t);position:absolute;left:0;top:-1px;width:22px;height:22px;border-radius:50%;border:1px solid var(--hair2);font:400 13px/21px Newsreader,Georgia,serif;text-align:center;color:var(--ink)}
 @media (max-width:1240px){.viewer .vh .meta{display:none}}
 @media (max-width:1100px){header .logo.full{display:none!important}header .logo.word.lt{display:block}:root[data-theme="dark"] header .logo.word.lt{display:none}:root[data-theme="dark"] header .logo.word.dk{display:block}header .meta{display:none}}
 @media (max-width:900px){.app{grid-template-columns:1fr;grid-template-rows:52px minmax(0,1fr) 40vh}aside{grid-column:1;border-top:1px solid var(--hair)}.viewer{flex-direction:column}}
@@ -305,9 +406,10 @@ padding:18px 20px;box-shadow:var(--pop);display:none;max-height:calc(100vh - 90p
 <div class="vrow"><button id="play"><svg viewBox="0 0 16 16" width="12" height="12" style="width:12px;height:12px"><path d="M4 3l9 5-9 5z" fill="currentColor" stroke="none"/></svg>Play scene</button>
 <button id="holdA" title="keep this frame as A, to compare with your next changes">Hold as A</button>
 <span class="mseg" id="abseg" style="display:none" title="A is the frame you held; Now is how it looks now. Drag across the picture to wipe between them."><span data-ab="a">A</span><span data-ab="now" class="on">Now</span></span>
-<input type="range" id="wipe" min="0" max="100" value="0" style="display:none" aria-label="before and after wipe"><span id="wipelab" style="display:none"></span>
-<button id="full" style="display:none">Show full video</button></div>
+<input type="range" id="wipe" min="0" max="100" value="0" style="display:none" aria-label="before and after wipe"><span id="wipelab" style="display:none"></span></div>
 <div class="slider"><span>Moment</span><input type="range" id="scrub" min="0.05" max="0.98" step="0.01" value="0.45" aria-label="moment in the scene"><span id="scrubv"></span></div>
+<div class="done" id="done"><span class="tick"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></span><div class="dtx"><span class="lab">Your video</span><h4 id="donet"></h4><div class="small" id="dones"></div></div>
+<div class="btns"><button class="primary" id="watch"><svg viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M4 3l9 5-9 5z" fill="currentColor" stroke="none"/></svg>Watch it</button><button class="xb" id="donex" title="hide this until the next render" aria-label="hide"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div></div>
 <div class="idea" id="idea"><div style="flex:1;min-width:0"><span class="lab" id="ideast">An idea for your AI</span><p class="q" id="ideaq"></p><span class="small" id="ideahelp"></span></div><button id="ideacopy" style="display:none">Copy for your AI</button></div>
 </div></section>
 <div class="canvas" id="canvas"><div class="grid" id="grid"></div>
@@ -329,16 +431,17 @@ padding:18px 20px;box-shadow:var(--pop);display:none;max-height:calc(100vh - 90p
 </div>
 <aside id="insp"></aside>
 </div>
-<div class="updbox" id="updbox" role="dialog" aria-label="new version of Venus"><h3 id="updh"></h3><ul id="updnotes"></ul>
+<div class="scrim" id="scrim"></div>
+<div class="updbox" id="updbox" role="dialog" aria-label="new version of Venus"><span class="lab">New version</span><h3 id="updh"></h3><ul id="updnotes"></ul>
 <p class="small" id="updsmall">Your videos and node files stay as they are. The version you have now is kept, and it comes back on its own if the new one does not start.</p>
 <div class="btns"><button class="primary" id="updgo">Update now</button><button id="updlater">Later</button></div></div>
-<div class="updbox storybox" id="storybox" role="dialog" aria-label="story check"><h3>Before it is made: the story check</h3><p id="storyq" style="font-weight:600"></p><ul id="storylist"></ul>
+<div class="updbox storybox" id="storybox" role="dialog" aria-label="story check"><span class="lab">Story check</span><h3>Before it is made</h3><p class="q" id="storyq"></p><ul id="storylist"></ul>
 <p class="small">Your AI can fix these (tell it “fix the story check”), or you can make it as it is.</p>
 <div class="btns"><button id="storyfix" class="primary">I'll fix them first</button><button id="storyany">Make it anyway</button></div></div>
-<div class="dirbox" id="dirbox" role="dialog" aria-label="three directions"><div class="dirhead"><h3>Three directions for this story</h3><button id="dirclose">Close</button></div>
+<div class="dirbox" id="dirbox" role="dialog" aria-label="three directions"><div class="dirhead"><div><span class="lab">Three directions</span><h3>The same story, three ways</h3></div><button class="xb" id="dirclose" title="close" aria-label="close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
 <p class="small" id="dirsmall">Venus lays the same story out three ways and draws a few frames of each. Nothing is made into a video.</p>
 <img id="dirimg" alt="frames of the three directions">
-<div class="btns" id="dirbtns"></div></div>
+<div class="dopts" id="dirbtns"></div></div>
 <div class="toast" id="toast"></div><div class="wtip" id="wtip"></div>
 <script>
 const $ = s => document.querySelector(s);
@@ -350,6 +453,11 @@ const NAMES = {in: 'Comes in', picture: 'Photo', look: 'Look', shape: 'Colour sh
 const DOES = {in: 'How this scene arrives', picture: 'The photo and where it sits', look: 'How the photo is printed', shape: 'The colour shape behind the photo',
   graphic: 'The number, chart or list', words: 'The words and how they arrive', marks: 'Arrows, rings and notes'};
 const TOOL_NAME = {blur: 'Blur', glow: 'Glow', grade: 'Colour', vignette: 'Dark edges'};
+const TOOL_ICON = {  // small marks, one per tool, drawn in ink
+  blur: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" stroke-dasharray="1.6 2"/><circle cx="8" cy="8" r="2.2"/></svg>',
+  glow: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.6"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3"/></svg>',
+  grade: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11" /><path d="M8 4.5a3.5 3.5 0 0 1 0 7" stroke-width="3.2" stroke-linecap="butt" opacity=".9"/></svg>',
+  vignette: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><ellipse cx="8" cy="8" rx="3.6" ry="2.6"/></svg>'};
 const TOOL_DOES = {blur: 'Softens what comes in', glow: 'A soft light around it', grade: 'Brightness, contrast and colour', vignette: 'Darker edges, to close in'};
 const TYPE_NAME = {title: 'Title', text: 'Words', clip: 'Clip', image: 'Photo', stat: 'Number', chart: 'Chart', line_chart: 'Line chart', timeline: 'Timeline',
   list: 'List', compare: 'Comparison', map: 'Map', split: 'Side by side', quote: 'Quote'};
@@ -477,7 +585,7 @@ function nodeCard(k, sid) {
     const end = l && G.branches[l]?.slice(-1)[0] === k;
     return `<div class="node tool ${sel.node === k ? 'sel' : ''} ${off ? 'off' : ''} ${aiTouched(id) ? 'ai' : ''}" data-k="${k}" ${l ? lc(l) : ''}>
       ${l ? `<span class="port t" style="--pc:${LAYER_COL[l]}"></span><span class="port b" ${end && G.dz ? `data-layer="${l}"` : ''} style="--pc:${LAYER_COL[l]}"></span>` : '<span class="port i"></span><span class="port o"></span>'}
-      <div class="hd" data-drag="${k}">${esc(TOOL_NAME[p.tool] || p.tool)}${sfx ? `<span class="n">${esc(sfx)}</span>` : ''}<span class="sp"></span>
+      <div class="hd" data-drag="${k}"><span class="ti">${TOOL_ICON[p.tool] || ''}</span>${esc(TOOL_NAME[p.tool] || p.tool)}${sfx ? `<span class="n">${esc(sfx)}</span>` : ''}<span class="sp"></span>
       <button class="pw ${off ? '' : 'on'}" data-tpw="${esc(id)}" title="${off ? 'switched off: click to switch on' : 'on: click to switch off (D)'}"><svg viewBox="0 0 10 10"><path d="M5 1v4"/><path d="M2.6 3a3.2 3.2 0 1 0 4.8 0"/></svg></button></div>
       <div class="wd">${esc(TOOL_DOES[p.tool] || '')}${G.dz ? ' · on ' + esc(onWhat(on)) : ''}</div>
       <div class="bd">${summary(shown, 'Usual amount')}</div>${askLine(n, null, off ? 'Switched off' : '')}</div>`;
@@ -485,7 +593,7 @@ function nodeCard(k, sid) {
   if (k.startsWith('style:')) {
     const u = k.slice(6), s = node(u) || {params: {}};
     return `<div class="node style ${sel.node === k ? 'sel' : ''} ${aiTouched(u) ? 'ai' : ''}" data-k="${esc(k)}"><span class="port b" style="--pc:var(--accent)"></span>
-      <div class="hd" data-drag="${esc(k)}">Style · ${esc(u)}<span class="sp"></span></div><div class="wd">A shared look for several scenes</div>
+      <div class="hd" data-drag="${esc(k)}">${esc(u)}<span class="sp"></span><span class="tag">Style</span></div><div class="wd">Shared by ${(() => { const n = S.doc.nodes.filter(x => (x.use || []).includes(u)).length; return n === 1 ? 'this scene only' : n + ' scenes'; })()}</div>
       <div class="bd">${summary(s.params)}</div>${askLine(s)}<div class="ds"><input data-desc="${esc(u)}" placeholder="describe this shared look…"></div></div>`;
   }
   if (k === 'out') {
@@ -614,9 +722,12 @@ function bounds() {
 }
 function fit() {
   // room between the toolbar (46 px) and the describe box (64 px)
-  const c = $('#canvas').getBoundingClientRect(), b = bounds(), top = 56, bottom = 66, W = c.width - 32, H = c.height - top - bottom;
-  const z = Math.max(0.3, Math.min(1, W / (b.x1 - b.x0), H / (b.y1 - b.y0)));
-  view[sel.scene] = {z, x: 16 + Math.max(0, (W - (b.x1 - b.x0) * z) / 2) - b.x0 * z, y: top + Math.max(0, (H - (b.y1 - b.y0) * z) / 2) - b.y0 * z};
+  // and clear of the map in the top right corner: keep its width free, or its height, whichever leaves the graph bigger
+  const c = $('#canvas').getBoundingClientRect(), b = bounds(), bw = b.x1 - b.x0, bh = b.y1 - b.y0, bottom = 66;
+  const zz = (W, H) => Math.max(0.3, Math.min(1, W / bw, H / bh));
+  const side = {top: 56, W: c.width - 32 - 148, H: c.height - 56 - bottom}, below = {top: 56 + 84, W: c.width - 32, H: c.height - 56 - 84 - bottom};
+  const o = zz(side.W, side.H) >= zz(below.W, below.H) ? side : below, z = zz(o.W, o.H), top = o.top, W = o.W, H = o.H;
+  view[sel.scene] = {z, x: 16 + Math.max(0, (W - bw * z) / 2) - b.x0 * z, y: top + Math.max(0, (H - bh * z) / 2) - b.y0 * z};
   applyView();
 }
 function zoomAt(mx, my, z) {
@@ -656,6 +767,7 @@ function viewerHead() {
   $('#vmeta').textContent = [typeName(s.type), s.seconds + ' s', tr ? 'comes in with a ' + tr : ''].filter(Boolean).join(' · ');
   $('#scrubv').textContent = `${(s.seconds * $('#scrub').value).toFixed(1)} s of ${s.seconds} s`;
 }
+let watching = false;
 function busy(on, text) { $('#busy').classList.toggle('on', on); if (text) $('#busytext').textContent = text; }
 function setPreview(force) {
   if (!sel.scene) return;
@@ -772,10 +884,11 @@ function drawInspector() {
   } else if (k.startsWith('merge:')) {
     const l = k.slice(6), i = G.order.indexOf(l);
     h += `<h2><span class="t">What sits on top</span></h2><div class="what">Here the ${LAYER_NAME[l].toLowerCase()} goes on top of what is already there. Change the order with the arrows${simple ? '' : ', or drag the dot under a branch onto another stack'}.</div>`;
-    h += `<div class="sec"><h3>Stack, bottom to top</h3>${G.order.map((x, j) => `<div class="rng" style="margin-bottom:4px"><span style="flex:1;${x === l ? 'font-weight:700' : ''}"><span style="color:${LAYER_COL[x]}">●</span> ${LAYER_NAME[x]}</span>
-      <button data-lay="${x}" data-dir="-1" ${j === 0 || !G.dz ? 'disabled' : ''} title="lower">▼</button><button data-lay="${x}" data-dir="1" ${j === G.order.length - 1 || !G.dz ? 'disabled' : ''} title="higher">▲</button></div>`).reverse().join('')}
-      ${G.dz ? '<div class="why">Top of the list is drawn last, over everything.</div>' : '<div class="why">This kind of scene keeps a fixed order.</div>'}
-      ${G.dz && node(sid).params.layers ? '<div class="btns" style="margin-top:6px"><button data-lay="reset">Usual order</button></div>' : ''}</div>`;
+    h += `<div class="sec"><h3>The stack, top first</h3><div class="stk">${G.order.map((x, j) => `<div class="sr ${x === l ? 'me' : ''}"><i style="background:${LAYER_COL[x]}"></i><span>${LAYER_NAME[x]}</span>${j === G.order.length - 1 ? '<small>on top</small>' : ''}
+      <button data-lay="${x}" data-dir="1" ${j === G.order.length - 1 || !G.dz ? 'disabled' : ''} title="higher" aria-label="higher"><svg viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg></button><button data-lay="${x}" data-dir="-1" ${j === 0 || !G.dz ? 'disabled' : ''} title="lower" aria-label="lower"><svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button></div>`).reverse().join('')}
+      <div class="sr base"><i style="background:var(--taupe)"></i><span>Paper</span><small>underneath</small></div></div>
+      ${G.dz ? '<div class="why" style="margin-top:8px">The top row is drawn last, over everything.</div>' : '<div class="why" style="margin-top:8px">This kind of scene keeps a fixed order.</div>'}
+      ${G.dz && node(sid).params.layers ? '<div class="btns" style="margin-top:8px"><button data-lay="reset">Usual order</button></div>' : ''}</div>`;
     h += toolButtons(['picture', 'words', 'marks'].includes(l) ? l : null);
   } else if (k.startsWith('tool:')) {
     const id = k.slice(5), n = node(id), p = n.params, spec = SC.tools[p.tool], lk = !!node(sid)?.locked;
@@ -793,9 +906,10 @@ function drawInspector() {
       h += `<div class="sec"><h3>How it comes in</h3>` + paramsOf('in').filter(q => SC.schema.in?.[q]).map(q => control(sid + '.in', q, SC.schema.in[q], ip[q], ilk)).join('') + '</div>';
     }
     const styles = S.doc.nodes.filter(x => x.kind === 'style');
-    h += `<div class="sec"><h3>Shared styles</h3>${styles.map(s => `<label style="display:flex;gap:6px;margin-bottom:4px"><input type="checkbox" data-wire="${esc(s.id)}" ${(n.use || []).includes(s.id) ? 'checked' : ''}> ${esc(s.id)}</label>`).join('') || '<div class="why">None yet. A style is a look several scenes can share.</div>'}
-      <div class="rng" style="margin-top:6px"><input type="text" id="newstyle" placeholder="new style name"><button id="mkstyle">Create and wire</button></div></div>`;
-    h += `<div class="sec"><h3>Scene</h3><div class="btns">      <button id="ml" ${i === 0 ? 'disabled' : ''}>◀ Move</button><button id="mr" ${i === S.scenes.length - 1 ? 'disabled' : ''}>Move ▶</button>
+    h += `<div class="sec"><h3>Shared styles</h3>${styles.map(s => { const on = (n.use || []).includes(s.id), k = S.doc.nodes.filter(x => (x.use || []).includes(s.id)).length;
+      return `<div class="swr"><span>${esc(s.id)}<small>${k} scene${k === 1 ? '' : 's'}</small></span><button class="tog ${on ? 'on' : ''}" data-wirebtn="${esc(s.id)}" data-on="${on ? 1 : 0}" title="${on ? 'this scene follows it: click to unwire' : 'make this scene follow it'}" aria-label="use ${esc(s.id)}"></button></div>`; }).join('') || '<div class="why">None yet. A style is a look several scenes can share.</div>'}
+      <div class="mkst"><input type="text" id="newstyle" placeholder="New style name"><button id="mkstyle">Create</button></div></div>`;
+    h += `<div class="sec"><h3>Scene</h3><div class="btns">      <button id="ml" ${i === 0 ? 'disabled' : ''}><svg viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></svg>Earlier</button><button id="mr" ${i === S.scenes.length - 1 ? 'disabled' : ''}>Later<svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></button>
       <button id="cp">Copy</button><button id="rm">Remove</button></div></div>` + askBox(sid);
   } else {
     const st = k.slice(3), part = partOf(st), id = sid + '.' + part, n = node(id), lk = stageLocked(sid, st), off = stageOff(sid, st);
@@ -879,7 +993,12 @@ function renderState() {
     const f = stage === 'joining' ? 0.5 + 0.38 * (1 - Math.exp(-(Date.now() - renderState.joinAt) / 60000)) : stage === 'checking' ? 0.92 : 0.03 + 0.47 * done / Math.max(1, of);
     $('#rpbar').style.width = Math.round(f * 100) + '%';
   }
-  $('#full').style.display = r.state === 'done' ? '' : 'none';
+  const fin = r.state === 'done' && renderState.hid !== (r.started || 0); $('#done').classList.toggle('on', fin);
+  if (fin) {
+    const m = Math.floor((r.seconds || 0) / 60), sec = Math.round((r.seconds || 0) % 60);
+    $('#donet').textContent = ($('#file').textContent || 'Your video') + ' is ready';
+    $('#dones').textContent = [total + ' s', S.aspect, 'made in ' + (m ? `${m} min ${sec} s` : `${sec} s`), r.video].filter(Boolean).join(' · ');
+  }
   $('#render').disabled = run;
 }
 function friendly(id) {
@@ -891,10 +1010,10 @@ async function refresh(force) {
   try { const st = await api('/api/state');
     if (force || st.version !== version || !S) apply(st, false);
     else if (JSON.stringify(st.render) !== JSON.stringify(S.render)) { const was = S.render.state; S.render = st.render; renderState();
-      if (was === 'running' && st.render.state === 'done') toast('Your video is ready. Press Show full video to watch it.'); }
+      if (was === 'running' && st.render.state === 'done') toast('Your video is ready. Press Watch it.'); }
   } catch (e) { $('#status').textContent = 'Studio is not running'; }
 }
-function select(scene, nodeKey) { sel.scene = scene; sel.node = nodeKey || sel.node || 'out'; drawStrip(); drawCanvas(); drawInspector(); setPreview(); }
+function select(scene, nodeKey) { if (watching) { watching = false; $('.viewer').classList.remove('watching'); $('#watch').lastChild.textContent = 'Watch it'; } sel.scene = scene; sel.node = nodeKey || sel.node || 'out'; drawStrip(); drawCanvas(); drawInspector(); setPreview(); }
 
 // ---------------------------------------------------------------- events
 document.addEventListener('input', e => {
@@ -929,6 +1048,7 @@ document.addEventListener('click', async e => {
   if (d.reset) return queue(d.reset, d.p, null);
   if (d.set) return queue(d.set, d.p, JSON.parse(d.v));
   if (d.unuse) return op('/api/use', {style: d.unuse, scene: sel.scene, on: false});
+  if (d.wirebtn) { t.blur(); await op('/api/use', {style: d.wirebtn, scene: sel.scene, on: d.on !== '1'}); return drawInspector(); }
   if (d.tpw) { e.stopPropagation(); return op('/api/tool_toggle', {node: d.tpw, on: !!node(d.tpw).off}); }
   if (d.tcopy) return dupTool(d.tcopy);
   if (d.trm) return rmTool(d.trm);
@@ -948,7 +1068,12 @@ document.addEventListener('click', async e => {
     case 'gaskgo': { const g = $('#gask'); describe(sel.scene, g.value); g.value = ''; return; }
     case 'addsc': return op('/api/copy', {scene: sel.scene}, 'Added a copy of this scene after it: change it, or describe what it should be');
     case 'render': return render(false);
-    case 'full': return showVideo('/api/video?t=' + Date.now());
+    case 'watch':
+      if (watching) { watching = false; $('#watch').lastChild.textContent = 'Watch it'; return select(sel.scene); }
+      watching = true; $('.viewer').classList.add('watching'); showVideo('/api/video?t=' + Date.now()); $('#vtitle').textContent = 'The full video';
+      $('#vmeta').textContent = `${Math.round(S.scenes.reduce((a, x) => a + x.seconds, 0))} s · ${S.aspect} · ${S.scenes.length} scenes`;
+      $('#watch').lastChild.textContent = `Back to scene ${i + 1}`; return;
+    case 'donex': renderState.hid = S.render.started || 0; return renderState();
     case 'play': { busy(true, 'Making a quick draft');
       const s = S.scenes[i]; try { const r = await fetch(`/api/play?scene=${encodeURIComponent(s.id)}&k=${s.key}`); if (!r.ok) throw new Error((await r.json()).error);
         showVideo(URL.createObjectURL(await r.blob())); } catch (er) { toast('Play: ' + er.message, 'bad'); } busy(false); return; }
@@ -1051,11 +1176,11 @@ function openMenu(x, y, w) {
   const on = w ? (w.branch || (w.kind === 'trunk' ? w.branch : null)) : null;
   const rows = Object.keys(SC.tools).map(t => {
     const bs = SC.toolOn[t].filter(b => branchHere(b) && (!on || b === on));
-    return bs.length ? `<div class="mr" title="${esc(TOOL_DOES[t])}"><b>${TOOL_NAME[t]}</b>${bs.map(b => `<button data-add="${t}" data-on="${b}" ${w?.before ? `data-before="${esc(w.before)}"` : ''}>${on || bs.length === 1 ? 'add' : 'on ' + BRANCH_NAME[b].toLowerCase()}</button>`).join('')}</div>` : '';
+    return bs.length ? `<div class="mt"><span class="ti">${TOOL_ICON[t]}</span><div class="mtx"><b>${TOOL_NAME[t]}</b><small>${esc(TOOL_DOES[t])}</small></div><div class="mto">${bs.map(b => `<button data-add="${t}" data-on="${b}" ${w?.before ? `data-before="${esc(w.before)}"` : ''} title="${esc(TOOL_NAME[t] + ' on ' + onWhat(b))}">${on || bs.length === 1 ? 'Add' : BRANCH_NAME[b]}</button>`).join('')}</div></div>` : '';
   }).join('');
   const m = document.createElement('div'); m.className = 'menu';
-  m.innerHTML = `<div class="mh">${on ? 'Add a tool here' : 'Add a tool'}</div>${rows || '<div class="mr">No tool fits here</div>'}
-    <div class="mh">Graph</div><button class="mi" id="m-fit">Fit the graph (F)</button><button class="mi" id="m-tidy">Tidy the layout</button>`;
+  m.innerHTML = `<div class="mh">${on ? 'Add a tool on ' + esc(onWhat(on)) : 'Add a tool'}</div>${rows || '<div class="mt"><div class="mtx"><small>No tool fits here</small></div></div>'}
+    <hr><div class="mh">Graph</div><button class="mi" id="m-fit">Fit the graph<kbd>F</kbd></button><button class="mi" id="m-tidy">Tidy the layout</button>`;
   document.body.appendChild(m);
   m.style.left = Math.min(x, innerWidth - m.offsetWidth - 8) + 'px'; m.style.top = Math.min(y, innerHeight - m.offsetHeight - 8) + 'px';
   m.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
@@ -1188,16 +1313,21 @@ async function showDirs() {
   clearInterval(dirPoll); dirPoll = null;
   if (d.state === 'failed') { $('#dirsmall').textContent = 'Could not make the directions: ' + d.why; return; }
   if (d.state !== 'done') return;
-  $('#dirsmall').textContent = 'The same story three ways. Pick one; Undo brings back what you had.';
+  $('#dirsmall').textContent = 'A few frames of each, top to bottom. Pick one; Undo brings back what you had.';
   $('#dirimg').src = '/api/directions.jpg?t=' + Date.now(); $('#dirimg').style.display = 'block';
-  $('#dirbtns').innerHTML = d.list.map(x => `<button data-tag="${x.tag}" class="${x.tag === 'A' ? '' : 'primary'}" title="${esc(x.why)}">Use ${x.tag}: ${esc(x.name)} (${x.seconds} s)</button>`).join('');
+  dirCards(d.list);
 }
 $('#dirs').addEventListener('click', async () => {
   $('#dirbox').classList.add('on'); $('#dirimg').style.display = 'none'; $('#dirbtns').innerHTML = '';
   try { await api('/api/directions', {}); } catch (e) { $('#dirsmall').textContent = e.message; return; }
   if (!dirPoll) dirPoll = setInterval(showDirs, 1200); showDirs();
 });
+function dirCards(list) {
+  $('#dirbtns').innerHTML = list.map(x => `<div class="dopt ${x.tag === 'A' ? 'cur' : ''}"><div class="dt"><span class="tg">${esc(x.tag)}</span><span class="nm">${esc(x.name)}</span></div>
+    <div class="why">${x.seconds} s · ${esc(x.why)}</div><button data-tag="${esc(x.tag)}" class="${x.tag === 'A' ? '' : 'primary'}">${x.tag === 'A' ? 'Keep this one' : 'Use ' + esc(x.tag)}</button></div>`).join('');
+}
 $('#dirclose').addEventListener('click', () => $('#dirbox').classList.remove('on'));
+$('#scrim').addEventListener('click', () => { $('#dirbox').classList.remove('on'); $('#storybox').classList.remove('on'); });
 $('#dirbtns').addEventListener('click', async e => {
   const b = e.target.closest('button[data-tag]'); if (!b) return;
   const r = await op('/api/direction_pick', {tag: b.dataset.tag}, `Direction ${b.dataset.tag} is in. Undo brings back what you had.`);
