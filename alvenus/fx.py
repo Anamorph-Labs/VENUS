@@ -37,6 +37,9 @@ Looks
   flick       the picture flickers between itself and its drawing every two
               frames (with=sketch|blueprint|chalk)
   negative    colours turned inside out
+  mono        black and white
+  fill        the whole frame one colour (colour=#FFFFFF): a flash frame, a
+              black beat, a colour frame
   xray        an x-ray: inside-out, cool blue, glowing
   poster      two-colour poster (purple to peach by default)
   pixel       big pixel blocks on the first and last frames
@@ -67,7 +70,7 @@ NEEDS_CUTOUT = {"silhouette", "glow", "solid", "speedlines", "pop", "words", "be
 EFFECTS = ("silhouette", "glow", "solid", "speedlines", "pop", "words",
            "strobe-light", "burst", "starburst", "lightning", "sparks", "burn", "endstrobe",
            "sketch", "blueprint", "chalk", "flick", "negative", "xray", "poster", "pixel", "repeat", "strip", "smear",
-           "dots", "arrows", "behind")
+           "dots", "arrows", "behind", "mono", "fill")
 
 
 def hexrgb(s: str) -> np.ndarray:
@@ -646,6 +649,15 @@ def negative(s: Shot) -> None:
     s.frames = 255 - s.frames
 
 
+def mono(s: Shot) -> None:
+    g = u8(grey(s.frames.astype(np.float32)))
+    s.frames = np.repeat(g[..., None], 3, axis=3)
+
+
+def fill(s: Shot) -> None:
+    s.frames = np.broadcast_to(u8(hexrgb(s.opt("colour", "#FFFFFF"))), s.frames.shape).copy()
+
+
 def xray(s: Shot) -> None:
     out = []
     for f in s.frames:
@@ -852,7 +864,7 @@ RUN = {
     "burn": burn, "endstrobe": endstrobe,
     "sketch": _look("sketch"), "blueprint": _look("blueprint"), "chalk": _look("chalk"), "flick": flick,
     "negative": negative, "xray": xray, "poster": poster, "pixel": pixel, "repeat": repeat, "strip": strip, "smear": smear,
-    "dots": dots, "arrows": arrows,
+    "dots": dots, "arrows": arrows, "mono": mono, "fill": fill,
 }
 
 

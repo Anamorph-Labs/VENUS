@@ -286,7 +286,7 @@ def _shot_filter(sh: Shot, src_size, w: int, h: int, fps: float, look: str, refr
         vf += ",perspective=" + ":".join(f"x{i}='{a}{z}':y{i}='{b}{z}'" for i, (a, b) in enumerate(corners)) + ":interpolation=cubic:eval=frame"
     if sh.flash:
         vf += ",eq=brightness='0.9*max(0,1-t/0.12)':eval=frame"
-    vf += f",trim=0:{d:.3f},setpts=PTS-STARTPTS,format=yuv420p"
+    vf += f",trim=end_frame={max(1, round(d * fps))},setpts=PTS-STARTPTS,format=yuv420p"  # whole frames: no drift over many short shots
     return vf
 
 

@@ -596,6 +596,46 @@ def cmd_cutout(a: argparse.Namespace) -> None:
     print("wrote " + cutout_file(Path(a.input), out, a.kind))
 
 
+def cmd_read(a: argparse.Namespace) -> None:
+    from .read import compare, read, starter_recipe
+
+    need_ffmpeg()
+    readings = []
+    for ref in a.reference:
+        r = read(Path(ref), Path(a.out_dir) if a.out_dir else None, see=not a.no_see)
+        readings.append(r)
+        print(f"\n{r['in_one_line']}")
+        for p in r["parts"]:
+            print(f"   {p['from']:5.2f}-{p['to']:5.2f} s  {p['words']}")
+        print(f"   wrote {', '.join(Path(f).name for f in r['_files'])}")
+    if len(readings) > 1:
+        where = Path(a.out_dir) if a.out_dir else Path(a.reference[0]).parent
+        (where / "references.compare.md").write_text(compare(readings), encoding="utf-8")
+        rec = starter_recipe(readings, [r["_files"][0] for r in readings])
+        (where / "references.recipe.json").write_text(json.dumps(rec, indent=2), encoding="utf-8")
+        print(f"\nside by side: {where / 'references.compare.md'}; a starting recipe to change: {where / 'references.recipe.json'}")
+
+
+def cmd_blend(a: argparse.Namespace) -> None:
+    from .blend import plan
+
+    need_ffmpeg()
+    if not a.clips or not a.music or not a.out:
+        raise SystemExit("blend needs a recipe, --clips, --music and --out")
+    out = Path(a.out)
+    if out.suffix.lower() not in (".mp4", ".mov", ".webm"):
+        out = out.with_name(out.name + ".mp4")
+    shots, settings, plan_path = plan(Path(a.recipe), a.clips, Path(a.music), out, seed=a.seed, in_order=a.in_order)
+    for k, s in enumerate(shots):
+        print(f"   {k + 1:>3} {s.length:5.2f}s  {Path(s.clip).name[:20]:20} {s.start:6.2f}s  {s.why}" + (f"  [{', '.join(s.fx)}]" if s.fx else ""))
+    print(f"planned {len(shots)} shots, {sum(s.length for s in shots):.1f} s, {settings['aspect']}, look {settings['look']}")
+    print(f"check before rendering: {out.with_suffix('.blend.jpg')} (reference above, yours below) and {out.with_suffix('.blend.md')}")
+    if a.render:
+        main(["montage", "--plan", str(plan_path)])
+    else:
+        print(f"when it's right: alvenus montage --plan {plan_path}")
+
+
 def cmd_montage(a: argparse.Namespace) -> None:
     from . import montage as mt
 
@@ -605,6 +645,8 @@ def cmd_montage(a: argparse.Namespace) -> None:
     settings: dict = {}
     if a.plan:
         shots, settings = mt.load_plan(Path(a.plan))
+        if settings.get("look_filter") and settings.get("look"):  # a look read from a reference (alvenus blend)
+            LOOKS[settings["look"]] = settings["look_filter"]
         for k in ("music", "aspect", "look", "title", "accent", "out", "title_style"):
             if getattr(a, k) is None:  # flags typed now win over the plan
                 setattr(a, k, settings.get(k))
@@ -1571,6 +1613,24 @@ def main(argv: list[str] | None = None) -> None:
             print(fetch())
 
     f.set_defaults(func=fetch_all)
+
+    rd = sub.add_parser("read", help="read reference videos shot by shot: every cut, what each shot is (flash, negative, "
+                        "drawing, dots...), what's in it, how it moves, the beat, and the parts of the clip in plain words")
+    rd.add_argument("reference", nargs="+", help="reference video file(s); two or more also get a side-by-side and a starting recipe")
+    rd.add_argument("--out-dir", help="where to write .read.json, .read.md and .shots.jpg (default: beside each reference)")
+    rd.add_argument("--no-see", action="store_true", help="skip CLIP (what's in each shot); light and shape only")
+    rd.set_defaults(func=cmd_read)
+
+    bl = sub.add_parser("blend", help="cut your clips the way parts of one or more references are cut (a recipe from alvenus read); "
+                        "plans and shows a side-by-side sheet first, renders only with --render")
+    bl.add_argument("recipe", help="recipe JSON: refs, parts (ref, from, to, take: rhythm/effects/light/content), look, shape, length, on_beat")
+    bl.add_argument("--clips", nargs="+", help="your clip files or folders")
+    bl.add_argument("--music", help="your song")
+    bl.add_argument("--out", help="output MP4 (the plan, sheet and report are written beside it)")
+    bl.add_argument("--in-order", action="store_true", help="use your clips in the order given")
+    bl.add_argument("--render", action="store_true", help="render straight after planning (only once the plan has been approved)")
+    bl.add_argument("--seed", type=int, default=0)
+    bl.set_defaults(func=cmd_blend)
 
     r = sub.add_parser("study", help="measure the style of a reference video (shape, cut rhythm, pace, pauses)")
     r.add_argument("reference", nargs="+", help="reference video file(s) on this computer")

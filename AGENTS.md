@@ -15,6 +15,16 @@ Venus makes three kinds of video. Pick by what the creator has:
 | A folder of clips and a song, no speaking | a music edit | `alvenus montage` (section 8) |
 | An idea, plus some clips or images (or none) | a video built scene by scene | `alvenus make` (section 9) |
 
+**Never assume. Ask.** Use only what the creator said, the files they gave
+you and what Venus measured. Do not fill gaps with your own guesses: not the
+topic or theme, not who it's for, not the length, the shape, the music, the
+look, which part of a reference they mean, or what a shot is about. When
+something you need is missing, ask one short question, or offer two or three
+choices and recommend one. Keep measured facts (cut times, shot lengths, the
+beat, loudness, colour numbers) apart from guesses (what a shot shows, what kind
+of shot it is): say which is which, and check a guess against the picture
+before you rely on it. If you can't tell, say "I can't tell" and ask.
+
 **Read [CRAFT.md](CRAFT.md) first.** It is the craft guide: how a good editor
 reads a cut, gives notes and respects the creator's taste. Everything below is
 how Venus helps you follow it.
@@ -93,6 +103,83 @@ usable as `cut --preset my-vox`, `montage --style my-vox`, `make --style my-vox`
 Its grade is fitted to each piece of footage when used (it grades a few frames,
 measures, corrects), so their clips land on the references' colour. Nothing from
 the references is copied into the video.
+
+### When they want it cut like one or more references (`alvenus read`, `alvenus blend`)
+
+`study` gives averages. When the person wants the *same* edit (the rhythm of
+this reel, the flashes of that one, its ending), read each reference shot by
+shot instead:
+
+```sh
+alvenus read ref1.mp4 ref2.mp4
+```
+
+For each reference it writes three files beside it:
+
+- `ref1.read.md`: the whole clip in one line, its parts in plain words (a
+  strobe open of 2-frame shots speeding up, a steady middle, a slowing end), the
+  music (tempo, how many cuts land on the beat, half-beat or quarter, the loud
+  hits, the silences), the ending, the colour, and a table of every shot: its
+  length in frames, what it is (white or black flash, negative of the shot
+  before, subject small on a plain colour, line drawing, blueprint, chalk, black
+  and white, poster, colour pop, dots, light burst, fade, dissolve), what is in it
+  and how close (CLIP, free and local), its light and colours, and how the camera
+  moves.
+- `ref1.shots.jpg`: every shot as a picture with its number, time, length and
+  what it is, under a timeline of the cuts against the beat and loudness. **Look
+  at it.** The measurements are good, not perfect: you are the one who checks
+  them against what you see, and you correct them in your own words.
+- `ref1.read.json`: the same, for a recipe.
+
+With two or more references it also writes `references.compare.md` (side by
+side) and `references.recipe.json` (a starting recipe).
+
+What is **measured** (cuts, shot lengths, the beat, light, colour) is exact. What is
+**seen** (what kind of shot it is, what's in it) is the model's best guess, shown
+with how sure it is; "unclear" means it couldn't tell. Check every guess you use
+against the picture, and never build a plan on one you haven't checked.
+
+**Comprehension is the job.** Before proposing anything, tell the person what
+you understood, part by part, in their language: "Reference 2 opens with three
+seconds of two-frame shots: a tiny figure on white, then its negative on black,
+flipping every two frames, with light bursts every half beat. It slows into
+four longer shots and ends on a white flash and black." Then say what you
+would take from each and why, and ask the one question that matters if their
+ask is unclear (which part they love, how long, which comes first). Do not
+average references together; take parts.
+
+Then write the recipe (edit the starter):
+
+```json
+{"refs": {"A": "ref1.read.json", "B": "ref2.read.json"},
+ "parts": [{"ref": "B", "from": 0, "to": 5.3, "take": ["rhythm", "effects", "light", "content"]},
+           {"ref": "A", "from": 13.0, "to": 17.8, "take": ["rhythm", "effects"]}],
+ "look": "A", "shape": "9:16", "length": null, "on_beat": true}
+```
+
+- `parts` play in this order; `from`/`to` are seconds in that reference (use the
+  part boundaries from the reading).
+- `take`: `rhythm` (shot lengths, counted in the reference's beats and replayed
+  on the beats of the new song, doubled or halved to keep the feel at a new
+  tempo), `effects` (each shot redone as what it was: flashes, negatives,
+  drawings, dots, a small subject on its plain colour...), `light` (bright and
+  dark shots in the same places), `content` (picks the moment in their clips
+  that shows the same kind of thing: a hand for a hand, stars for stars).
+- `look`: whose colour to grade toward (the starter leaves it empty: ask); `length`: squeeze or stretch the whole
+  thing to N seconds; `on_beat: false` keeps the reference's own timing exactly.
+
+Plan it, which renders nothing:
+
+```sh
+alvenus blend recipe.json --clips their-clips/ --music song.mp3 --out reel.mp4
+```
+
+It writes `reel.blend.jpg` (each reference shot above the shot of theirs that
+answers it, with the effects already on), `reel.blend.md` (where every shot
+comes from and why) and `reel.montage.json`. Look at the sheet, fix what's
+wrong in the plan (a better clip for a shot, a part dropped), **show the person
+the sheet and wait for their yes**, then render with
+`alvenus montage --plan reel.montage.json`.
 
 ### When their words and their wishes disagree
 
@@ -740,3 +827,5 @@ ships, its author is thanked and credited by name (CONTRIBUTING.md has the detai
   suggest a fix and let the creator decide (CRAFT.md).
 - Say what you are unsure about. A confident wrong cut costs the creator more than
   a question.
+- Never assume a topic, theme, audience, length, look or music the creator didn't give.
+  Ask, or offer choices. A guess presented as a fact is the worst mistake you can make.

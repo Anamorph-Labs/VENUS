@@ -71,6 +71,15 @@ folder of about five of one kind and it learns a style pack of your own:
 `alvenus study refs/ --as my-vox`, then `--preset my-vox` (or `--style my-vox`). Its
 colour grade is fitted to each of your clips, so they land on the references' look.
 
+Cut it like those references, part by part: `alvenus read ref1.mp4 ref2.mp4` reads
+each one shot by shot (every cut to the frame, flashes, negatives, drawings, dots,
+a small subject on a plain colour, what's in each shot, the beat, and the parts of
+the clip in plain words, with a picture of every shot). A recipe then takes the
+parts you want ("the first 5 seconds of ref 2, the ending of ref 1, ref 1's
+colour"), and `alvenus blend recipe.json --clips mine/ --music song.mp3 --out reel.mp4`
+cuts your clips to it on your song's beat. It shows a sheet of each reference
+shot above yours before anything is rendered.
+
 Ask your footage: `alvenus find "someone laughing" clips/` finds the moments that
 match, with times and a picture of them, using a free model on your computer.
 
