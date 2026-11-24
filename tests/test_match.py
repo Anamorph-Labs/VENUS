@@ -927,7 +927,7 @@ class Studio(unittest.TestCase):
         here = Path(alvenus.__file__).parent
         page = (here / "studio.html").read_text(encoding="utf-8")
         for bit in ('id="done"', 'id="watch"', 'id="scrim"', 'id="storybox"', 'id="dirbox"', 'function dirCards', 'TOOL_ICON', 'class="stk"',
-                    'id="tipsx"', 'function closeTips', 'max-height:calc(100vh - 48px)', 'spec.options.includes(spec.default)'):
+                    'id="tipsx"', 'function closeTips', 'id="vsplit"', 'id="bigview"', 'function viewerRow', 'function openBig', '.left.tallv', 'max-height:calc(100vh - 48px)', 'spec.options.includes(spec.default)'):
             self.assertIn(bit, page)
         home = (here / "studio_home.html").read_text(encoding="utf-8")
         for bit in ('id="idea"', 'id="seconds"', 'id="aspect"', 'id="kind"', 'id="look"', 'id="start"', 'id="projects"'):

@@ -15,6 +15,8 @@ so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 - How-to videos: a camera that follows the cursor and typing on screen recordings, steps that slide on, a clear label for another way to do a step, and checks for mock-ups and for skipping the viewer's real path.
 - Studio: edit each caption card (its words, its big word, where it sits), and set how clear the voice stays over the music.
 - A clip that ends before its scene does now holds its last frame instead of cutting the video short.
+- Studio: tall videos get their own full-height picture beside the node graph, square ones a bigger picture, a line to drag it bigger or smaller, and Big view (double-click the picture; Esc closes).
+- Studio: the Tips card fits any window and closes with ×, Esc or a click outside; a caption's place shows "auto" when Venus picks it.
 
 ## 0.9.0 (24 Nov 2026)
 - Trailers: credit words that slam in huge over old newsprint or red paint, settle small and are wiped off by a brush stroke, and a date card over red smoke, with booms, risers and a deep braam (`make --template trailer`).
