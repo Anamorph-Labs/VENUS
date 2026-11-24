@@ -52,26 +52,96 @@ def _esc(s: str) -> str:
     return s.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
 
 
+# Caption cards: short, following the voice. A card holds CARD_WORDS[0] to
+# CARD_WORDS[1] words (2 to 6 unless the creator picks otherwise), breaks at
+# punctuation and at each new line of the script, and never leaves one word
+# on a card by itself when it can join a neighbour.
+CARD_WORDS = (2, 6)
+_JOIN = {"the", "a", "an", "of", "to", "and", "or", "but", "with", "in", "on", "at", "for", "my", "your",
+         "our", "their", "this", "that", "his", "her", "its", "from", "into", "by"}
+
+
 def chunks(words, vertical: bool) -> list[list]:
-    """Short phrases that read at a glance: a few words, broken at punctuation."""
-    max_chars, max_words = (18, 4) if vertical else (32, 7)
-    out, cur = [], []
-    for w in words:
-        if cur and (len(" ".join(x.text for x in cur + [w])) > max_chars or len(cur) >= max_words
-                    or getattr(w, "line", None) != getattr(cur[-1], "line", None)):  # a new line (scene) is a new phrase
-            out.append(cur)
+    """Caption cards that read at a glance (see CARD_WORDS)."""
+    lo, hi = CARD_WORDS
+    max_chars = 30 if vertical else 44  # two short rows at most
+    pieces, cur = [], []
+    for w in words:  # first: phrases, split where the script line changes or punctuation ends a thought
+        if cur and getattr(w, "line", None) != getattr(cur[-1], "line", None):
+            pieces.append(cur)
             cur = []
         cur.append(w)
         if w.text[-1:] in ",.?!;:":
-            out.append(cur)
+            pieces.append(cur)
             cur = []
     if cur:
-        out.append(cur)
+        pieces.append(cur)
+    out: list[list] = []
+    for pc in pieces:  # then: the best cut of each phrase into cards
+        out += _cards(pc, lo, hi, max_chars)
+    merged: list[list] = []
+    for g in out:  # a lone word joins its neighbour on the same line when the card stays within the limit
+        if merged and (len(g) < lo or len(merged[-1]) < lo) and len(merged[-1]) + len(g) <= hi \
+                and getattr(g[0], "line", None) == getattr(merged[-1][-1], "line", None):
+            merged[-1] = merged[-1] + g
+        else:
+            merged.append(g)
+    return merged
+
+
+def _cards(pc: list, lo: int, hi: int, max_chars: int) -> list[list]:
+    """Cut one phrase into cards: each lo..hi words and not too wide, sizes
+    even, and no card ending on a joining word ("the", "of"), which belongs
+    with the word after it. The best cut is found by trying them all."""
+    n = len(pc)
+    if n <= hi and len(" ".join(x.text for x in pc)) <= max_chars:
+        return [pc]
+    ideal = n / max(1, -(-n // hi))
+    best = [0.0] + [float("inf")] * n
+    back = [0] * (n + 1)
+    for j in range(1, n + 1):
+        for i in range(max(0, j - hi), j):
+            card = pc[i:j]
+            c = (len(card) - ideal) ** 2
+            if len(card) < lo and n >= lo:
+                c += 40
+            if len(" ".join(x.text for x in card)) > max_chars:
+                c += 100
+            if j < n and card[-1].text.lower().strip(",.?!;:") in _JOIN:
+                c += 15
+            if best[i] + c < best[j]:
+                best[j], back[j] = best[i] + c, i
+    cuts, j = [], n
+    while j > 0:
+        cuts.append((back[j], j))
+        j = back[j]
+    return [pc[i:j] for i, j in reversed(cuts)]
+
+
+def _even(items: list, n: int) -> list[list]:
+    """items split into n runs as equal as can be (5 -> 3 + 2, never 4 + 1)."""
+    k, r = divmod(len(items), n)
+    out, i = [], 0
+    for j in range(n):
+        m = k + (1 if j < r else 0)
+        if m:
+            out.append(items[i:i + m])
+        i += m
     return out
 
 
 CAPTION_MODE = "pop"  # "pop" (below), "bracket" or "keyword" (interview looks from the Venus 1 board)
 CAPTION_MODES = ("pop", "classic", "bracket", "keyword")
+# The type: Venus's own fonts, unless the brand kit gives the creator's
+# (brand.fonts()). FONT_MAP swaps a Venus font for the creator's everywhere
+# on screen (captions, titles, cards, charts); KIT_FILES says where those
+# font files are, so text is measured and drawn in the font that is shown.
+FONT_FILES = {"Inter ExtraBold": "Inter-ExtraBold.otf", "Inter SemiBold": "Inter-SemiBold.otf",
+              "Instrument Serif": "InstrumentSerif-Italic.ttf", "Inter Display Black": "InterDisplay-Black.otf"}
+FONT_MAP: dict[str, str] = {}
+KIT_FILES: dict[str, Path] = {}
+BRANDED = False  # a brand kit is in use: accents come from it, not from a look's own colours
+PLACE = None  # a placement.Planner while a cut is being finished: where each caption card goes
 GOLD = "&H004AB0E8&"  # warm gold (#E8B04A) for the keyword look
 _STOP = {"the", "a", "an", "and", "or", "but", "to", "of", "in", "on", "at", "for", "is", "it", "that", "this", "i", "you",
          "we", "they", "he", "she", "be", "are", "was", "were", "so", "just", "with", "my", "your", "our", "as", "if", "do"}
@@ -109,29 +179,61 @@ def bracket_events(words, w: int, h: int, accent: str, skip: set[int] = frozense
     return rows
 
 
+def _where(g, g_end: float, bw: float, bh: float, w: int, h: int):
+    """(ASS alignment, x, y) for a caption card: the planner's choice when one
+    is running (placement.py), else the usual bottom-centre spot (None)."""
+    if PLACE is None:
+        return None
+    slot = PLACE.place(g[0].start, g_end, bw, bh, getattr(g[0], "line", -1))
+    return PLACE.anchor(slot)
+
+
 def keyword_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset()) -> list[str]:
     """The produced-podcast look: each phrase in small clean type with its
     one carrying word set large above it in gold italic serif, landing as it
-    is said and staying for the phrase."""
+    is said and staying for the phrase. One small row at most: when the rest
+    of the phrase is wider than the frame allows, its type gets smaller, it
+    never stacks into more rows."""
+    from .placement import safe_box
+
     vertical = h > w
     groups = chunks([x for x in words if x.line not in skip], vertical)
     small = round((0.034 if vertical else 0.036) * min(w, h) * (1.25 if vertical else 1))
     big = round(small * 2.8)
     y = round(h * (0.7 if vertical else 0.8))
+    L, _, R, _ = safe_box(w, h)
     rows = []
     for g_i, g in enumerate(groups):
         nxt = groups[g_i + 1][0].start if g_i + 1 < len(groups) else None
         g_end = g[-1].end + 0.25 if nxt is None else min(g[-1].end + 0.25, nxt)
         k = _key_word(g)
         key = g[k]
-        rest = " ".join(_esc(x.text) for j, x in enumerate(g) if j != k)
+        rest_text = " ".join(x.text for j, x in enumerate(g) if j != k)
+        fs = small
+        if rest_text:
+            _, fs = fit_lines(rest_text, small, (R - L), max_lines=1)  # one row, smaller type if it must
+            fs = round(min(small, fs))
+        bf = round(big * fs / small)  # the small row and the big word scale together
+        key_t = key.text.strip(",.?!;:")
+        bw = max(text_width(key_t, bf, "InstrumentSerif-Italic.ttf"), text_width(rest_text, fs, "Inter-SemiBold.otf") if rest_text else 0)
+        bh = bf * 1.02 + (fs * 1.25 if rest_text else 0)
+        at = _where(g, g_end, bw, bh, w, h)
+        if at is None:  # the classic spot: big word sitting on the small row's top edge
+            kx, ky, kan, rx, ry, ran = w // 2, y - round(fs * 1.3), 2, w // 2, y - round(fs * 1.1), 8
+        else:
+            an, ax, ay = at
+            col, row = (an - 1) % 3, (an - 1) // 3
+            top = ay - bh if row == 0 else ay - bh / 2 if row == 1 else ay
+            kan, ran = (7, 7) if col == 0 else (9, 9) if col == 2 else (8, 8)
+            kx = rx = ax
+            ky, ry = round(top), round(top + bf * 1.02)
         if key.start < g_end:
-            rows.append(f"Dialogue: 3,{_t(key.start)},{_t(g_end)},Cap,,0,0,0,,{{\\an2\\pos({w // 2},{y - round(small * 1.3)})"
-                        f"\\fnInstrument Serif\\i1\\fs{big}\\bord0\\shad{max(1, big // 24)}\\4c&H90000000&\\1c{GOLD}"
-                        f"\\fscx90\\fscy90\\t(0,160,\\fscx100\\fscy100)\\fad(60,120)}}{_esc(key.text.strip(',.?!;:'))}")
-        if rest:
-            rows.append(f"Dialogue: 2,{_t(g[0].start)},{_t(g_end)},Cap,,0,0,0,,{{\\an8\\pos({w // 2},{y - round(small * 1.1)})"
-                        f"\\fnInter SemiBold\\fs{small}\\bord0\\shad{max(1, small // 16)}\\4c&H90000000&\\fad(80,120)}}{rest}")
+            rows.append(f"Dialogue: 3,{_t(key.start)},{_t(g_end)},Cap,,0,0,0,,{{\\an{kan}\\pos({kx},{ky})"
+                        f"\\fnInstrument Serif\\i1\\fs{bf}\\bord0\\shad{max(1, bf // 24)}\\4c&H90000000&\\1c{ass_colour(accent) if BRANDED else GOLD}"
+                        f"\\fscx90\\fscy90\\t(0,160,\\fscx100\\fscy100)\\fad(60,120)}}{_esc(key_t)}")
+        if rest_text:
+            rows.append(f"Dialogue: 2,{_t(g[0].start)},{_t(g_end)},Cap,,0,0,0,,{{\\an{ran}\\pos({rx},{ry})"
+                        f"\\fnInter SemiBold\\fs{fs}\\bord0\\shad{max(1, fs // 16)}\\4c&H90000000&\\fad(80,120)}}{_esc(rest_text)}")
     return rows
 
 
@@ -148,22 +250,35 @@ def pop_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset())
     lights up in the accent colour with a small pop, words still to come wait
     slightly dimmed. Highlighted words sit on an accent marker block (drawn
     on a layer below with the same layout), in dark text. Lines in `skip`
-    (shown as full-screen cards) get no captions."""
+    (shown as full-screen cards) get no captions. A card too wide for one row
+    breaks into two rows of even length (never one word left alone below)."""
+    from .placement import safe_box
+
     vertical = h > w
     groups = chunks([x for x in words if x.line not in skip], vertical)
     hi = ass_colour(accent)
     dark = "&H00141414&"
     pop = "\\t(0,90,\\fscx112\\fscy112)\\t(90,190,\\fscx100\\fscy100)"
+    cap = round((0.062 if vertical else 0.055) * min(w, h))
+    L, _, R, _ = safe_box(w, h)
     rows = []
     for g_i, g in enumerate(groups):
         nxt = groups[g_i + 1][0].start if g_i + 1 < len(groups) else None
         g_end = g[-1].end + 0.2
         if nxt is not None:
             g_end = min(g_end, nxt)
+        texts = [x.text for x in g]
+        lines = [" ".join(texts)]
+        if text_width(lines[0], cap, "Inter-ExtraBold.otf") > (R - L) * 0.94 and len(g) >= 2:
+            lines = _balanced(texts, 2)
+        brk = len(lines[0].split()) if len(lines) > 1 else -1
+        bw = max(text_width(x, cap, "Inter-ExtraBold.otf") for x in lines)
+        at = _where(g, g_end, bw, cap * 1.2 * len(lines), w, h)
+        place = f"\\an{at[0]}\\pos({at[1]},{at[2]})" if at else ""
         for i, word in enumerate(g):
-            s = word.start
+            s0 = word.start
             e = g[i + 1].start if i + 1 < len(g) else g_end
-            if e - s < 0.02:
+            if e - s0 < 0.02:
                 continue
             top, box = [], []
             for j, x in enumerate(g):
@@ -180,13 +295,14 @@ def pop_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset())
                 top.append(f"{{{fill}{anim}}}{t}{{\\r}}" if fill or anim else t)
                 show = "\\3a&H00&" if x.mark else "\\3a&HFF&"
                 # a space between two marked words is part of the marker, so the block is unbroken
-                sp = " " if j and x.mark and g[j - 1].mark else ""
+                sp = " " if j and x.mark and g[j - 1].mark and j != brk else ""
                 box.append(f"{{\\1a&HFF&\\3c{hi}{show}{anim}}}{sp}{t}{{\\r}}")
-            enter = "{\\fad(80,0)}" if i == 0 else ""
-            rows.append(f"Dialogue: 2,{_t(s)},{_t(e)},Cap,,0,0,0,,{enter}{' '.join(top)}")
+            enter = f"{{\\fad(80,0){place}}}" if i == 0 else (f"{{{place}}}" if place else "")
+            joined_top = "".join(("\\N" if j == brk else " " if j else "") + x for j, x in enumerate(top))
+            rows.append(f"Dialogue: 2,{_t(s0)},{_t(e)},Cap,,0,0,0,,{enter}{joined_top}")
             if any(x.mark for x in g):
-                joined = box[0] + "".join(("" if g[j].mark and g[j - 1].mark else " ") + b for j, b in enumerate(box[1:], 1))
-                rows.append(f"Dialogue: 1,{_t(s)},{_t(e)},CapBox,,0,0,0,,{enter}{joined}")
+                joined = box[0] + "".join(("\\N" if j == brk else "" if g[j].mark and g[j - 1].mark else " ") + b for j, b in enumerate(box[1:], 1))
+                rows.append(f"Dialogue: 1,{_t(s0)},{_t(e)},CapBox,,0,0,0,,{enter}{joined}")
     return rows
 
 
@@ -196,7 +312,9 @@ def text_width(text: str, size: float, font: str = "InterDisplay-Black.otf") -> 
     try:
         from PIL import ImageFont
 
-        f = ImageFont.truetype(str(FONTS / font), 200)
+        fam = next((k for k, v in FONT_FILES.items() if v == font), None)
+        mine = KIT_FILES.get(FONT_MAP.get(fam, "")) if fam else None
+        f = ImageFont.truetype(str(mine or (FONTS / font)), 200)
         asc, desc = f.getmetrics()
         return f.getlength(text) * size / (asc + desc)
     except Exception:  # no Pillow: a safe guess
@@ -353,9 +471,35 @@ def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | 
         rows += title_events(title, w, h, accent, 0.1, min(3.0, max(1.5, cut_len - 0.5)), centre=False, kind=title_style)
     if end_card:
         rows += title_events(end_card, w, h, accent, cut_len + 0.15, cut_len + card_len, centre=True, kind=title_style)
-    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    text = "\n".join(rows) + "\n"
+    for ours, theirs in FONT_MAP.items():  # the creator's fonts, everywhere on screen
+        text = text.replace(f",{ours},", f",{theirs},").replace(f"\\fn{ours}\\", f"\\fn{theirs}\\").replace(f"\\fn{ours}}}", f"\\fn{theirs}}}")
+    path.write_text(text, encoding="utf-8")
+
+
+def fonts_dir() -> Path:
+    """Venus's fonts, plus the creator's own font files when the kit gives them."""
+    if not KIT_FILES:
+        return FONTS
+    import hashlib
+    import os
+    import tempfile
+
+    key = hashlib.sha256("|".join(sorted(str(p) for p in KIT_FILES.values())).encode()).hexdigest()[:10]
+    d = Path(tempfile.gettempdir()) / f"venus-fonts-{key}"
+    d.mkdir(exist_ok=True)
+    for f in list(FONTS.glob("*.[ot]tf")) + list(KIT_FILES.values()):
+        link = d / Path(f).name
+        if not link.exists():
+            try:
+                os.symlink(Path(f).resolve(), link)
+            except OSError:
+                import shutil
+
+                shutil.copy2(f, link)
+    return d
 
 
 def ass_filter(path: Path) -> str:
     esc = lambda p: str(p).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
-    return f"subtitles='{esc(path)}':fontsdir='{esc(FONTS)}'"
+    return f"subtitles='{esc(path)}':fontsdir='{esc(fonts_dir())}'"

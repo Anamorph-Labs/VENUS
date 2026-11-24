@@ -5,7 +5,12 @@ background, the text and the accent (fonts too, if they have them):
 
     {"name": "My Studio",
      "colours": {"ivory": "#F4EFE6", "ink": "#151515", "deep blue": "#1F3A93"},
-     "background": "ivory", "text": "ink", "accent": "deep blue"}
+     "background": "ivory", "text": "ink", "accent": "deep blue",
+     "fonts": {"heading": "fonts/Newsreader.ttf", "body": "fonts/HankenGrotesk.ttf"}}
+
+Fonts are optional: a font file (best: it travels with the kit) or the name
+of a font installed on this computer. The heading font is used for titles,
+end cards and big words; the body font for captions, labels and charts.
 
 Where Venus finds it: the storyboard's "brand" (a file path, or the kit
 itself), else VENUS_HOME/brand.json (saved with `alvenus brand set`).
@@ -159,12 +164,87 @@ def board_findings(sb: dict, add, base: Path | None = None) -> dict | None:
     return kit
 
 
-def apply(sb: dict, kit: dict | None) -> None:
+def apply(sb: dict, kit: dict | None, base: Path | None = None) -> None:
     """Fill what the storyboard leaves open with the kit (never overrides what it says)."""
     if not kit:
         return
     if not sb.get("accent") and (a := role(kit, "accent")):
         sb["accent"] = a
+    sb["_branded"] = True
+    if isinstance(kit.get("fonts"), dict) and not sb.get("fonts"):
+        sb["fonts"] = {k: _abs(v, base) for k, v in kit["fonts"].items() if v}
+
+
+def _abs(v, base: Path | None) -> str:
+    p = Path(str(v)).expanduser()
+    if p.suffix.lower() in (".ttf", ".otf") and not p.is_absolute() and base is not None:
+        p = base / p
+    return str(p) if p.suffix.lower() in (".ttf", ".otf") else str(v)
+
+
+# which of Venus's own fonts each of the creator's replaces
+FONT_ROLES = {"heading": ("Inter Display Black", "Instrument Serif"), "body": ("Inter ExtraBold", "Inter SemiBold")}
+
+
+def font_family(path: Path) -> str | None:
+    """The family name inside a font file (what the renderer looks it up by)."""
+    try:
+        from PIL import ImageFont
+
+        return ImageFont.truetype(str(path), 20).getname()[0]
+    except Exception:
+        return None
+
+
+def installed(name: str) -> bool:
+    import shutil
+    import subprocess
+
+    from .style import FONT_FILES
+
+    if name in FONT_FILES:
+        return True
+    if not shutil.which("fc-list"):
+        return False
+    out = subprocess.run(["fc-list", ":", "family"], capture_output=True, text=True).stdout
+    return any(name.lower() == f.strip().lower() for line in out.splitlines() for f in line.split(","))
+
+
+def font_setup(fonts: dict | None) -> list[str]:
+    """Use the creator's fonts for everything on screen (style.FONT_MAP), or
+    say plainly why one can't be used. Call reset_fonts() when done."""
+    from . import style
+
+    reset_fonts()
+    notes = []
+    for role_name, value in (fonts or {}).items():
+        if role_name not in FONT_ROLES or not value:
+            continue
+        v = str(value)
+        if v.lower().endswith((".ttf", ".otf")):
+            p = Path(v).expanduser()
+            fam = font_family(p) if p.exists() else None
+            if not fam:
+                notes.append(f"{role_name} font: {p.name} can't be read here, so Venus's own font is used instead")
+                continue
+            style.KIT_FILES[fam] = p
+        else:
+            fam = v
+            if not installed(fam):
+                notes.append(f"{role_name} font: \"{fam}\" isn't installed on this computer, so Venus's own font is used instead. "
+                             "Put the font file's path in the brand kit, and it will travel with the kit")
+                continue
+        for ours in FONT_ROLES[role_name]:
+            style.FONT_MAP[ours] = fam
+        notes.append(f"{role_name} font: {fam} (from the brand kit)")
+    return notes
+
+
+def reset_fonts() -> None:
+    from . import style
+
+    style.FONT_MAP.clear()
+    style.KIT_FILES.clear()
 
 
 # --- after the render -------------------------------------------------------------

@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+
 from .cut import Clip, positions, subtitle_filter
 from .style import LOOKS, ass_filter, write_ass
 from .media import duration, has_video, load_audio, run
@@ -57,6 +59,7 @@ def finish(
     line_charts=(), quotes=(), progress: bool = False, scene_marks=(),
     maps=(), timelines=(), kinetic_lines=(), titles=(), split_labels=(), title_style: str = "track",
     more_events=(), camera=(), talk: dict | None = None, music_duck: float = 12.0, sfx_gain: float = 0.0,
+    caption_places: dict | bool | None = None, voice_gap: float = 10.0,
 ) -> list[str]:
     """srt: classic one-line captions; words: timed words for animated captions;
     sfx: None for no sound effects, else [(time, kind)] for the cut's own
@@ -214,7 +217,22 @@ def finish(
         cards = [([x for x in all_words if x.line == n], *spans[n], n) for n in card_lines if n in spans]
         notes += [f"lower third for line {lt.line + 1} skipped: that line is not in the cut" for lt in lower_thirds if lt.line not in spans]
         ass = out.with_suffix(".look.ass")
-        write_ass(ass, w, h, accent, words, title, end_card, cut_len, card, lts, cards, extra, skip | talk_lines, title_style=title_style)
+        from . import style as style_
+
+        if words and style_.CAPTION_MODE in ("pop", "keyword") and caption_places is not False:
+            from .placement import Planner
+
+            # each caption card goes where the picture under it leaves room (placement.py)
+            style_.PLACE = Planner(base, w, h, fixed=dict(caption_places or {}))
+        try:
+            write_ass(ass, w, h, accent, words, title, end_card, cut_len, card, lts, cards, extra, skip | talk_lines, title_style=title_style)
+        finally:
+            used, style_.PLACE = (style_.PLACE.used if style_.PLACE else []), None
+        if used:
+            from collections import Counter
+
+            notes.append("captions: placed shot by shot where the picture leaves room ("
+                         + ", ".join(f"{k} {n}" for k, n in Counter(used).most_common()) + ")")
         parts.append(f"[{v}]{ass_filter(ass)}[tt]")
         v = "tt"
     if late_srt:
@@ -254,10 +272,13 @@ def finish(
                   f"afade=t=in:d=0.3,adelay={round(cut_len * 1000)}:all=1[hiss]",
                   "[ap0][hiss]amix=inputs=2:normalize=0:duration=first[ap]"]
         a = "ap"
-    fx_times: list[float] = []
-    if sfx is not None:
-        from .sfx import write_track
+    # The sound: effects tidied (fewer, varied), the music made long enough by
+    # repeating it on the bar, its level planned around the voice and then
+    # measured line by line; effects lifted where they'd be lost. See mix.py.
+    from . import listen, mix
 
+    ev: list = []
+    if sfx is not None:
         ev = list(sfx)
         ev += [(spans[lt.line][0] + 0.05, "pop") for lt in lower_thirds if lt.line in spans]
         ev += [(spans[n][0], "pop") for n in card_lines if n in spans]
@@ -272,39 +293,60 @@ def finish(
         ev += [(t0 + 0.1, "hit") for _, t0, _ in titles]
         if end_card:
             ev += [(cut_len, "whoosh"), (cut_len + 0.2, "hit")]
-        fx_times = [t for t, _ in ev]
-        if ev:
-            track = out.with_suffix(".sfx.wav")
-            write_track(track, ev, total, sfx_gain)
-            k, n_in = n_in, n_in + 1
-            args += ["-i", str(track)]
-            parts += [f"[{a}]aformat=sample_rates=48000:channel_layouts=stereo[vfx]",
-                      f"[vfx][{k}:a]amix=inputs=2:normalize=0:duration=first[withfx]"]
-            a = "withfx"
+        ev = [e for e in ev if 0 <= e[0] <= total]
+    ev, dropped = mix.tidy(ev)
+    fx_times = [t for t, _ in ev]
+    try:
+        voice = load_audio(base, listen.SR)
+    except RuntimeError:  # a cut with no sound of its own
+        voice = np.zeros(int(cut_len * listen.SR), np.float32)
+    bed = np.zeros(int((total + 0.5) * listen.SR), np.float32)
+    bed[: min(len(bed), len(voice))] += voice[: len(bed)]
+    gaps, joins, jumps, lifted = [], [], [], []
+    if music is not None:
+        src, joins, jumps = listen.extend_music(Path(music), total + 0.5, out.with_suffix(".long.wav"))
+        fade_out = min(2.5, total / 3)
+        raw = out.with_suffix(".music.raw.wav")
+        run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(src), "-vn", "-af",
+             f"aformat=sample_rates=48000:channel_layouts=stereo,loudnorm=I={music_lufs:g}:TP=-3,"
+             f"atrim=0:{total:.3f},asetpts=PTS-STARTPTS,afade=t=in:d=1,afade=t=out:st={total - fade_out:.3f}:d={fade_out:.3f},"
+             f"apad=whole_dur={total + 0.5:.3f}", "-ar", "48000", "-ac", "2", str(raw)])
+        phrases = listen.phrases_of(listen.loudness(voice))
+        keys = listen.duck_keys(phrases, total, music_duck)
+        keys = listen.make_room(keys, fx_times, total)
+        m16 = load_audio(raw, listen.SR)
+        if music_duck > 0:
+            keys, gaps = mix.fit_under_voice(voice, m16, keys, phrases, gap=voice_gap) if voice_gap > 0 else (keys, [])
+        g16 = 10 ** (np.interp(np.arange(len(m16)) / listen.SR, [k[0] for k in keys], [k[1] for k in keys]) / 20)
+        n = min(len(bed), len(m16))
+        bed[:n] += (m16 * g16)[:n]
+        m48 = listen._stereo(raw)
+        g48 = 10 ** (np.interp(np.arange(len(m48)) / 48000, [k[0] for k in keys], [k[1] for k in keys]) / 20)
+        listen._write_stereo(out.with_suffix(".music.wav"), m48 * g48[:, None].astype(np.float32))
+        raw.unlink(missing_ok=True)
+        if src != Path(music):
+            src.unlink(missing_ok=True)
+    if sfx is not None and ev:
+        from .sfx import write_track
+
+        lifted = mix.effect_gains(ev, bed)
+        track = out.with_suffix(".sfx.wav")
+        write_track(track, ev, total, sfx_gain, lifted)
+    notes += mix.report(gaps, joins, jumps, dropped, lifted)
+    ins = []
+    if sfx is not None and ev:
+        k, n_in = n_in, n_in + 1
+        args += ["-i", str(out.with_suffix(".sfx.wav"))]
+        parts.append(f"[{k}:a]aformat=sample_rates=48000:channel_layouts=stereo[fxa]")
+        ins.append("[fxa]")
     if music is not None:
         k, n_in = n_in, n_in + 1
-        args += ["-stream_loop", "-1", "-i", str(music)]
-        fade_out = min(2.5, total / 3)
-        from . import listen
-
-        keys = listen.duck_keys(listen.phrases_of(listen.loudness(load_audio(base, listen.SR))), total, music_duck)
-        keys = listen.make_room(keys, fx_times, total)
-        gain_track = out.with_suffix(".gain.wav")
-        listen.write_gain(gain_track, keys, total + 0.5)
-        g, n_in = n_in, n_in + 1
-        args += ["-i", str(gain_track)]
-        parts += [
-            f"[{a}]aformat=sample_rates=48000:channel_layouts=stereo,apad=whole_dur={total + 0.5:.3f}[vst]",
-            f"[{k}:a]aformat=sample_rates=48000:channel_layouts=stereo,loudnorm=I={music_lufs:g}:TP=-3,"
-            f"atrim=0:{total:.3f},asetpts=PTS-STARTPTS,afade=t=in:d=1,afade=t=out:st={total - fade_out:.3f}:d={fade_out:.3f}[mus]",
-            # The music's level is planned from where the voice speaks (listen.py): it
-            # eases down before each phrase and back up after it, always in a gap,
-            # never on a word; short breaths keep it down. It also makes a little
-            # room for each sound effect, so the effects sit just above it.
-            f"[{g}:a]aformat=sample_rates=48000:channel_layouts=stereo[gain]",
-            "[mus][gain]amultiply[duck]",
-            "[vst][duck]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.89:level=false[ao]",
-        ]
+        args += ["-i", str(out.with_suffix(".music.wav"))]
+        parts.append(f"[{k}:a]aformat=sample_rates=48000:channel_layouts=stereo[mus]")
+        ins.append("[mus]")
+    if ins:
+        parts += [f"[{a}]aformat=sample_rates=48000:channel_layouts=stereo,apad=whole_dur={total + 0.5:.3f}[vst]",
+                  f"[vst]{''.join(ins)}amix=inputs={1 + len(ins)}:normalize=0:duration=first,alimiter=limit=0.89:level=false[ao]"]
     else:
         parts.append(f"[{a}]apad[ao]")  # never let the sound end before the picture (-t trims both)
 
@@ -314,8 +356,8 @@ def finish(
         "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out),
     ]
     run(args)
-    out.with_suffix(".sfx.wav").unlink(missing_ok=True)
-    out.with_suffix(".gain.wav").unlink(missing_ok=True)
+    for x in (".sfx.wav", ".music.wav"):
+        out.with_suffix(x).unlink(missing_ok=True)
     return notes
 
 

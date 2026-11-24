@@ -166,6 +166,20 @@ tempo, sections, hits and stops, and where the voice speaks). In a story, scenes
 is in each picture (`"cast"`), and `alvenus cast` checks each person and object looks the
 same throughout.
 
+The mix is measured, not assumed: every spoken line is checked against the music under it,
+and the music goes further down wherever the voice is less than 10 dB clear. Sound effects
+are fewer and varied (never stacked, never the same sound copied), and each is lifted until
+it is heard. A song shorter than the video repeats on a bar line with a short blend. Captions
+are short cards of 2 to 6 words that follow the voice; each card sits where the picture under
+it leaves room (calm areas, away from skin tones), moves when the shot changes, and stays
+clear of the app's buttons and caption area on tall videos. Your own fonts go in the brand kit
+(`alvenus brand set ... --heading-font FILE --body-font FILE`). The checks also flag the same
+shot used twice close together, a picture that doesn't show what is said over it (`alvenus fit`),
+and any change to a part you already approved, so a fix changes only what you asked for.
+How-to videos (`"kind": "how-to"`) get a camera that follows the cursor and typing on screen
+recordings, steps that slide on, a clear label for another way to do a step, and checks for
+mock-ups and for skipping the viewer's real path to a page.
+
 Drafts: add `--draft` to `cut`, `montage` or `make` for a quick look at a third of
 the size with the fastest settings (a 30 s storyboard video in about 30 s). Every
 render also writes `.sheet.jpg`, one page with a labelled frame from each scene.

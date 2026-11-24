@@ -3,6 +3,19 @@
 Each release, newest first, in plain words. `alvenus update --check` reads this file,
 so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 
+## Coming in the next release
+- A clean mix, measured on every line: the voice always sits at least 10 dB over the music, and Venus says how close the closest line came (`--voice-gap`, 0 to switch it off).
+- Sound effects: fewer and varied. Never two stacked together, a sound used again is slightly retuned, and quiet ones are lifted until they're heard.
+- A song shorter than the video now repeats on a bar line with a short blend, instead of jumping back to its start.
+- Captions are short cards of 2 to 6 words that follow the voice, never leaving one word alone (`--caption-words` to choose).
+- Each caption card sits where the picture leaves room, away from faces and busy detail, and moves when the shot changes (`--fixed-captions` to keep it at the bottom). On tall videos it stays clear of the app's buttons and caption area.
+- Your own fonts in the brand kit, used for every title, caption, label and chart (`alvenus brand set --heading-font FILE --body-font FILE`).
+- New checks: the same shot used twice close together, a picture that may not show what is said over it (`alvenus fit`), and captions that aren't clean (alone words, uneven rows, outside the safe area).
+- What you approved stays as it was: a fix changes only what you asked for, and Venus lists every other change to an approved part.
+- How-to videos: a camera that follows the cursor and typing on screen recordings, steps that slide on, a clear label for another way to do a step, and checks for mock-ups and for skipping the viewer's real path.
+- Studio: edit each caption card (its words, its big word, where it sits), and set how clear the voice stays over the music.
+- A clip that ends before its scene does now holds its last frame instead of cutting the video short.
+
 ## 0.9.0 (24 Nov 2026)
 - Trailers: credit words that slam in huge over old newsprint or red paint, settle small and are wiped off by a brush stroke, and a date card over red smoke, with booms, risers and a deep braam (`make --template trailer`).
 - Video essays: a key word whose letters scramble and glitch before landing on what it really means (TAXES becomes F€$Y£).

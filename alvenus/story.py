@@ -69,7 +69,7 @@ def load(path: Path, data: dict | None = None) -> dict:
     from . import brand
 
     try:
-        brand.apply(sb, brand.load(sb.get("brand"), base))
+        brand.apply(sb, brand.load(sb.get("brand"), base), base)
     except (OSError, ValueError) as e:
         problems.append(f"brand: the kit can't be read ({e})")
     for key in ("music", "voiceover"):
@@ -191,6 +191,23 @@ def load(path: Path, data: dict | None = None) -> dict:
     return sb
 
 
+def card_words(v) -> tuple[int, int]:
+    """A storyboard's "caption_words" ("2-6", [2, 6] or 4) as (fewest, most) words per caption card."""
+    try:
+        if isinstance(v, (list, tuple)) and len(v) == 2:
+            lo, hi = int(v[0]), int(v[1])
+        elif isinstance(v, str) and "-" in v:
+            lo, hi = (int(x) for x in v.split("-", 1))
+        elif v:
+            lo = hi = int(v)
+        else:
+            return (2, 6)
+    except (TypeError, ValueError):
+        return (2, 6)
+    lo, hi = max(1, min(lo, 12)), max(1, min(hi, 12))
+    return (min(lo, hi), max(lo, hi))
+
+
 def _beat_snap(lengths: list[float], music: str | None) -> list[float]:
     """Move each scene boundary to the nearest beat (scenes stay at least 1.2 s)."""
     if not music:
@@ -251,6 +268,10 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
         archive_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_accent", "#C0392B"))
     else:
         _plain_scene(sc, d, w, h, fps, out)
+        if sc.get("screen") and sc["type"] == "clip":  # a screen recording: the camera follows the cursor and typing
+            from .screencam import apply
+
+            apply(out, w, h, fps)
     if sc.get("frame"):
         from .archive import add_frame
 
@@ -289,9 +310,10 @@ def _plain_scene(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> N
         dim = kind in ("title", "text", "quote", "stat") and not sc.get("_verse")  # text over a picture: darken it so the words read
         dark = float(sc.get("darken", 0.22 if dim else 0.0))
         tail = f",eq=brightness=-{dark:.2f}:saturation=0.75,boxblur=6:1" if dim else (f",eq=brightness=-{dark:.2f}" if dark else "")
-        push = float(sc.get("push", 0.06 if kind == "image" else 0.04 if kind == "clip" else 0.03))
+        push = float(sc.get("push", 0.0 if sc.get("screen") else 0.06 if kind == "image" else 0.04 if kind == "clip" else 0.03))
         inp = (["-loop", "1"] if _still(media) else ["-ss", f"{float(sc.get('from', 0)):.3f}"]) + ["-t", f"{d + 0.2:.3f}", "-i", media]
-        run(base + inp + ["-vf", f"fps={fps:g},{_cover(w, h)}{_push(d, fps, push)}{tail},format=yuv420p"] + enc)
+        hold = f",tpad=stop_mode=clone:stop_duration={d:.3f}" if not _still(media) else ""  # a clip that runs out holds its last frame
+        run(base + inp + ["-vf", f"fps={fps:g},{_cover(w, h)}{_push(d, fps, push)}{tail}{hold},format=yuv420p"] + enc)
         return
     # No footage: a living background made here (see backgrounds.py).
     from .backgrounds import source
@@ -335,7 +357,7 @@ def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
         keep["_design_v"] = VERSION
         keep["_has_words"] = has_words(sc)
         keep["_k"] = sc.get("_k")  # the scene's place picks its shape and paper
-    blob = json.dumps([keep, round(d, 3), w, h, fps, media.DRAFT, stamps, 1], sort_keys=True, default=str)
+    blob = json.dumps([keep, round(d, 3), w, h, fps, media.DRAFT, stamps, 2], sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
@@ -353,6 +375,12 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         footage = sc.get("file") or sc["type"] in ("clip", "image", "map", "split", "archive", "slam", "date", "scramble")
         sc["_dir"] = 0 if footage or not moving else (1 if k % 2 == 0 else -1)
         sc["_verse"] = sc["type"] == "quote" and (sc.get("style") or sb.get("quote_style")) == "verse"
+    howto = (sb.get("brief") or {}).get("kind") == "how-to" or sb.get("how_to")
+    for k, sc in enumerate(scenes):  # screen recordings: a following camera, and steps that slide on rather than dissolve
+        if howto and sc["type"] == "clip" and "screen" not in sc:
+            sc["screen"] = True
+        if k and sc.get("screen") and scenes[k - 1].get("screen") and "transition" not in sc:
+            sc["transition"] = "slide"
     design = sb.get("design")
     for k, sc in enumerate(scenes):
         # its place in the whole video (a scene built alone with --scene keeps its own)
@@ -486,7 +514,11 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                 sc = {**sc, "big_words": list(sc.get("big_words") or []) + [re.sub(r"[^\w']", "", m) for m in marked]}
             sc = {**sc, **{k: plain(str(sc[k])) for k in ("text", "caption") if sc.get(k)}}
         if sc.get("caption") and sb.get("captions", True):
-            words += spread(sc["caption"], i, t0, t1)
+            cw = spread(sc["caption"], i, t0, t1)
+            big = {x.lower() for x in str(sc.get("caption_big") or "").split()}
+            for x in cw:  # the word the creator chose to be big (Studio's caption card)
+                x.mark = x.mark or x.text.lower().strip(",.?!;:'\"") in big
+            words += cw
         if kind == "title":
             titles.append((sc.get("text", ""), t0, t1))
         elif kind == "text":
@@ -526,6 +558,11 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             side = lambda d: (str(d["title"]), [str(x) for x in d.get("points") or []])
             more += compare_events(side(sc["left"]), side(sc["right"]), t0, t1, w, h, sb.get("accent", "#FFD23F"))
             pops += [t0 + 0.3, t0 + 0.3 + min(1.2, (t1 - t0) * 0.3)]
+        if sc.get("alternative"):  # another way to do a step: labelled, so the main path stays clear
+            from .graphics import tag_events
+
+            lab = sc["alternative"] if isinstance(sc["alternative"], str) else "Another way"
+            more += tag_events(lab, t0, t1, w, h, sb.get("accent", "#FFD23F"))
         if sc.get("callout") and not (design and sc["type"] in ("clip", "image", "title", "text")):
             c = sc["callout"]
             more += callout_events(float(c["x"]), float(c["y"]), str(c["label"]), t0, t1, w, h, sb.get("accent", "#FFD23F"))
@@ -575,11 +612,21 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     for key, val in (("archive", archive), ("verses", verses), ("credits", credit_rows)):
         if val:
             genre.EXTRAS[key] = val
+    from .placement import parse_place
+
+    style_.CARD_WORDS = card_words(sb.get("caption_words"))
+    style_.BRANDED = bool(sb.get("_branded"))
+    from . import brand
+
+    notes += brand.font_setup(sb.get("fonts"))
     try:
         notes += finish(base, out, size, fps, spans, music=Path(sb["music"]) if sb.get("music") else None,
                         music_lufs=float(sb.get("music_lufs", -16.0 if not sb.get("voiceover") else -22.0)),
                         music_duck=min(24.0, max(0.0, float(sb.get("music_duck", 12.0)))),
                         sfx_gain=min(12.0, max(-12.0, float(sb.get("sfx_volume", 0.0)))),
+                        voice_gap=min(20.0, max(0.0, float(sb.get("voice_gap", 10.0)))),
+                        caption_places=False if sb.get("caption_placement") == "fixed" else
+                        {i: p for i, sc in enumerate(scenes) if (p := parse_place(sc.get("caption_place")))},
                         end_card=sb.get("end_card"), card_len=float(sb.get("end_card_seconds", 2.5)), words=words or None, look=sb.get("look", "natural"),
                         accent=sb.get("accent", "#FFD23F"), all_words=all_words, stats=stats, charts=charts,
                         sfx=None if sb.get("sound_effects") is False else sfx, line_charts=lcharts, quotes=quotes,
@@ -589,6 +636,9 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     finally:
         graphics.PANELS = True
         style_.CAPTION_MODE = "pop"
+        style_.CARD_WORDS = (2, 6)
+        style_.BRANDED = False
+        brand.reset_fonts()
         genre.EXTRAS = {}
     base.unlink()
     return notes

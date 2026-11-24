@@ -366,6 +366,13 @@ def _asks_unanswered(scenes: list[dict], point: str) -> bool:
     return not any(back & _roots(words_of(sc)) for sc in scenes[-2:])
 
 
+STANDIN = re.compile(r"\b(mock-?ups?|placeholder|dummy|lorem|fake (?:page|site|screen|button))\b", re.I)
+OTHERWAY = re.compile(r"\b(or you can|alternatively|another way|or just ask|or ask your)\b", re.I)
+PLACE = re.compile(r"\b(?:the )?(?:download|settings|sign[- ]?in|login|home|install|releases?|account) (?:page|button|menu|screen)\b|"
+                   r"\bclick (?:the )?\w+ (?:button|link|tab)\b", re.I)
+ROUTE = re.compile(r"\b(search|go to|open|visit|type|navigate|www\.|https?://|\.com\b|from the menu|in the menu)", re.I)
+
+
 def craft(sb: dict, scenes: list[dict], add) -> None:
     """The checks from the craft guide (CRAFT.md) that a storyboard can show before
     anything is made: the promise, the opening paid off, setups paid off, things
@@ -440,6 +447,46 @@ def craft(sb: dict, scenes: list[dict], add) -> None:
     if len(pic) >= 3 and people >= 2 and not any(sc.get("cast") for sc in scenes):
         add("cast-untagged", "note", 0, "the story follows people, but no scene says who is in its picture",
             "add \"cast\": [\"name\"] to each picture scene, then run alvenus cast to check each one looks the same throughout")
+
+    # the same shot used twice close together reads as a mistake, not a callback
+    t, at = 0.0, []
+    for sc in scenes:
+        at.append(t)
+        t += float(sc.get("seconds") or 3)
+    for i, sc in enumerate(scenes):
+        f = sc.get("file")
+        if not f or sc.get("type") not in PICTURE or sc.get("repeat_ok"):
+            continue
+        a0 = float(sc.get("from") or 0)
+        a1 = a0 + float(sc.get("seconds") or 3)
+        for j in range(i - 1, -1, -1):
+            if at[i] - at[j] > 8:
+                break
+            o = scenes[j]
+            if o.get("file") != f or o.get("type") not in PICTURE or o.get("repeat_ok"):
+                continue
+            b0 = float(o.get("from") or 0)
+            if j == i - 1 and sc.get("type") == "image":
+                continue  # one picture held across two scenes: the "still" note covers it
+            if sc.get("type") == "image" or (a0 < b0 + float(o.get("seconds") or 3) and b0 < a1):
+                add("repeat-shot", "weak", i + 1, f"the same shot as scene {j + 1}, {at[i] - at[j]:.0f} s earlier",
+                    "use another clip, or another part of this one; if it is a deliberate callback, add \"repeat_ok\": true")
+                break
+
+    # how-tos: the real place, the real path, other ways kept apart
+    if kind == "how-to" or sb.get("how_to"):
+        for i, sc in enumerate(scenes, 1):
+            line = _line_of(sc)
+            if sc.get("placeholder") or STANDIN.search(str(sc.get("file") or "")) or STANDIN.search(line):
+                add("stand-in", "note", i, "this shows a stand-in (a mock-up or placeholder), not the real page or button",
+                    "record or screenshot the real one the viewer will use; a mock-up only if the real one doesn't exist yet")
+            if OTHERWAY.search(line) and not sc.get("alternative"):
+                add("other-way-mixed", "note", i, f"\"{OTHERWAY.search(line).group(0)}\" mixes another way into this step",
+                    "give it its own scene with \"alternative\": \"Another way\" (it gets a clear label), so the main path stays simple")
+        first = next((i for i, sc in enumerate(scenes) if PLACE.search(_line_of(sc))), None)
+        if first is not None and not any(ROUTE.search(_line_of(sc)) for sc in scenes[: first + 1]):
+            add("no-path", "note", first + 1, f"the viewer is shown \"{PLACE.search(_line_of(scenes[first])).group(0)}\" but not how to get there",
+                "show the way there first, as the viewer would go: search, the site, the menu, then this")
 
     # clarity: who, what
     for i, sc in enumerate(scenes[:2], 1):

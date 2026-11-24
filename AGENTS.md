@@ -32,6 +32,11 @@ then don't ask again. Suggest a change only when the kit would hurt the video
 (the check says "brand-contrast"). Save a new kit with
 `alvenus brand set --colour NAME=#RRGGBB ... --background NAME --text NAME --accent NAME`.
 A colour they approve for one video goes in the storyboard's `"brand_exceptions"`.
+Their **fonts** go in the kit too (`"fonts": {"heading": "fonts/Their-Heading.ttf",
+"body": "fonts/Their-Body.ttf"}`, or `alvenus brand set ... --heading-font FILE
+--body-font FILE`): every title, caption, label and chart then uses them. A font
+file travels with the kit; a font name only works where it is installed, and Venus
+says plainly when it had to fall back to its own.
 **No kit?** Ask the creator, once, which colours they'd like for this video
 (their own words: "warm and calm", "black, white and one red"). Turn the answer
 into colours, show them, and use them; offer to save them as their kit with
@@ -478,10 +483,25 @@ suits calm, long-form or documentary pieces.
 - **Under a voice** the music sits well below it (12 dB down while someone
   speaks; `--music-duck` / storyboard `"music_duck"` only if the creator asks for
   more or less). It eases down before each phrase and back up after it, always in
-  a gap, never on a word; a short breath keeps it down. Sound effects get a
-  little room, so they sit just above the music. Raise `--music-lufs` (e.g. -18)
-  for an energetic piece, lower it (-26) for an intimate one. Only use music the
-  creator has the right to use.
+  a gap, never on a word; a short breath keeps it down. Raise `--music-lufs`
+  (e.g. -18) for an energetic piece, lower it (-26) for an intimate one. Only use
+  music the creator has the right to use.
+- **The mix is measured, line by line.** Before the final mix is written, Venus
+  measures every spoken phrase against the music under it. Wherever the voice is
+  less than 10 dB over the music, the music goes further down for that stretch
+  (`--voice-gap` / `"voice_gap"`, 0 = off). The notes say how close the closest
+  line came. When the creator set the music level themselves and Venus had to go
+  further down, tell them, and why.
+- **Sound effects: fewer, varied, heard.** Venus never stacks two effects within
+  half a second (the stronger one stays) and allows at most two small ones
+  (pops, ticks, snaps) in two seconds. A sound used again is slightly retuned,
+  so a run of them never sounds copied. Each effect is measured against what
+  plays under it and lifted until it is heard (never more than 9 dB). Put
+  effects on the moments that matter, not on every graphic.
+- **Music that has to run longer than the song** repeats on a bar line, with a
+  short blend, from the bar whose loudness best matches, never by jumping back
+  to the top. The notes list each join and flag any where the level still
+  changes; listen to those.
 - **Never split joined words.** Inside a phrase the words run together; Venus
   only cuts in real quiet and takes back any cut that would split two words.
   When you place voice pieces yourself, cut only in the gaps `alvenus listen`
@@ -489,7 +509,39 @@ suits calm, long-form or documentary pieces.
 - **Title** sits over the opening seconds, so the hook still starts at once. Keep
   it to a few words. **End card**: a short call to action ("Follow for part two").
 
+### Captions
+
+- **Short cards that follow the voice.** A caption card holds 2 to 6 words, breaks
+  where the voice pauses or punctuation ends a thought, never leaves one word
+  alone, and never ends on a joining word ("the", "of"): that word goes with
+  what it joins. In the `keyword` style there is one big word and at most one
+  small row; the small row gets smaller before it would ever wrap. The creator
+  can choose other limits (`--caption-words 3-5`, `"caption_words": "3-5"`).
+- **Each card sits where the picture leaves room.** Venus reads the frame under
+  every card and puts the words where it is calm (little detail, no skin tone),
+  so they don't cover a face or the subject. Within a shot the card stays put; it
+  moves when the shot changes; when two spots are nearly as good, it picks the
+  one the last shot didn't use, so the words don't sit in one place all video.
+  It measures detail and skin tone, it does not recognise faces: if a card lands
+  badly, set that scene's `"caption_place"` ("top", "bottom-left", ...). For
+  captions always at the bottom: `--fixed-captions` / `"caption_placement": "fixed"`.
+- **Clean type.** Cards stay inside the safe area (on tall videos: clear of the
+  app's caption area at the bottom and its buttons on the right). Rows are even,
+  and the small row scales with the big word. The self-review checks every card
+  for this after the render.
+- In Studio the creator can edit each caption card: its words, the big word
+  (`"caption_big"`) and where it sits. What they set always wins.
+
 ## 6. Steer and re-cut
+
+**What the creator approved stays as it was.** When they ask for a fix, change
+only what they named. Example: they say "the opening repeats a shot", so swap
+only the repeated shots for unused clips of the same look. Don't restyle,
+rebuild or "improve" anything else. Venus keeps a copy of what was approved.
+`alvenus check` lists every approved part that has changed since
+(`approved-changed`), and `alvenus approve` lists them again. Put back any
+change the creator didn't ask for. If you think something else should change,
+ask first.
 
 Every cut writes `cut.plan.json` beside it: the script, the takes, every setting,
 `picks` (your overrules), `chosen_now` (the take each line used), `broll`, music,
@@ -607,7 +659,17 @@ neither the promise nor its neighbours. It also guards the setup: the point
 said in the first third before it is earned (`payoff-early`), an answer to a
 question the video never asked (`answer-unasked`), and a story that opens on
 what happened next (`setup-missing`). A colour that isn't in the brand kit is
-weak (`off-brand`).
+weak (`off-brand`). The same shot used again within 8 seconds is weak
+(`repeat-shot`): use an unused clip of the same look, or mark a deliberate
+callback `"repeat_ok": true`. After the render, the self-review also compares the
+shots themselves and flags two that look the same close together.
+
+**Does each picture show what is said over it?** `alvenus fit sb.json` measures
+how well every scene's picture matches its words (the same local model as the
+footage search) and points out the weakest matches. Once the model is on the
+computer, `alvenus check` does this too (`picture-off-line`). It is a measurement
+to look at: a deliberate contrast between word and picture can be the point.
+Show the creator the flagged scenes; don't swap a picture without their yes.
 
 **The same person looks the same.** In a story, tag who and what is in each
 picture: `"cast": ["father", "daughter (young)", "watch"]`. Then
@@ -717,6 +779,30 @@ check and approval. `alvenus make --example sb.json` writes every scene type.
    side by side (their style, the opposite energy, a tighter pace), with
    `video-versions.jpg` to compare and `video-versions.md` with why each exists.
    They pick one; build it in full from its saved `.storyboard.json`.
+
+### How-to videos (`"kind": "how-to"`)
+
+A how-to teaches one task. Show the result first, then what the viewer needs,
+then each step, and end on it working.
+
+- **Explain what you name.** Each thing the viewer needs (a program, an account,
+  a file) also gets what it is and where to get it.
+- **Show the real place.** Record or screenshot the actual site, page and button
+  the viewer will use. Don't use a mock-up unless the real one doesn't exist yet.
+  The check flags stand-ins (`stand-in`).
+- **Show the real path.** Go there the way the viewer would: search, the site,
+  the menu, the page, the button. Don't cut straight to the last page
+  (`no-path`).
+- **Keep other ways apart.** If a step can also be done another way ("or ask
+  your AI"), give it its own scene with `"alternative": "Another way"`. It gets
+  a clear label in the corner, and the main path stays simple
+  (`other-way-mixed`).
+- **Screen recordings move.** In a how-to every clip is treated as a screen
+  recording (`"screen": true` anywhere else, `"screen": false` to turn it off).
+  The camera follows the activity: it pushes in on the cursor or the text
+  being typed, eases back out when the whole page changes, and holds still when
+  nothing happens. Steps slide on instead of dissolving. It follows changes on
+  the screen; it does not read what the screen says.
 
 ### Three directions, before anything is made (`alvenus directions`)
 
@@ -890,5 +976,9 @@ ships, its author is thanked and credited by name (CONTRIBUTING.md has the detai
   a question.
 - Brand kit first; watch every reference before the first draft; on feedback change
   only what was flagged; ask for the creator's music before using any other.
+- What the creator approved stays locked: a fix changes only what they asked for.
+- Every check above is a measurement. Report what it measured and say what it
+  can't know (it measures detail, not faces; changes on a screen, not what the
+  screen says). Never present a measurement as certain.
 - Never assume a topic, theme, audience, length, look or music the creator didn't give.
   Ask, or offer choices. A guess presented as a fact is the worst mistake you can make.

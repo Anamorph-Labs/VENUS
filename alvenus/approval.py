@@ -60,11 +60,53 @@ def stamp_path(path: Path) -> Path:
 
 
 def approve(path: Path, by: str, note: str = "") -> dict:
-    rec = {"approved_by": by, "at": time.strftime("%Y-%m-%d %H:%M"), "fingerprint": fingerprint(content(path))}
+    sb = content(path)
+    rec = {"approved_by": by, "at": time.strftime("%Y-%m-%d %H:%M"), "fingerprint": fingerprint(sb),
+           # what was approved, kept so a later change to an approved part can be shown (see changed_since)
+           "approved": _clean(sb)}
     if note:
         rec["note"] = note
     stamp_path(path).write_text(json.dumps(rec, indent=2), encoding="utf-8")
     return rec
+
+
+def changed_since(path: Path) -> list[tuple[str, list[str]]]:
+    """What changed in parts the creator already approved: [(where, [keys])].
+    A fix should change only what the creator asked for; anything else listed
+    here has to be put back or shown to them. Scenes are matched by content
+    first, so adding or moving a scene doesn't count as changing the others."""
+    sp = stamp_path(path)
+    try:
+        old = json.loads(sp.read_text(encoding="utf-8")).get("approved")
+    except (OSError, ValueError):
+        return []
+    if not isinstance(old, dict):
+        return []
+    cur = _clean(content(path))
+    out = []
+    top = sorted(k for k in set(old) | set(cur) if k != "scenes" and old.get(k) != cur.get(k))
+    if top:
+        out.append(("whole video", top))
+    now = cur.get("scenes") or []
+    olds = old.get("scenes") or []
+    kept = {fingerprint(o) for o in olds}
+    fresh = [(j, c) for j, c in enumerate(now, 1) if fingerprint(c) not in kept]  # new or edited scenes
+    same = {fingerprint(sc) for sc in now}
+    for i, o in enumerate(olds, 1):
+        if fingerprint(o) in same:
+            continue
+        # the edited version is the new scene most like it (same picture, same kind, most settings alike)
+        best = max(fresh, key=lambda jc: (jc[1].get("file") == o.get("file") and bool(o.get("file")),
+                                          sum(1 for k in o if k not in ("type", "seconds") and jc[1].get(k) == o[k]),
+                                          jc[1].get("type") == o.get("type"), -abs(jc[0] - i)), default=None)
+        if best is None or not any(best[1].get(k) == o[k] for k in o if k != "seconds"):
+            out.append((f"scene {i}", ["removed"]))
+            continue
+        fresh.remove(best)
+        c = best[1]
+        where = f"scene {i}" if best[0] == i else f"scene {i} (now scene {best[0]})"
+        out.append((where, sorted(k for k in set(o) | set(c) if o.get(k) != c.get(k))))
+    return out
 
 
 def status(path: Path) -> tuple[bool, str]:

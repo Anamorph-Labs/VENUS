@@ -191,7 +191,7 @@ class MatchTests(unittest.TestCase):
         self.assertEqual(ass_colour("#FFD23F"), "&H003FD2FF")
         ws = [Word(t, i, i + 1) for i, t in enumerate("So we visit him, and we lose track of it.".split())]
         self.assertEqual([[w.text for w in g] for g in chunks(ws, vertical=True)],
-                         [["So", "we", "visit", "him,"], ["and", "we", "lose", "track"], ["of", "it."]])
+                         [["So", "we", "visit", "him,"], ["and", "we", "lose", "track", "of", "it."]])  # 2-6 word cards, no "of it." left alone
 
     def test_word_placement_follows_syllables(self):
         from alvenus.wordtime import place, syllables

@@ -465,7 +465,8 @@ const LABEL = {venus_mark: 'Made with Venus mark', size: 'Size', caption: 'Words
   darken: 'Darken', push: 'Slow push in', label: 'Label', speed: 'Speed', delay: 'Wait', align: 'Align', caps: 'Capitals', big_words: 'Big words', subtitle: 'Subtitle',
   who: 'Who said it', callout: 'Pointer', note: 'Note', colour: 'Colour', show: 'Show', seconds: 'Length', dark: 'Dark page', background: 'Background',
   transition: 'Transition', amount: 'Amount', bright: 'Brightness', contrast: 'Contrast', saturation: 'Colour', warmth: 'Warmth', type: 'Kind', camera: 'Camera move',
-  layers: 'Stack', accent: 'Accent', look: 'Look', aspect: 'Shape', music: 'Music', voiceover: 'Voice', style: 'Style', music_lufs: 'Music loudness', music_duck: 'Music under the voice', sound_effects: 'Sound effects', sfx_volume: 'Sound effects volume'};
+  layers: 'Stack', accent: 'Accent', look: 'Look', aspect: 'Shape', music: 'Music', voiceover: 'Voice', style: 'Style', music_lufs: 'Music loudness', music_duck: 'Music under the voice', sound_effects: 'Sound effects', sfx_volume: 'Sound effects volume', voice_gap: 'Voice clear of music',
+  caption_style: 'Caption style', caption_words: 'Words per caption', caption_placement: 'Caption placement', caption_big: 'Big word', caption_place: 'Caption place'};
 const PART_LABEL = {words: 'Words', picture: 'Photo', mark: 'Marks', graphic: 'Graphic', in: 'Comes in'};
 const labelOf = q => { if (q.includes('.')) { const [a, b] = q.split('.'); return (PART_LABEL[a] || a) + ' · ' + (LABEL[b] || b).toLowerCase(); }
   return LABEL[q] || (q[0].toUpperCase() + q.slice(1)).replace(/_/g, ' '); };

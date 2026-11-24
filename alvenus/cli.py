@@ -440,8 +440,15 @@ def cmd_cut(a: argparse.Namespace) -> None:
         from . import genre
 
         genre.EXTRAS = extras_of(a, line_spans(clips), len(script))
-        finish_notes = finish(base, out, ASPECTS[a.aspect], fps, line_spans(clips), cutaways, music, a.music_lufs,
+        from . import brand, style as style_
+        from .story import card_words
+
+        style_.CARD_WORDS = card_words(getattr(a, "caption_words", None))
+        style_.BRANDED = _kit() is not None
+        font_notes = brand.font_setup((_kit() or {}).get("fonts"))
+        finish_notes = font_notes + finish(base, out, ASPECTS[a.aspect], fps, line_spans(clips), cutaways, music, a.music_lufs,
                               music_duck=getattr(a, "music_duck", 12.0), sfx_gain=getattr(a, "sfx_volume", 0.0), title=a.title, end_card=a.end_card,
+                              voice_gap=getattr(a, "voice_gap", 10.0), caption_places=False if getattr(a, "fixed_captions", False) else None,
                               srt=srt if a.captions and not pop else None,
                               words=words if pop else None, look=a.look, accent=a.accent,
                               lower_thirds=lower_thirds, card_lines=card_lines, all_words=words,
@@ -453,6 +460,9 @@ def cmd_cut(a: argparse.Namespace) -> None:
                               scene_marks=[t for i, t in enumerate(positions(clips))
                                            if i and clips[i - 1].line != clips[i].line and clips[i - 1].line in breaks])
         genre.EXTRAS = {}
+        style_.CARD_WORDS = (2, 6)
+        style_.BRANDED = False
+        brand.reset_fonts()
         thumb_from = base
     else:
         thumb_from = None
@@ -807,6 +817,13 @@ def cmd_brand(a: argparse.Namespace) -> None:
             kit = brand.load({"name": a.name or "", "colours": cols, "background": a.background, "text": a.text, "accent": a.accent})
         if not kit:
             raise SystemExit("no colours: give a kit file, or --colour NAME=#RRGGBB (as many as the brand has)")
+        fonts = {r: v for r, v in (("heading", getattr(a, "heading_font", None)), ("body", getattr(a, "body_font", None))) if v}
+        if fonts or isinstance(kit.get("fonts"), dict):
+            base = Path(a.file).resolve().parent if a.file else Path.cwd()
+            kit["fonts"] = {r: brand._abs(v, base) for r, v in {**(kit.get("fonts") or {}), **fonts}.items()}
+            for r, v in kit["fonts"].items():  # say now, not at render time, if a font can't be used
+                if v.lower().endswith((".ttf", ".otf")) and not brand.font_family(Path(v)):
+                    raise SystemExit(f"{r} font {v}: can't be read (is the path right?)")
         for role in ("background", "text", "accent"):
             if kit.get(role) and not brand.role(kit, role):
                 raise SystemExit(f"--{role} {kit[role]!r} is not one of the kit's colours ({', '.join(kit['colours'])})")
@@ -847,6 +864,23 @@ def cmd_cast(a: argparse.Namespace) -> None:
     print("\n".join(notes) if notes else "each one looks alike across their scenes (measured); still glance at the sheet")
     if data:
         print(f"sheet: {sheet} (show it to the creator before approving)")
+
+
+def cmd_fit(a: argparse.Namespace) -> None:
+    from . import fit, story
+    from .approval import content
+
+    p = Path(a.storyboard)
+    sb = story.load(p, json.loads(json.dumps(content(p))))
+    notes, rows = fit.check(sb)
+    if a.json:
+        print(json.dumps({"notes": notes, "scenes": rows}, indent=1))
+        return
+    for r in rows:
+        m = "not measured" if r["match"] is None else f"{r['match']:.2f}" + ("  <- may not match" if r["weak"] else "")
+        print(f"scene {r['scene']}: {m}   \"{r['line'][:60]}\"")
+    print("\n".join(notes) if notes else ("every picture fits its line about as well as the rest (measured)" if rows else
+                                          "no scene has both a picture and words to compare"))
 
 
 def cmd_listen(a: argparse.Namespace) -> None:
@@ -1043,9 +1077,24 @@ def cmd_check(a: argparse.Namespace) -> None:
 
         if sheet := board_sheet(loaded, p.with_name((p.name[:-5] if p.name.endswith(".json") else p.name) + ".pictures.jpg")):
             print(f"the drawn pictures, to show with the board: {sheet}")
+        from . import fit
+
+        _, rows = fit.check(loaded, fetch=False)  # only when its model is already here: a check never downloads
+        for r in rows:
+            if r["weak"]:
+                findings.append(storycheck.Finding("note", r["scene"], "", f"the picture may not show what is said over it (match {r['match']:.2f}, measured)",
+                                                   "look at it: swap the picture, or keep it if the contrast is meant", "picture-off-line"))
     except SystemExit as e:  # the storyboard can't be built as written: that is weak too
         for line in str(e).splitlines()[1:]:
             findings.insert(0, storycheck.Finding("weak", 0, "", line.strip(), "fix the storyboard file"))
+    from .approval import changed_since
+
+    for where, keys in changed_since(p):  # approved parts stay locked: a fix changes only what was asked
+        n = re.findall(r"\d+", where)
+        findings.append(storycheck.Finding("note", int(n[-1]) if n else 0, "",
+                                           f"already approved{f' as scene {n[0]}' if len(n) > 1 else ''}, and changed since ({', '.join(keys)})",
+                                           "keep it only if the creator asked for this change; otherwise put it back as approved",
+                                           "approved-changed"))
     from . import taste
 
     taste.seen(p, findings)
@@ -1080,7 +1129,14 @@ def cmd_approve(a: argparse.Namespace) -> None:
     if w and not a.anyway:
         raise SystemExit(f"the story check still finds {len(w)} weak point{'s' if len(w) > 1 else ''} (alvenus check {p}). "
                          "Fix them, or if the creator wants it as it is: approve --anyway \"their reason\"")
+    from .approval import changed_since
+
+    moved = changed_since(p)
     rec = approve(p, a.by, a.anyway or "")
+    if moved:
+        print("changed since the last approval (approved parts stay as they were unless the creator asked):\n"
+              + "\n".join(f"   {where}: {', '.join(keys)}" for where, keys in moved)
+              + "\nmake sure the creator asked for each of these; put back any they didn't")
     from . import taste
 
     taste.approved(p, sb, found)  # what still stands is how this creator likes it
@@ -1525,6 +1581,10 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--music-duck", type=float, default=12.0,
                    help="how far the music dips under the voice, in dB (default 12: well under it). Lower only if the creator asks")
     c.add_argument("--sfx-volume", type=float, default=0.0, help="sound effects louder (+) or softer (-), in dB")
+    c.add_argument("--voice-gap", type=float, default=10.0,
+                   help="how far (dB) the voice always sits over the music, measured on every line; the music goes further down where needed (0 = off)")
+    c.add_argument("--caption-words", default="2-6", help="words per caption card, fewest-most (default 2-6)")
+    c.add_argument("--fixed-captions", action="store_true", help="keep captions in one spot instead of placing them shot by shot")
     c.add_argument("--title", help="opening title, shown over the first seconds")
     c.add_argument("--end-card", help="text on a closing card after the last line (e.g. a call to action)")
     c.add_argument("--look", default="natural", choices=sorted(LOOKS), help="colour grade for the whole cut, B-roll included")
@@ -1723,6 +1783,8 @@ def main(argv: list[str] | None = None) -> None:
     br.add_argument("--background", help="set: which colour is the background")
     br.add_argument("--text", help="set: which colour the words are")
     br.add_argument("--accent", help="set: the accent colour")
+    br.add_argument("--heading-font", help="set: the brand's heading font (a .ttf/.otf file, or an installed font's name)")
+    br.add_argument("--body-font", help="set: the brand's body font (a .ttf/.otf file, or an installed font's name)")
     br.add_argument("--kit", help="show/check: a kit file instead of the saved one")
     br.set_defaults(func=cmd_brand)
     ca = sub.add_parser("cast", help="check that each person and key object looks the same in every scene (scenes say \"cast\")")
@@ -1730,6 +1792,10 @@ def main(argv: list[str] | None = None) -> None:
     ca.add_argument("--json", action="store_true")
     ca.add_argument("--no-measure", action="store_true", help="only the sheet, no likeness model")
     ca.set_defaults(func=cmd_cast)
+    fi = sub.add_parser("fit", help="measure how well each scene's picture shows what is said over it; points out the weakest")
+    fi.add_argument("storyboard")
+    fi.add_argument("--json", action="store_true")
+    fi.set_defaults(func=cmd_fit)
     li = sub.add_parser("listen", help="read a song and a voice precisely: tempo, bars, sections, hits, stops; spoken phrases and the gaps between")
     li.add_argument("music", nargs="?", help="the song")
     li.add_argument("--voice", help="a voiceover or any speech track")

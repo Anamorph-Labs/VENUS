@@ -28,7 +28,7 @@ QUESTIONS: dict[str, str] = {
     "audience": "who will watch it, in a few words (\"first-year students\", \"people planning a Kyoto trip\")",
     "point": "the ONE thing they should remember afterwards, as one short sentence",
     "promise": "what the video promises the viewer for watching, in one line (\"you'll see why your phone dies in the cold\"); every scene must serve it",
-    "kind": "explainer, travel, story, list or ad",
+    "kind": "explainer, how-to, travel, story, list or ad",
     "seconds": "how long, in seconds (15 to 90 works best for these shapes)",
     "aspect": "16:9 (YouTube), 9:16 (Reels, Shorts), 1:1 or 4:5",
     "mood": "two or three words for the feel (\"calm, curious\", \"bright, fast\")",
@@ -70,6 +70,20 @@ RECIPES: dict[str, dict] = {
             ("payoff", 0.16, ("text", "clip"), "one closing line over a last shot: what the place felt like, not what it was"),
         ],
     },
+    "how-to": {
+        "about": "Teach one task: show the result first, what the viewer needs before starting (each thing named is "
+                 "explained: what it is and how to get it), then each step on the real screen in the order the viewer "
+                 "will do it, and end on it working.",
+        "look": "explainer", "aspect": "16:9", "end_card": None,
+        "beats": [
+            ("hook", 0.10, ("clip", "text"), "the finished result, shown working, in under 3 seconds"),
+            ("need", 0.14, ("list", "text"), "what the viewer needs first; each thing named also says what it is and where to get it"),
+            ("step", 0.18, ("clip", "image"), "the first step on the real screen, from where the viewer starts (search, site, menu, button)"),
+            ("step", 0.18, ("clip", "image"), "the next step, on the real screen, in the viewer's own order"),
+            ("step", 0.18, ("clip", "image"), "the last step; another way to do a step goes in its own scene marked \"alternative\""),
+            ("payoff", 0.22, ("clip", "text"), "it working on the viewer's screen, and one line on what they can do now"),
+        ],
+    },
     "story": {
         "about": "A small true story: start in the hardest moment, go back to how it began, rise, then land on what it meant.",
         "look": "cinematic-doc", "aspect": "16:9", "end_card": "Thanks for watching",
@@ -106,7 +120,7 @@ RECIPES: dict[str, dict] = {
     },
 }
 KINDS = tuple(RECIPES)
-NAMES = {"explainer": "explainer", "travel": "travel reel", "story": "short story", "list": "top-5 list", "ad": "product ad"}
+NAMES = {"explainer": "explainer", "how-to": "how-to", "travel": "travel reel", "story": "short story", "list": "top-5 list", "ad": "product ad"}
 
 
 def new(idea: str) -> dict:

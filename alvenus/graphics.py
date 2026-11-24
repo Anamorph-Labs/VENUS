@@ -812,3 +812,25 @@ def callout_events(x: float, y: float, label: str, start: float, end: float, w: 
     rows.append(f"Dialogue: 9,{_t(t0 + 0.65)},{_t(end)},CardText,,0,0,0,,{{\\an7\\pos({bx + pad},{by + round(pad * 0.6)})\\fs{round(sz)}"
                 f"\\fnInter ExtraBold\\1c&H00141414&\\alpha&HFF&\\t(0,200,\\alpha&H00&)\\fad(0,200)}}{'\\N'.join(_esc(s) for s in lines)}")
     return rows
+
+
+def tag_events(label: str, start: float, end: float, w: int, h: int, accent: str) -> list[str]:
+    """A small label in the top-left corner for a scene that shows another way
+    to do a step ("Another way", "Or ask your AI"): an accent plate with the
+    words on it, sliding in, so the viewer knows this is not the main path."""
+    from .placement import safe_box
+    from .style import text_width
+
+    size = round(0.036 * min(w, h))
+    text = label.strip().upper()
+    tw = text_width(text, size, "Inter-ExtraBold.otf") + len(text) * round(size * 0.08)  # letters plus their spacing
+    pad = round(size * 0.55)
+    L, T, _, _ = safe_box(w, h)
+    bw, bh = round(tw + 2 * pad), round(size * 1.6)
+    t0 = start + 0.25
+    return [
+        _rect(9, t0, end, L, T + bh, bw, bh, ass_colour(accent),
+              f"\\clip({L},{T},{L},{T + bh})\\t(0,260,0.5,\\clip({L},{T},{L + bw},{T + bh}))\\fad(0,200)"),
+        f"Dialogue: 10,{_t(t0 + 0.15)},{_t(end)},Card,,0,0,0,,{{\\an4\\pos({L + pad},{T + bh // 2})\\fnInter ExtraBold\\fs{size}"
+        f"\\fsp{round(size * 0.08)}\\bord0\\shad0\\1c&H00FFFFFF&\\fad(160,200)}}{_esc(text)}",
+    ]

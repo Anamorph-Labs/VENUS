@@ -270,3 +270,81 @@ def report(music: dict | None = None, voice: dict | None = None) -> str:
         fit = [g for g in gaps if g[1] - g[0] >= 1.6]
         lines.append(f"  the music can lift in {len(fit)} of the {len(gaps)} gaps (1.6 s or longer); in the others it stays down")
     return "\n".join(lines)
+
+
+# --- music that has to run longer than the song ----------------------------------
+
+def _stereo(path: Path, sr: int = 48000) -> np.ndarray:
+    import subprocess
+
+    raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(path), "-vn", "-ac", "2", "-ar", str(sr), "-f", "f32le", "-"],
+                         capture_output=True, check=True).stdout
+    return np.frombuffer(raw, dtype=np.float32).reshape(-1, 2).copy()
+
+
+def _write_stereo(path: Path, y: np.ndarray, sr: int = 48000) -> None:
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes((np.clip(y, -1, 1) * 32767).astype("<i2").tobytes())
+
+
+def loop_points(y: np.ndarray, sr: int, bars: list[float], beat: float | None) -> tuple[float, float, float]:
+    """(start, end, blend) of the stretch to repeat. On a song with a beat both
+    ends are bar lines, so the repeat lands on the downbeat; the start is the
+    bar whose loudness best matches the end, so the level doesn't jump."""
+    length = len(y) / sr
+    db = loudness(y.mean(axis=1) if y.ndim == 2 else y, sr)
+
+    def level(t: float) -> float:
+        i = int(t / HOP)
+        return float(np.mean(db[max(0, i - 50): i + 50])) if len(db) else -120.0
+
+    if len(bars) >= 4:
+        ends = [b for b in bars if b <= length - 0.6]
+        end = ends[-1] if ends else length - 0.6
+        starts = [b for b in bars if 0.5 <= b <= end - 4.0] or [bars[0]]
+        start = min(starts, key=lambda b: abs(level(b) - level(end)) + 0.02 * b)
+        return start, end, round(min(0.5, (beat or 0.5)), 3)
+    end = max(1.0, length - 1.2)
+    starts = [t for t in np.arange(0.5, max(0.6, end / 3), 0.25)]
+    start = min(starts, key=lambda t: abs(level(t) - level(end)))
+    return round(float(start), 3), round(end, 3), 1.5
+
+
+def extend_music(path: Path, need: float, out: Path) -> tuple[Path, list[float], list[float]]:
+    """The song made at least `need` seconds long by repeating a stretch of it,
+    joined on the bar with a short equal-power blend instead of jumping back to
+    the top. Returns (file to use, where each join sits, level change at each
+    join in dB). A song already long enough comes back as it is."""
+    sr = 48000
+    y = _stereo(path, sr)
+    length = len(y) / sr
+    if length >= need or length < 3.0:
+        return path, [], []
+    m = music_map(path)
+    beat = 60 / m["tempo"] if m.get("tempo") else None
+    start, end, xf = loop_points(y, sr, m.get("bars") or [], beat)
+    s, e, n = int(start * sr), int(end * sr), int(xf * sr)
+    fade = np.linspace(0, np.pi / 2, n, dtype=np.float32)
+    fin, fout = np.sin(fade)[:, None], np.cos(fade)[:, None]
+    body = y[s:e]
+    out_y = y[:e].copy()
+    joins = []
+    while len(out_y) / sr < need + 0.5:
+        tail = y[e: e + n]
+        if len(tail) < n:
+            tail = np.vstack([tail, np.zeros((n - len(tail), 2), np.float32)])
+        head = y[s: s + n]
+        joins.append(round(len(out_y) / sr, 2))
+        rest = y[s:] if (len(out_y) + len(y) - s) / sr >= need + 0.5 else body
+        out_y = np.vstack([out_y, tail * fout + head * fin, rest[n:]])
+    db = loudness(out_y.mean(axis=1), sr)
+    jumps = []
+    for t in joins:
+        i = int(t / HOP)
+        a, b = db[max(0, i - 100): i - 10], db[i + 10: i + 100]
+        jumps.append(round(abs(float(np.mean(b)) - float(np.mean(a))), 1) if len(a) and len(b) else 0.0)
+    _write_stereo(out, out_y, sr)
+    return out, joins, jumps

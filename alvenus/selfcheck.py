@@ -117,7 +117,7 @@ def _contrast(video: Path, ass: Path, events, w: int, h: int, total: float) -> l
     pixel it touches (and whether any of it runs off the frame). In the finished frame, letters with their own light and
     dark (an outline, or words on a plate) read over anything; plain letters
     are compared with what is just around them."""
-    from .style import FONTS
+    from .style import FONTS, fonts_dir  # noqa: F401
 
     esc = lambda p: str(p).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
     # letters only: shapes (chart fills, lines, dots, plates drawn as their own
@@ -142,7 +142,7 @@ def _contrast(video: Path, ass: Path, events, w: int, h: int, total: float) -> l
     bad, cut_off = [], []
     def layer(t: float, bg: str) -> np.ndarray:
         return _gray(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i", f"color={bg}:s={w}x{h}:r=25:d=0.04",
-                      "-vf", f"setpts=PTS+{t:.3f}/TB,subtitles='{esc(ass)}':fontsdir='{esc(FONTS)}',scale={sw}:{sh}"
+                      "-vf", f"setpts=PTS+{t:.3f}/TB,subtitles='{esc(ass)}':fontsdir='{esc(fonts_dir())}',scale={sw}:{sh}"
                       + (f",perspective={cam.replace('(TIME)', f'({t:.3f})')}:interpolation=linear" if cam else ""),
                       "-frames:v", "1"], sw, sh)
 
@@ -276,6 +276,7 @@ def _pace(video: Path, total: float) -> list[str]:
         notes.append(Finding(f"{'a shot' if len(blips) == 1 else f'{len(blips)} shots'} too quick to take in ({when}): under 0.4 s "
                              "between longer shots, so the eye catches a flicker, not a picture. Hold it longer, or make it part of a run of quick cuts",
                              "pace", blips))
+    notes += _repeats(fr, fps, edges, plain)
     if len(cuts) >= 8:
         try:
             from .beats import SR, beat_grid
@@ -302,6 +303,94 @@ def _pace(video: Path, total: float) -> list[str]:
     return notes
 
 
+def _type(ass: Path, w: int, h: int) -> list:
+    """Clean type: every caption card inside the safe area (clear of the frame's
+    edges and, on tall videos, of the app's caption area and buttons), rows of
+    even length, and no word left alone on a row of its own. Read from the
+    caption layout itself, measured with the fonts on screen."""
+    from .placement import safe_box
+    from .style import text_width
+
+    L, T, R, B = safe_box(w, h)
+    cap = round((0.062 if h > w else 0.055) * min(w, h))
+    out, seen = [], set()
+    for row in ass.read_text(encoding="utf-8").splitlines():
+        if not row.startswith("Dialogue:"):
+            continue
+        parts = row[len("Dialogue:"):].split(",", 9)
+        if len(parts) < 10 or parts[3].strip() != "Cap":
+            continue
+        raw = parts[9]
+        text = re.sub(r"\{[^}]*\}", "", raw)
+        key = (parts[1], text)
+        if key in seen or not text.strip():
+            continue
+        seen.add(key)
+        t = _secs(parts[1].strip())
+        rows = [r.strip() for r in text.split("\\N")]
+        fs = float(m.group(1)) if (m := re.search(r"\\fs(\d+(?:\.\d+)?)", raw)) else cap
+        font = "InstrumentSerif-Italic.ttf" if "Instrument Serif" in raw else "Inter-SemiBold.otf" if "Inter SemiBold" in raw else "Inter-ExtraBold.otf"
+        widths = [text_width(r, fs, font) for r in rows]
+        if len(rows) > 1 and len(rows[-1].split()) == 1 and len(rows[0].split()) >= 3:
+            out.append(Finding(f"a caption at {t:.1f}s leaves one word alone on its last row (\"{rows[-1]}\")", "type", [t]))
+        if len(rows) > 1 and min(widths) < 0.45 * max(widths):
+            out.append(Finding(f"a caption at {t:.1f}s has rows of very different length", "type", [t]))
+        pm = re.search(r"\\pos\((\d+),(\d+)\)", raw)
+        am = re.search(r"\\an(\d)", raw)
+        if pm:
+            x, y, an = int(pm.group(1)), int(pm.group(2)), int(am.group(1)) if am else 2
+            col, rowk = (an - 1) % 3, (an - 1) // 3
+            bw, bh = max(widths), fs * 1.2 * len(rows)
+            x0 = x if col == 0 else x - bw / 2 if col == 1 else x - bw
+            y0 = y - bh if rowk == 0 else y - bh / 2 if rowk == 1 else y
+            if x0 < L - 4 or x0 + bw > R + 4 or y0 < T - 4 or y0 + bh > B + 4:
+                out.append(Finding(f"a caption at {t:.1f}s runs outside the safe area (\"{' '.join(rows)[:30]}\")", "type", [t]))
+    return out[:5]
+
+
+def _thumb(f: np.ndarray) -> np.ndarray:
+    g = f.mean(axis=2) if f.ndim == 3 else f.astype(np.float64)
+    h, w = g.shape
+    g = g[: h // 4 * 4, : w // 4 * 4].reshape(h // 4, 4, w // 4, 4).mean(axis=(1, 3))
+    return g
+
+
+def _repeats(fr: np.ndarray, fps: float, edges: list[float], plain, near: float = 8.0, alike: float = 0.93) -> list:
+    """The same shot (or one nearly the same) shown twice within `near`
+    seconds: viewers read it as a mistake. Compared on the middle frame of
+    each shot, by shape and by tone; plain frames (flat colour, text cards on
+    one background) are left out."""
+    mids = []
+    for a, b in zip(edges, edges[1:]):
+        if b - a < 0.3 or plain(a, b):
+            mids.append(None)
+            continue
+        g = _thumb(fr[min(len(fr) - 1, int((a + b) / 2 * fps))].astype(np.float64))
+        gy, gx = np.gradient(g)
+        e = np.hypot(gx, gy)
+        if g.std() < 14 or e.mean() < 3:
+            mids.append(None)
+            continue
+        mids.append(((g - g.mean()) / g.std(), (e - e.mean()) / (e.std() or 1), a))
+    out, seen = [], set()
+    for i, x in enumerate(mids):
+        if x is None:
+            continue
+        for j in range(i - 2, -1, -1):
+            y = mids[j]
+            if y is None:
+                continue
+            if x[2] - y[2] > near:
+                break
+            tone, shape = float((x[0] * y[0]).mean()), float((x[1] * y[1]).mean())
+            if tone > alike and shape > alike - 0.1 and j not in seen:
+                out.append(Finding(f"the shot at {x[2]:.1f}s looks the same as the one at {y[2]:.1f}s (measured likeness {min(tone, shape):.2f}); "
+                                   "a repeat this close reads as a mistake. Swap one for an unused clip of the same look", "repeat", [x[2], y[2]]))
+                seen.add(i)
+                break
+    return out
+
+
 def review(video: Path, ass: Path | None = None, spoken=()) -> list[str]:
     """Plain-language problems found in a finished video ([] = all clear)."""
     video = Path(video)
@@ -320,6 +409,10 @@ def review(video: Path, ass: Path | None = None, spoken=()) -> list[str]:
         events = text_events(Path(ass))
         notes += _reading(events, total, spoken)
         notes += _contrast(video, Path(ass), events, w, h, total)
+        try:
+            notes += _type(Path(ass), w, h)
+        except Exception:  # a check that can't run never stops the video
+            pass
     notes += _picture(video, fps, total)
     notes += _sound(video, info, total)
     try:

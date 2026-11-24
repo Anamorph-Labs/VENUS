@@ -214,12 +214,27 @@ def export_pack(folder: Path) -> list[Path]:
     return out
 
 
-def write_track(path: Path, events: list[tuple[float, str]], total: float, gain_db: float = 0.0) -> None:
+def _variant(y: np.ndarray, n: int) -> np.ndarray:
+    """The n-th use of a sound, slightly retuned, so a run of them never sounds copied."""
+    if n == 0:
+        return y
+    f = (1.0, 1.045, 0.962, 1.025, 0.978, 1.06)[n % 6]
+    src = np.arange(0, len(y) - 1, f)
+    if y.ndim == 2:
+        return np.stack([np.interp(src, np.arange(len(y)), y[:, c]) for c in range(y.shape[1])], axis=1)
+    return np.interp(src, np.arange(len(y)), y)
+
+
+def write_track(path: Path, events: list[tuple[float, str]], total: float, gain_db: float = 0.0,
+                event_gains: list[float] | None = None) -> None:
     """All the sound effects on one stereo track, each placed so its peak lands
-    on its moment."""
+    on its moment. event_gains: dB to add to each event (same order as events)."""
     out = np.zeros((int(total * SR) + 1, 2))
     cache: dict[str, np.ndarray] = {}
-    for i, (t, kind) in enumerate(sorted(events)):
+    used: dict[str, int] = {}
+    order = sorted(range(len(events)), key=lambda j: events[j])
+    for i, j in enumerate(order):
+        t, kind = events[j]
         make, level, peak = KINDS[kind]
         if kind not in cache:
             y = make()
@@ -228,6 +243,13 @@ def write_track(path: Path, events: list[tuple[float, str]], total: float, gain_
         if kind == "whoosh":  # vary each whoosh a little so a run of them does not sound looped
             y = whoosh(seed=i + 1)
             y = y / (np.abs(y).max() or 1) * 10 ** (level / 20)
+        else:
+            y = _variant(y, used.get(kind, 0))
+        used[kind] = used.get(kind, 0) + 1
+        if y.ndim == 1:
+            y = np.stack([y, y], axis=1)
+        if event_gains is not None:
+            y = y * 10 ** (event_gains[j] / 20)
         s = int(max(0.0, t - peak) * SR)
         e = min(len(out), s + len(y))
         if e > s:
