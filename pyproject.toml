@@ -7,7 +7,7 @@ name = "alvenus"
 dynamic = ["version"]
 description = "Free, local script-to-cut video editing: best take per script line."
 readme = "README.md"
-license = { text = "MIT" }
+license = { text = "BUSL-1.1" }
 requires-python = ">=3.10"
 dependencies = ["numpy", "onnxruntime", "pillow"]
 

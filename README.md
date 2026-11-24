@@ -19,7 +19,7 @@ you read the storyboard, and nothing is made until you press Render.
 - **From your clips and a song.** Every cut on the beat, the strongest moment on the drop, or the fast "creative edit" look with cut-outs and light.
 - **It checks the story, not only the pixels.** Does the hook make you stay, one idea per scene, a turn in the middle, an ending that lands, every number with its source. Then three directions to pick from at a glance.
 
-Free and private: everything runs on your computer. No account, no API keys, no uploads, no watermark. MIT licence.
+Free and private: everything runs on your computer. No account, no API keys, no uploads, no watermark. Free to use, including for paid client work; you may not resell Venus or offer it as a service (see [Licence](#licence)).
 
 ## Install in 3 steps
 
@@ -273,9 +273,21 @@ More explainer graphics for talking-head cuts: `--map "3=city.png|0.3,0.6 Old po
 
 | Part | Licence | How we use it |
 |---|---|---|
-| Our code | MIT | this repo |
+| Our code | Business Source License 1.1 (becomes MIT after four years) | this repo |
 | FFmpeg | LGPL/GPL | separate program the user installs |
 | Whisper small.en / base.en weights (OpenAI), ONNX export by onnx-community | MIT | downloaded by the user at first run |
 | CLIP ViT-B/32 weights (OpenAI), ONNX export by Xenova | MIT | footage search; downloaded by the user on first use |
 | onnxruntime, numpy, Pillow | MIT, BSD, MIT-CMU | pip packages |
 | Flite (test voice only, inside FFmpeg) | BSD-style | only for making test takes |
+
+## Licence
+
+Venus is free to use for anything, including paid client work, and the videos
+you make are yours. What you may not do is sell Venus itself, or offer it to
+others as a hosted or paid video service. That is the
+[Business Source License 1.1](LICENSE); each version becomes MIT four years after
+it is published. Versions published before 24 November 2026 stay under MIT.
+
+The names "Venus" and "Anamorph Labs" and their logos are not covered by any
+licence: see [TRADEMARKS.md](TRADEMARKS.md). A fork needs its own name and logo.
+
