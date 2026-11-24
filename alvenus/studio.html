@@ -8,220 +8,319 @@
 @font-face{font-family:"Hanken Grotesk";src:url(/fonts/HankenGrotesk-normal.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
 @font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-normal.woff2) format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
 @font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-italic.woff2) format("woff2");font-weight:200 800;font-style:italic;font-display:swap}
-/* the brand palette: mostly ivory, then panels, ink for text, deep blue rare so it always means something */
-:root{--bg:#F6F2EA;--panel:#FFFEFB;--panel2:#F5F1EA;--ink:#22201D;--soft:#5E5850;--faint:#8C8378;--line:#E8E4DD;--hair:rgba(34,32,29,.10);
---wire:#8C8378;--accent:#2B4A78;--onaccent:#F6F2EA;--soft-accent:#9DB7D9;--ai:#9DB7D9;--sel:#2B4A78;--off:#C9C1B5;--ok:#22201D;--bad:#22201D;
---node:#FFFEFB;--nodeHead:#F5F1EA;--input:#FFFFFF;--view:#ECE6DB;--shadow:0 10px 30px rgba(34,32,29,.05);--chipbg:#F5F1EA;
---l-shape:#C9C1B5;--l-picture:#9DB7D9;--l-words:#22201D;--l-marks:#8C8378;--l-graphic:#5E5850;--trunk:#5E5850}
-:root[data-theme="dark"]{--bg:#22201D;--panel:#2A2825;--panel2:#33302C;--ink:#F6F2EA;--soft:#C9C1B5;--faint:#8C8378;--line:#3B3833;--hair:rgba(246,242,234,.10);
---wire:#8C8378;--accent:#9DB7D9;--onaccent:#22201D;--soft-accent:#9DB7D9;--ai:#9DB7D9;--sel:#F6F2EA;--off:#5E5850;--ok:#F6F2EA;--bad:#F6F2EA;
---node:#2A2825;--nodeHead:#33302C;--input:#22201D;--view:#1B1A18;--shadow:0 10px 30px rgba(0,0,0,.18);--chipbg:#33302C;
---l-shape:#8C8378;--l-picture:#9DB7D9;--l-words:#F6F2EA;--l-marks:#C9C1B5;--l-graphic:#C9C1B5;--trunk:#C9C1B5}
+/* Studio brand kit. Day: ivory ground, ink text, neutral greys made from #17181B (never warm or brown).
+   Deep blue only for the AI's own words; light blue only for "changed by your AI". Night: the approved Night tokens. */
+:root{--ground:#F6F2EA;--panel:#FFFEFB;--canvas:#FFFEFB;--chip:rgba(23,24,27,.045);--chipsolid:#F3F1EC;
+--ink:#22201D;--mut:rgba(23,24,27,.70);--q:rgba(23,24,27,.56);--faint:rgba(23,24,27,.42);--taupe:rgba(23,24,27,.22);
+--hair:rgba(23,24,27,.09);--hair2:rgba(23,24,27,.14);--blue:#2B4A78;--lb:#9DB7D9;
+--fill:#22201D;--filltx:#F6F2EA;--sel:#22201D;--frame:#17181B;--input:#FFFEFB;--field:#F6F2EA;
+--trunk:#22201D;--l-shape:rgba(23,24,27,.40);--l-picture:rgba(23,24,27,.55);--l-words:#22201D;--l-marks:rgba(23,24,27,.40);--l-graphic:rgba(23,24,27,.55);
+--shadow:0 10px 30px rgba(23,24,27,.05);--pop:0 10px 30px rgba(23,24,27,.08);--insp:#FFFEFB;
+/* older names, kept so every part of Studio reads the same palette */
+--bg:var(--ground);--soft:var(--mut);--line:var(--hair);--accent:var(--fill);--onaccent:var(--filltx);--panel2:var(--chipsolid);--node:var(--panel);
+--view:var(--ground);--ai:var(--lb);--wire:var(--q);--off:var(--taupe);--bad:var(--ink)}
+:root[data-theme="dark"]{--ground:#0C0D0F;--panel:#16171A;--canvas:#111214;--chip:#212226;--chipsolid:#212226;
+--ink:#ECEAE6;--mut:#9A9893;--q:#9A9893;--faint:#9A9893;--taupe:#2C2D31;
+--hair:rgba(236,234,230,.08);--hair2:rgba(236,234,230,.13);--blue:#9DB7D9;--lb:#9DB7D9;
+--fill:#ECEAE6;--filltx:#0C0D0F;--sel:#ECEAE6;--frame:#17181B;--input:#16171A;--field:#212226;
+--trunk:#ECEAE6;--l-shape:#6B6A66;--l-picture:#9A9893;--l-words:#ECEAE6;--l-marks:#9A9893;--l-graphic:#9A9893;
+--shadow:none;--pop:0 10px 30px rgba(0,0,0,.35);--insp:rgba(22,23,26,.85)}
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 "Hanken Grotesk","Noto Sans",ui-sans-serif,system-ui,sans-serif;overflow:hidden}
+body{margin:0;background:var(--ground);color:var(--ink);font:14px/1.45 "Hanken Grotesk",ui-sans-serif,system-ui,sans-serif;overflow:hidden}
+:root[data-theme="dark"] body::before,:root[data-theme="dark"] body::after{content:"";position:fixed;pointer-events:none;z-index:0}
+:root[data-theme="dark"] body::before{right:-10%;top:-12%;width:60vw;height:50vh;background:radial-gradient(closest-side,rgba(43,74,120,.22),transparent 70%)}
+:root[data-theme="dark"] body::after{left:-10%;bottom:-12%;width:55vw;height:45vh;background:radial-gradient(closest-side,rgba(43,74,120,.19),transparent 70%)}
 button,input,select,textarea{font:inherit;color:inherit}
-button{background:var(--panel);border:1px solid var(--hair);border-radius:999px;padding:5px 14px;cursor:pointer}
-button:hover{border-color:var(--faint)}
+button{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--hair2);background:var(--panel);
+color:var(--ink);font:500 13px "Hanken Grotesk",sans-serif;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--taupe)}
+:root[data-theme="dark"] button:hover{border-color:rgba(236,234,230,.28)}
 button:disabled{opacity:.4;cursor:default}
-button.primary{background:var(--accent);border-color:var(--accent);color:var(--onaccent);font-weight:600}
-.app{display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:52px minmax(0,1fr);height:100vh}
-header{grid-column:1/3;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--panel)}
-header h1{font:400 21px/1 Newsreader,Georgia,serif;margin:0 12px 0 4px;letter-spacing:-.005em}
-header .file{color:var(--soft);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.status{color:var(--soft);font-size:12px;white-space:nowrap}
-.left{display:grid;grid-template-rows:minmax(170px,36%) minmax(240px,1fr) 118px;min-width:0;min-height:0}
-.viewer{position:relative;background:var(--view);display:flex;flex-direction:column;min-height:0;border-bottom:1px solid var(--line)}
-.screen{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.screen video{max-width:100%;max-height:100%;display:block}
-.frame{position:relative;flex:0 0 auto}
+button.primary{background:var(--fill);border-color:transparent;color:var(--filltx);font-weight:600}
+button.ic{width:32px;padding:0}
+button svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+.lab{font:600 11px/1 "Hanken Grotesk",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--q)}
+.app{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:52px minmax(0,1fr);height:100vh}
+/* top bar */
+header{grid-column:1/3;position:relative;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--hair);min-width:0}
+header .brand{display:flex;align-items:center;flex:0 0 auto}
+header .logo{height:28px;width:auto;display:block}
+header .logo.dk,header .logo.word,:root[data-theme="dark"] header .logo.lt{display:none}
+:root[data-theme="dark"] header .logo.full.dk{display:block}
+.vr{width:1px;height:22px;background:var(--hair2);flex:0 0 auto}
+.fname{font:400 17px/1 Newsreader,Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.meta{font-size:12px;color:var(--q);white-space:nowrap}
+header .sp{flex:1}
+.ailine{display:inline-flex;align-items:center;gap:7px;height:auto;padding:0;border:0;background:none;font:400 13px "Hanken Grotesk",sans-serif;color:var(--mut);white-space:nowrap}
+.ailine i{width:8px;height:8px;border-radius:50%;background:var(--lb);flex:0 0 auto}
+.ailine u{text-decoration:underline;text-decoration-color:var(--lb);text-underline-offset:3px}
+.more i{display:none;width:6px;height:6px;border-radius:50%;background:var(--ink)}
+.more.dot i{display:inline-block}
+.rprog{display:none;align-items:center;gap:10px;font-size:13px;color:var(--mut);white-space:nowrap}
+.rendering .rprog{display:inline-flex}.rendering #render{display:none}
+.rprog .bar{width:150px;height:4px;border-radius:999px;background:var(--chip);overflow:hidden}
+:root:not([data-theme="dark"]) .rprog .bar{background:rgba(23,24,27,.08)}
+.rprog .bar b{display:block;height:100%;width:0;background:var(--fill);border-radius:999px;transition:width .4s}
+.moremenu{position:absolute;right:16px;top:48px;width:240px;background:var(--panel);border:1px solid var(--hair2);border-radius:16px;box-shadow:var(--pop);padding:6px;display:none;z-index:40}
+.moremenu.on{display:block}
+.moremenu button{display:flex;width:100%;justify-content:space-between;height:auto;padding:9px 12px;border:0;border-radius:10px;background:none;font-weight:400;text-align:left}
+.moremenu button:hover{background:var(--chip)}
+.moremenu small{color:var(--q);font-size:12px}
+.moremenu hr{border:0;border-top:1px solid var(--hair);margin:5px 6px}
+/* left column */
+.left{display:grid;grid-template-rows:292px minmax(240px,1fr) 118px;min-width:0;min-height:0;border-right:1px solid var(--hair)}
+/* viewer */
+.viewer{display:flex;gap:22px;padding:16px 20px;align-items:stretch;border-bottom:1px solid var(--hair);min-height:0;min-width:0}
+.screen{position:relative;flex:0 0 auto;display:flex;align-items:center;justify-content:flex-start;min-height:0}
+.frame{position:relative;flex:0 0 auto;border-radius:12px;overflow:hidden;background:var(--frame)}
+:root[data-theme="dark"] .frame,:root[data-theme="dark"] .screen video,:root[data-theme="dark"] .clip .th{border:1px solid rgba(236,234,230,.13)}
 .frame img{width:100%;height:100%;display:block}
 .frame img.a{position:absolute;inset:0;width:100%;height:100%}
-.busy{position:absolute;right:12px;top:12px;font-size:12px;color:var(--soft);background:var(--panel);box-shadow:var(--shadow);padding:4px 12px;border-radius:99px;display:none}
-.busy.on{display:block}
-.vbar{display:flex;gap:8px;align-items:center;padding:6px 10px;background:var(--panel);border-top:1px solid var(--line);flex-wrap:wrap}
-.vbar input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
-.vbar .lab{color:var(--soft);font-size:12px;white-space:nowrap}
-.wipe{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);pointer-events:none}
-.canvas{position:relative;overflow:hidden;background:radial-gradient(ellipse 70% 60% at 15% 0%,color-mix(in srgb,var(--panel) 60%,transparent),transparent 70%),var(--bg);min-height:0;touch-action:none;cursor:default}
+.screen video{max-width:100%;max-height:100%;display:block;border-radius:12px;background:var(--frame)}
+.wipe{position:absolute;top:0;bottom:0;width:2px;background:#E4E1DB;box-shadow:0 0 0 1px rgba(23,24,27,.35);pointer-events:none}
+.frame.cmp{cursor:ew-resize}
+.busy{position:absolute;inset:0;background:rgba(23,24,27,.7);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:#E4E1DB;font-size:13px;border-radius:12px;z-index:2}
+.busy.on{display:flex}
+.phase{display:flex;gap:9px;align-items:center}
+.phase svg{width:14px;height:14px;animation:wax 1.6s infinite ease-in-out}
+.phase svg:nth-child(2){animation-delay:.2s}.phase svg:nth-child(3){animation-delay:.4s}
+@keyframes wax{0%,100%{opacity:.35}50%{opacity:1}}
+.vside{flex:1;display:flex;flex-direction:column;gap:14px;min-width:0;padding-top:2px}
+.vh{display:flex;align-items:baseline;gap:10px;min-width:0}
+.vh h2{font:400 22px/1.1 Newsreader,Georgia,serif;margin:0;white-space:nowrap}
+.vh .meta{overflow:hidden;text-overflow:ellipsis}
+.vrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mseg{display:inline-flex;height:auto;background:var(--panel);border:1px solid var(--hair2);border-radius:999px;padding:2px;gap:0}
+.mseg span{padding:5px 11px;border-radius:999px;font-size:12px;font-weight:400;color:var(--mut);cursor:pointer}
+.mseg span.on{background:var(--chip);color:var(--ink);font-weight:500}
+:root:not([data-theme="dark"]) .mseg span.on{background:rgba(23,24,27,.07)}
+.vrow .mseg span{padding:6px 12px;font-size:13px}
+.slider{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--q)}
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:4px;border-radius:999px;background:var(--chip);border:1px solid var(--hair);margin:0;min-width:80px}
+:root:not([data-theme="dark"]) input[type=range]{background:rgba(23,24,27,.07)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--panel);border:1.5px solid var(--ink);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--panel);border:1.5px solid var(--ink);cursor:pointer}
+input[type=range]::-moz-range-progress{background:var(--ink);height:4px;border-radius:999px}
+.idea{margin-top:auto;display:none;align-items:center;gap:12px;padding:10px 14px;border-radius:16px;background:var(--panel);border:1px solid var(--hair)}
+.idea.on{display:flex}
+.idea .lab{display:block;margin-bottom:5px}
+.idea .q{margin:0;font:400 15px/1.35 Newsreader,Georgia,serif;color:var(--blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idea .small{font-size:12px;color:var(--q)}
+/* node canvas */
+.canvas{position:relative;overflow:hidden;background:var(--canvas);min-height:0;touch-action:none;cursor:default}
 .canvas.panning{cursor:grabbing}
-.grid{position:absolute;inset:0;background-image:radial-gradient(var(--hair) 1px,transparent 1px);background-size:18px 18px;pointer-events:none}
+.grid{display:none}
 #world{position:absolute;left:0;top:0;transform-origin:0 0}
 #wires{position:absolute;left:0;top:0;overflow:visible;width:1px;height:1px}
 #wires path.hit{stroke:transparent;stroke-width:16;fill:none;pointer-events:stroke;cursor:help}
 #wires path.hit.ins{cursor:copy}
-.wtip{position:fixed;z-index:25;pointer-events:none;background:var(--panel);border:1px solid var(--hair);border-radius:16px;box-shadow:0 10px 30px rgba(34,32,29,.12);
-padding:7px 13px;font-size:12px;max-width:300px;display:none;line-height:1.4}
-.wtip.on{display:block}
-.wtip i{display:block;color:var(--faint);font-style:normal;font-size:11px;margin-top:2px}
-.tips{position:absolute;left:50%;top:52px;transform:translateX(-50%);z-index:8;width:min(440px,calc(100% - 32px));background:var(--panel);border:1px solid var(--hair);
-border-radius:24px;box-shadow:0 10px 30px rgba(34,32,29,.05);padding:18px 22px 16px}
-.tips h4{font:400 22px/1.2 Newsreader,Georgia,serif;margin:0 0 10px}
-.tips h4 em{font-style:italic}
-.tips ol{margin:0 0 14px;padding-left:20px;color:var(--soft);font-size:13px}
-.tips li{margin-bottom:6px}
-.tips li b{color:var(--ink);font-weight:600}
-.tips p.community{margin:0 0 14px;padding-top:12px;border-top:1px solid var(--hair);color:var(--soft);font-size:12px;line-height:1.5}
-.tips p.community b{color:var(--ink);font-weight:600}
-#wires path.hit:hover+path,#wires path.hot{stroke:var(--accent)!important}
-.cv-title{position:absolute;left:0;top:0;right:0;padding:8px 12px;color:var(--soft);font-size:12px;z-index:5;display:flex;gap:8px;align-items:center;pointer-events:none}
+#wires path.hit:hover+path,#wires path.hot{stroke:var(--ink)!important;stroke-width:2.6}
+.cv-title{position:absolute;left:0;top:0;right:0;height:46px;padding:0 16px;font-size:13px;z-index:5;display:flex;gap:8px;align-items:center;pointer-events:none}
 .cv-title>*{pointer-events:auto}
 .cv-title .sp{flex:1;pointer-events:none}
-.cv-title button{padding:2px 9px;font-size:12px}
-.zoom{min-width:44px;text-align:center;color:var(--faint)}
-.cv-ask{position:absolute;left:12px;bottom:10px;right:190px;z-index:5;display:flex;gap:6px}
-.cv-ask input{flex:1;background:var(--panel);border:1px solid var(--hair);border-radius:999px;padding:9px 16px;box-shadow:var(--shadow)}
-.cv-ask input::placeholder{color:var(--faint)}
-#mini{position:absolute;right:10px;bottom:10px;width:168px;height:104px;background:var(--panel);border:1px solid var(--hair);border-radius:16px;z-index:5;cursor:pointer;box-shadow:var(--shadow)}
-.node{position:absolute;width:176px;background:var(--node);border:1px solid var(--hair);border-radius:16px;box-shadow:var(--shadow);user-select:none;z-index:2}
-.node .hd{display:flex;align-items:center;gap:6px;padding:7px 10px 2px;border-radius:15px 15px 0 0;cursor:grab;font-weight:600;font-size:12.5px}
-.node .hd::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--lc,var(--wire));flex:0 0 auto}
-.node .wd{padding:0 10px 4px;font-size:11px;color:var(--faint);line-height:1.3}
-.node .hd .n{color:var(--faint);font-weight:500;font-size:11px}
+.cv-title #cvt{margin-right:6px;color:var(--q)}
+.cv-title #cvt b{color:var(--ink);font-weight:600}
+.cv-title button{height:28px;font-size:12px;padding:0 11px}
+.cv-title .mseg span{font-size:12px}
+.zoom{font-size:12px;color:var(--q);min-width:34px;text-align:right}
+.cv-ask{position:absolute;left:16px;right:16px;bottom:12px;z-index:5;height:40px;border-radius:999px;background:var(--panel);border:1px solid var(--hair2);display:flex;align-items:center;gap:10px;padding:0 5px 0 16px}
+.cv-ask input{flex:1;border:0;background:none;outline:0;font-size:13px;min-width:0}
+.cv-ask button{height:30px}
+#mini{position:absolute;right:16px;top:58px;width:128px;height:72px;background:var(--panel);border:1px solid var(--hair);border-radius:12px;z-index:5;cursor:pointer}
+.node{position:absolute;width:196px;background:var(--panel);border:1px solid var(--hair2);border-radius:16px;padding:10px 12px;box-shadow:var(--shadow);user-select:none;z-index:2;cursor:pointer}
+.node.drag{cursor:grabbing;box-shadow:0 14px 34px rgba(23,24,27,.12);z-index:4}
+.node .hd{display:flex;align-items:center;gap:6px;font:600 13px/1.2 "Hanken Grotesk",sans-serif;cursor:grab}
+.node .hd .n{color:var(--q);font-weight:500;font-size:11px}
 .node .hd .sp{flex:1}
-.node .bd{padding:2px 10px 6px;font-size:11.5px;color:var(--soft);min-height:0}
-.node .bd div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.node .bd b{color:var(--ink);font-weight:500}
-.node .ds{padding:0 8px 8px}
-.node .ds input{width:100%;background:var(--input);border:1px solid var(--hair);border-radius:999px;padding:4px 10px;font-size:11.5px}
-.node .ds input::placeholder{color:var(--faint)}
-.node .ask{font:italic 11.5px/1.3 Newsreader,Georgia,serif;padding:0 10px 6px;color:var(--soft)}
-.node .ask.done{color:var(--accent)}
-.node.sel{border-color:var(--sel);box-shadow:0 0 0 1.5px var(--sel),var(--shadow)}
-.node.ai{border-color:var(--ai);box-shadow:0 0 0 3px color-mix(in srgb,var(--ai) 55%,transparent),var(--shadow)}
-.node.off{opacity:.55}
-.node.off .hd{text-decoration:line-through}
-.node.empty .bd{font-style:italic}
+.node .wd{font-size:12px;color:var(--q);margin:3px 0 7px;line-height:1.3}
+.node .bd{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px}
+.node .bd span{font-size:11.5px;background:var(--chip);border-radius:999px;padding:2px 8px;color:var(--mut);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.node .bd b{color:var(--ink);font-weight:600}
+.node .ask{font-size:11.5px;color:var(--q);display:flex;gap:6px;align-items:baseline;line-height:1.35}
+.node .ask i{width:6px;height:6px;border-radius:50%;background:var(--taupe);flex:0 0 auto;transform:translateY(-1px)}
+.node .ask.ai{color:var(--blue)}
+.node .ask.ai i,.node .ask.wait i{background:var(--lb)}
+.node .ds{margin-top:7px}
+.node .ds input{width:100%;height:24px;border:0;border-radius:999px;background:var(--chip);padding:0 10px;font-size:11.5px;outline:0}
+.node.sel{border:1.5px solid var(--sel);box-shadow:0 0 0 3px var(--hair)}
+.node.ai{border:1.5px solid var(--lb)}
+.node.ai .ask{color:var(--blue)}.node.ai .ask i{background:var(--lb)}
+.node.off{opacity:.5}
+.node.off .pw{background:var(--chip)}
 .node.style{border-style:dashed}
-.node.merge{width:136px;border-radius:999px}
-.node.merge .hd{border-radius:999px 999px 0 0;justify-content:center;padding-top:6px}
-.node.merge .bd{text-align:center;min-height:0;padding:0 10px 7px;border-radius:0 0 22px 22px;font-size:11px}
-.node.join{width:22px;height:22px;border-radius:50%;padding:0;background:var(--panel);border:2.5px solid var(--lc,var(--wire));box-shadow:none;cursor:pointer}
-.node.join.sel{box-shadow:0 0 0 3px var(--sel)}
+.node.out .hd{font:400 16px/1.2 Newsreader,Georgia,serif}
+.node.merge{width:136px;border-radius:999px;padding:6px 12px;text-align:center}
+.node.merge .hd{justify-content:center}
+.node.merge .bd{display:block;margin:2px 0 0;font-size:11px;color:var(--q)}
+.node.join{width:14px;height:14px;border-radius:50%;padding:0;background:var(--panel);border:1.6px solid var(--trunk);box-shadow:none;cursor:pointer}
+.node.join.sel{box-shadow:0 0 0 3px var(--hair2)}
 .node.join .hd,.node.join .bd,.node.join .wd,.node.join .port{display:none}
 .node.join.drop{transform:scale(1.5)}
-.node.merge.drop{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 35%,transparent)}
-.node.tool{width:156px;background:var(--panel2)}
-.node.out,.node.paper{background:var(--panel2)}
-.pw{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--soft);padding:0;display:grid;place-items:center;font-size:9px;line-height:1;background:transparent}
-.pw.on{background:var(--ink);border-color:var(--ink)}
-.lk{font-size:9.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--faint);font-weight:600}
-.port{position:absolute;width:11px;height:11px;border-radius:50%;background:var(--pc,var(--wire));border:2px solid var(--bg);z-index:3}
+.node.merge.drop{box-shadow:0 0 0 4px var(--hair2)}
+.node.tool{width:176px}
+.pw{width:18px;height:18px;border-radius:50%;border:1px solid var(--hair2);padding:0;background:none;display:grid;place-items:center;flex:0 0 auto}
+.pw svg{width:10px;height:10px;stroke:var(--ink);fill:none;stroke-width:1.8;stroke-linecap:round}
+.lk{font-size:9.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--q);font-weight:600}
+.port{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--panel);border:1.6px solid var(--pc,var(--trunk));z-index:3;opacity:0}
 .port.i{left:-7px;top:14px}.port.o{right:-7px;top:14px}
-.port.t{top:-7px;left:calc(50% - 5px)}.port.b{bottom:-7px;left:calc(50% - 5px)}
-.port[data-layer]{cursor:crosshair;width:14px;height:14px;bottom:-8px;left:calc(50% - 7px)}
-.port[data-layer]:hover{transform:scale(1.35)}
-.menu{position:fixed;z-index:30;background:var(--panel);border:1px solid var(--hair);border-radius:16px;box-shadow:0 10px 30px rgba(34,32,29,.12);padding:8px;min-width:240px;font-size:12.5px}
-.menu .mh{color:var(--faint);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;padding:6px 8px}
-.menu .mr{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px}
-.menu .mr b{width:62px;font-weight:600}
-.menu .mr button{padding:1px 8px;font-size:11.5px}
-.menu .mi{display:block;width:100%;text-align:left;border:0;background:none;padding:5px 8px;border-radius:6px}
-.menu .mi:hover{background:var(--panel2)}
-.hint{color:var(--faint);font-size:11px}
-.strip{display:flex;gap:8px;overflow-x:auto;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line);align-items:stretch}
-.clip{flex:0 0 auto;width:150px;border:1px solid var(--hair);border-radius:16px;background:var(--panel);cursor:pointer;position:relative;overflow:hidden;display:flex;flex-direction:column}
-.clip img{width:100%;height:60px;object-fit:contain;display:block;background:var(--view)}
-.clip .t{padding:3px 6px;font-size:11px;display:flex;gap:4px;align-items:center;white-space:nowrap;overflow:hidden}
-.clip .t span{color:var(--soft)}
-.clip.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
-.clip.ai{box-shadow:inset 0 0 0 2px var(--ai)}
-.clip.drop{border-left:3px solid var(--accent)}
-.clip .tr{position:absolute;left:6px;top:6px;font-size:10px;background:var(--panel);color:var(--soft);padding:1px 8px;border-radius:99px}
-aside{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;min-height:0;padding:12px 14px 30px}
-aside h2{font:400 22px/1.15 Newsreader,Georgia,serif;margin:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-aside h2 .lkd{font:600 10px "Hanken Grotesk",sans-serif;text-transform:uppercase;letter-spacing:.14em;color:var(--faint)}
-aside .what{color:var(--soft);font-size:12.5px;margin:4px 0 14px}
-.row{margin:0 0 12px}
-.row label{display:flex;justify-content:space-between;gap:6px;font-size:12px;margin-bottom:4px}
-.row label span{color:var(--soft)}
-.row label .rs{background:none;border:0;padding:0;color:var(--faint);font-size:11px;text-decoration:underline;cursor:pointer}
-.row .why{color:var(--faint);font-size:11px;margin-top:2px}
-.row input[type=text],.row select,.row input[type=number],aside input[type=text]{width:100%;background:var(--input);border:1px solid var(--hair);border-radius:999px;padding:5px 12px}
-.row textarea{width:100%;background:var(--input);border:1px solid var(--hair);border-radius:16px;padding:8px 12px}
-.row textarea{min-height:56px;resize:vertical}
-.row .rng{display:flex;gap:8px;align-items:center}
-.row .rng input[type=range]{flex:1;accent-color:var(--accent)}
-.row .rng input[type=number]{width:70px}
-.row .col{display:flex;gap:8px;align-items:center}
-.row .col input[type=color]{width:42px;height:28px;border:1px solid var(--line);border-radius:6px;background:none;padding:2px}
-.sec{border-top:1px solid var(--line);margin:14px -14px 12px;padding:10px 14px 0}
-.sec h3{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--faint);margin:0 0 10px;font-weight:600}
-.describe textarea{width:100%;min-height:62px;background:var(--input);border:1px solid var(--hair);border-radius:16px;padding:8px 12px}
-.askbox{background:var(--panel2);border-radius:16px;padding:10px 12px;margin-top:10px;font-size:12px}
-.askbox .q{font:italic 14px/1.35 Newsreader,Georgia,serif}
-.askbox .st{font-size:11px;text-transform:uppercase;letter-spacing:.14em;font-weight:600;color:var(--faint)}
-.askbox .st.done{color:var(--accent)}
-.askbox .ans{font:15px/1.4 Newsreader,Georgia,serif;color:var(--accent);margin-top:2px}
-.btns{display:flex;flex-wrap:wrap;gap:6px}
-.err{color:var(--bad);font-size:12px;margin:6px 0}
-.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--hair);padding:9px 18px;border-radius:999px;
-box-shadow:var(--shadow);z-index:20;display:none;max-width:80vw}
-.toast.on{display:block}
-.toast.bad{border-color:var(--bad)}
-.toast.ai{border-color:var(--ai)}
-.chip{font-size:10.5px;padding:1px 7px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);color:var(--soft)}
-.chip.ai{color:var(--accent);border-color:var(--soft-accent);background:var(--panel)}
-kbd{font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--soft)}
-header button,header h1{white-space:nowrap}
-header .brand{display:flex;align-items:center;margin:0 14px 0 2px;flex:0 0 auto}
-header .logo{height:32px;width:auto;display:block}
-header .logo.dk,header .logo.word,:root[data-theme="dark"] header .logo.lt{display:none}
-:root[data-theme="dark"] header .logo.full.dk{display:block}
-@media (max-width:1100px){header .logo.full{display:none!important}header .logo.word.lt{display:block}:root[data-theme="dark"] header .logo.word.lt{display:none}:root[data-theme="dark"] header .logo.word.dk{display:block}}
+.port.t{top:-7px;left:calc(50% - 6px)}.port.b{bottom:-7px;left:calc(50% - 6px)}
+.port[data-layer]{cursor:crosshair}
+.node:hover .port[data-layer]{opacity:1}
+.wtip{position:fixed;z-index:25;pointer-events:none;background:var(--fill);color:var(--filltx);border-radius:999px;padding:5px 12px;font-size:12px;max-width:340px;display:none;line-height:1.4}
+.wtip.on{display:block}
+.wtip i{display:block;font-style:normal;font-size:11px;opacity:.7}
+.wtip:has(i){border-radius:14px}
+/* menus and tips */
+.menu{position:fixed;z-index:30;background:var(--panel);border:1px solid var(--hair2);border-radius:16px;box-shadow:var(--pop);padding:6px;min-width:240px;font-size:13px}
+.menu .mh{color:var(--q);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;padding:8px 10px 6px}
+.menu .mr{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:10px}
+.menu .mr b{width:76px;font-weight:600}
+.menu .mr button{height:26px;padding:0 10px;font-size:12px}
+.menu .mi{display:flex;width:100%;justify-content:flex-start;height:auto;border:0;background:none;padding:8px 10px;border-radius:10px;font-weight:400}
+.menu .mi:hover{background:var(--chip)}
+.tips{position:absolute;left:50%;top:52px;transform:translateX(-50%);z-index:8;width:min(440px,calc(100% - 32px));background:var(--panel);border:1px solid var(--hair2);
+border-radius:24px;box-shadow:var(--pop);padding:18px 22px 16px}
+.tips h4{font:400 22px/1.2 Newsreader,Georgia,serif;margin:0 0 10px}
+.tips h4 em{font-style:italic}
+.tips ol{margin:0 0 14px;padding-left:20px;color:var(--mut);font-size:13px}
+.tips li{margin-bottom:6px}
+.tips li b{color:var(--ink);font-weight:600}
+.tips p.community{margin:0 0 14px;padding-top:12px;border-top:1px solid var(--hair);color:var(--mut);font-size:12px;line-height:1.5}
+.tips p.community b{color:var(--ink);font-weight:600}
 .tips .mark{height:64px;width:auto;display:block;margin:0 0 12px}
 .tips .mark.dk,:root[data-theme="dark"] .tips .mark.lt{display:none}
 :root[data-theme="dark"] .tips .mark.dk{display:block}
+/* scene strip */
+.strip{display:flex;gap:10px;overflow-x:auto;padding:12px 16px;border-top:1px solid var(--hair);align-items:stretch}
+.clip{flex:0 0 auto;width:116px;border-radius:12px;background:var(--panel);border:1px solid var(--hair2);padding:6px;cursor:pointer;position:relative;display:flex;flex-direction:column}
+.clip .th{height:50px;border-radius:8px;background:var(--frame);margin-bottom:6px;position:relative;overflow:hidden}
+.clip .th img{width:100%;height:100%;object-fit:cover;display:block}
+.clip.todo .th{background:var(--chip);border:1px dashed var(--taupe)}
+.clip.todo .th img{display:none}
+.clip .tw{position:absolute;left:10px;top:16px;font-size:11px;color:var(--q)}
+.clip .t{margin:0;font-size:11.5px;display:flex;justify-content:space-between;gap:4px;color:var(--mut);white-space:nowrap}
+.clip .t b{color:var(--ink);font-weight:600}
+.clip .t span{overflow:hidden;text-overflow:ellipsis}
+.clip .tag{position:absolute;right:5px;top:5px;font-size:10.5px;padding:1px 7px;border-radius:999px;background:var(--panel);color:var(--ink);display:flex;align-items:center;gap:3px}
+.clip .tag svg{width:10px;height:10px;stroke:var(--ink);fill:none;stroke-width:1.8}
+.clip.sel{border:1.5px solid var(--sel)}
+.clip.ai{border:1.5px solid var(--lb)}
+.clip.drop{box-shadow:-3px 0 0 var(--ink)}
+.addsc{flex:0 0 auto;width:44px;height:auto;border-radius:12px;border:1px dashed var(--taupe);background:none;color:var(--q);font-size:20px;font-weight:400;padding:0}
+/* inspector */
+aside{background:var(--insp);overflow-y:auto;min-height:0;padding:18px 18px 16px;display:flex;flex-direction:column}
+aside>.lab{margin-bottom:12px}
+aside h2{font:400 24px/1.05 Newsreader,Georgia,serif;margin:0;display:flex;align-items:center;gap:8px}
+aside h2 .t{flex:1;min-width:0}
+aside h2 button{height:28px;padding:0 10px;font-size:12px}
+aside h2 .lkd{font:600 10px "Hanken Grotesk",sans-serif;text-transform:uppercase;letter-spacing:.14em;color:var(--q)}
+aside .what{color:var(--q);font-size:13px;margin:8px 0 16px}
+.row{margin:0 0 14px}
+.row label{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:7px;font:600 11px/1 "Hanken Grotesk",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--q)}
+.row label .rs{height:auto;background:none;border:0;padding:0;color:var(--q);font:400 11px "Hanken Grotesk",sans-serif;letter-spacing:0;text-transform:none;text-decoration:underline}
+.row .why{color:var(--q);font-size:11.5px;margin-top:5px}
+.row input[type=text],.row select,.row input[type=number],aside input[type=text]{width:100%;height:34px;background:var(--input);border:1px solid var(--hair2);border-radius:999px;padding:0 12px;font-size:13px}
+.row textarea,.row .words{width:100%;background:var(--field);border:1px solid var(--hair2);border-radius:14px;padding:9px 12px;min-height:56px;resize:vertical}
+.row .words{font:400 15px/1.35 Newsreader,Georgia,serif}
+.row .rng{display:flex;gap:10px;align-items:center}
+.row .rng input[type=number]{width:64px;height:28px;font-size:12px;padding:0 8px;text-align:center}
+.row .col{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--mut)}
+.row .col input[type=color]{width:42px;height:28px;border:1px solid var(--hair2);border-radius:8px;background:none;padding:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{height:auto;padding:5px 12px;font-size:12.5px;font-weight:400;color:var(--mut)}
+.chips button.on{background:var(--fill);color:var(--filltx);border-color:transparent}
+.row .inline{display:flex;justify-content:space-between;align-items:center}
+.row .inline label{margin:0}
+.tog{width:34px;height:20px;padding:0;border-radius:999px;background:var(--chip);border:1px solid var(--hair2);position:relative;display:block}
+.tog::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--panel);border:1px solid var(--hair2);transition:left .15s}
+.tog.on{background:var(--fill);border-color:transparent}
+.tog.on::after{left:16px;border-color:transparent}
+.sec{border-top:1px solid var(--hair);margin:6px 0 14px;padding:14px 0 0}
+.sec h3{font:600 11px/1 "Hanken Grotesk",sans-serif;text-transform:uppercase;letter-spacing:.14em;color:var(--q);margin:0 0 10px}
+.sec .why{color:var(--q);font-size:11.5px}
+.dbox{display:flex;align-items:center;gap:6px;height:38px;border:1px solid var(--hair2);border-radius:999px;padding:0 5px 0 14px;background:var(--input)}
+.dbox input{flex:1;border:0!important;background:none!important;outline:0;height:30px!important;padding:0!important;font-size:13px;min-width:0}
+.dbox button{height:28px;font-size:12px}
+.conv{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.conv .you{font:italic 400 15px/1.35 Newsreader,Georgia,serif}
+.conv .vdid{font-size:12.5px;color:var(--mut)}
+.conv .vdid b{font-weight:600;color:var(--ink)}
+.conv .aiw p{margin:6px 0 0;font:400 15.5px/1.4 Newsreader,Georgia,serif;color:var(--blue)}
+.conv .wait{display:flex;gap:7px;align-items:center;font-size:12.5px;color:var(--q)}
+.conv .wait i{width:6px;height:6px;border-radius:50%;background:var(--lb)}
+.conv .wait.done i{background:var(--blue)}
+aside .foot{margin-top:auto;padding-top:18px;font-size:11.5px;color:var(--q)}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.err{color:var(--ink);font-size:12px;margin:6px 0}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--fill);color:var(--filltx);padding:9px 18px;border-radius:999px;z-index:50;display:none;max-width:80vw;font-size:13px}
+.toast.on{display:block}
+.toast.ai{box-shadow:0 0 0 2px var(--lb)}
+kbd{font:11px ui-monospace,monospace;border:1px solid var(--hair2);border-radius:4px;padding:0 4px;color:var(--mut)}
 #pv:not([src]){visibility:hidden}
-@media (max-width:1180px){.cv-title .hint{display:none}}
-@media (max-width:1100px){.status{display:none}}
-@media (max-width:900px){.app{grid-template-columns:1fr;grid-template-rows:44px minmax(0,1fr) 40vh}aside{grid-column:1;border-left:0;border-top:1px solid var(--line)}}
-.idea{display:none;align-items:center;gap:12px;padding:9px 14px;background:var(--panel);border-bottom:1px solid var(--line);font-size:13px}
-.idea.on{display:flex}
-.idea .q{font:italic 15px/1.3 Newsreader,Georgia,serif;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.idea .st{font-size:11px;text-transform:uppercase;letter-spacing:.14em;font-weight:600;color:var(--accent);white-space:nowrap}
+/* pop-ups */
+.updbox{position:fixed;top:56px;right:16px;z-index:41;width:min(380px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--hair2);
+border-radius:20px;padding:16px 18px;box-shadow:var(--pop);display:none}
+.updbox.on{display:block}
+.updbox h3{font:400 20px/1.25 Newsreader,Georgia,serif;margin:0 0 6px}
+.updbox ul{margin:6px 0 10px 18px;padding:0;font-size:13px;line-height:1.45}
+.updbox .small,.dirbox .small{font-size:12px;color:var(--q);margin:6px 0 12px}
 .storybox ul{font-size:13px}
-.dirbox{position:fixed;inset:64px 24px auto;z-index:31;max-width:1100px;margin:0 auto;background:var(--panel);border:1px solid var(--hair);border-radius:24px;
-padding:18px 20px;box-shadow:var(--shadow);display:none;max-height:calc(100vh - 90px);overflow:auto}
+.dirbox{position:fixed;inset:64px 24px auto;z-index:41;max-width:1100px;margin:0 auto;background:var(--panel);border:1px solid var(--hair2);border-radius:24px;
+padding:18px 20px;box-shadow:var(--pop);display:none;max-height:calc(100vh - 90px);overflow:auto}
 .dirbox.on{display:block}
 .dirbox .dirhead{display:flex;align-items:center;justify-content:space-between}
-.dirbox h3{font:500 22px/1.2 Newsreader,Georgia,serif;margin:0}
+.dirbox h3{font:400 22px/1.2 Newsreader,Georgia,serif;margin:0}
 .dirbox img{width:100%;border-radius:12px;margin:8px 0 12px;display:none}
-.dirbox .btns button{padding:8px 16px}
-.clip.todo img{opacity:.85}
-.upd{border-color:var(--accent)!important;color:var(--accent)}
-.updbox{position:fixed;top:52px;right:16px;z-index:30;width:min(380px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--hair);
-border-radius:20px;padding:16px 18px;box-shadow:var(--shadow);display:none}
-.updbox.on{display:block}
-.updbox h3{font:500 19px/1.25 Newsreader,Georgia,serif;margin:0 0 6px}
-.updbox ul{margin:6px 0 10px 18px;padding:0;font-size:13px;line-height:1.45}
-.updbox .small{font-size:12px;color:var(--soft);margin:6px 0 12px}
+@media (max-width:1240px){.viewer .vh .meta{display:none}}
+@media (max-width:1100px){header .logo.full{display:none!important}header .logo.word.lt{display:block}:root[data-theme="dark"] header .logo.word.lt{display:none}:root[data-theme="dark"] header .logo.word.dk{display:block}header .meta{display:none}}
+@media (max-width:900px){.app{grid-template-columns:1fr;grid-template-rows:52px minmax(0,1fr) 40vh}aside{grid-column:1;border-top:1px solid var(--hair)}.viewer{flex-direction:column}}
 </style></head><body>
-<div class="app">
-<header><div class="brand"><img class="logo full lt" src="/fonts/venus-lockup-light.svg" alt="Venus, by Anamorph Labs"><img class="logo full dk" src="/fonts/venus-lockup-dark.svg" alt="Venus, by Anamorph Labs"><img class="logo word lt" src="/fonts/venus-logo-light.svg" alt="Venus"><img class="logo word dk" src="/fonts/venus-logo-dark.svg" alt="Venus"></div><span class="file" id="file"></span>
-<span class="chip ai" id="aichip" style="display:none" title="nodes your AI changed in the last few minutes"></span>
-<button class="upd" id="upd" style="display:none" title="a new version of Venus is ready">New version</button>
-<span class="status" id="status"></span>
-<button id="undo" title="Undo (Ctrl+Z)">Undo</button><button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
-<button id="newv" title="describe a new video">New video</button><button id="dirs" title="the same story three ways: your look, the opposite energy, tighter">3 directions</button><button id="vset">Video settings</button><button id="sound">Sound</button>
-<button id="theme" title="light or dark">Theme</button>
-<button class="primary" id="render">Render video</button></header>
+<div class="app" id="app">
+<header id="top"><div class="brand"><img class="logo full lt" src="/fonts/venus-lockup-light.svg" alt="Venus, by Anamorph Labs"><img class="logo full dk" src="/fonts/venus-lockup-dark.svg" alt="Venus, by Anamorph Labs"><img class="logo word lt" src="/fonts/venus-logo-light.svg" alt="Venus"><img class="logo word dk" src="/fonts/venus-logo-dark.svg" alt="Venus"></div>
+<span class="vr"></span><span class="fname" id="file"></span><span class="meta" id="status"></span>
+<span class="sp"></span>
+<button class="ailine" id="aichip" style="display:none" title="nodes your AI changed in the last few minutes: click when you have seen them"><i></i><u id="aitext"></u></button>
+<span class="vr" id="aivr" style="display:none"></span>
+<button class="ic" id="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 16 16"><path d="M5 4 2 7l3 3"/><path d="M2 7h8a4 4 0 0 1 0 8H8"/></svg></button>
+<button class="ic" id="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 16 16"><path d="m11 4 3 3-3 3"/><path d="M14 7H6a4 4 0 0 0 0 8h2"/></svg></button>
+<button class="more" id="more" aria-haspopup="menu">More<i></i></button>
+<span class="rprog" id="rprog"><span id="rptext">Rendering</span><span class="bar"><b id="rpbar"></b></span><button id="rstop">Stop</button></span>
+<button class="primary" id="render">Render video</button>
+<div class="moremenu" id="moremenu" role="menu">
+<button id="upd" style="display:none" title="a new version of Venus is ready"><span id="updtext">New version ready</span><small>Update</small></button><hr id="updhr" style="display:none">
+<button id="newv" title="describe a new video">New video</button>
+<button id="dirs" title="the same story three ways: your look, the opposite energy, tighter">Three directions</button>
+<button id="vset">Video settings</button>
+<button id="sound">Sound</button><hr>
+<button id="theme" title="light or dark">Theme <small id="themename">Day</small></button>
+</div></header>
 <div class="left">
-<div class="viewer"><div class="idea" id="idea"><span class="st" id="ideast"></span><span class="q" id="ideaq"></span><span class="small" id="ideahelp"></span><button id="ideacopy" style="display:none">Copy what to tell your AI</button></div><div class="screen" id="screen"><div class="frame" id="frame"><img id="pv" alt="preview of the selected scene"><img class="a" id="pa" alt="" style="display:none"><div class="wipe" id="wl" style="display:none"></div></div>
-<video id="vid" controls playsinline style="display:none"></video><div class="busy" id="busy">drawing…</div></div>
-<div class="vbar"><button id="play">▶ Play scene</button><span class="lab">moment</span><input type="range" id="scrub" min="0.05" max="0.98" step="0.01" value="0.75" aria-label="moment in the scene">
+<section class="viewer"><div class="screen" id="screen"><div class="frame" id="frame"><img id="pv" alt="preview of the selected scene"><img class="a" id="pa" alt="" style="display:none"><div class="wipe" id="wl" style="display:none"></div>
+<div class="busy" id="busy"><span class="phase" id="phase"></span><span id="busytext">Drawing the moment</span></div></div>
+<video id="vid" controls playsinline style="display:none"></video></div>
+<div class="vside"><div class="vh"><span class="lab">Viewer</span></div>
+<div class="vh"><h2 id="vtitle"></h2><span class="meta" id="vmeta"></span></div>
+<div class="vrow"><button id="play"><svg viewBox="0 0 16 16" width="12" height="12" style="width:12px;height:12px"><path d="M4 3l9 5-9 5z" fill="currentColor" stroke="none"/></svg>Play scene</button>
 <button id="holdA" title="keep this frame as A, to compare with your next changes">Hold as A</button>
-<span class="lab" id="wipelab" style="display:none">A | now</span><input type="range" id="wipe" min="0" max="100" value="50" style="display:none;max-width:140px" aria-label="before and after wipe">
-<button id="full" style="display:none">Show full video</button></div></div>
+<span class="mseg" id="abseg" style="display:none" title="A is the frame you held; Now is how it looks now. Drag across the picture to wipe between them."><span data-ab="a">A</span><span data-ab="now" class="on">Now</span></span>
+<input type="range" id="wipe" min="0" max="100" value="0" style="display:none" aria-label="before and after wipe"><span id="wipelab" style="display:none"></span>
+<button id="full" style="display:none">Show full video</button></div>
+<div class="slider"><span>Moment</span><input type="range" id="scrub" min="0.05" max="0.98" step="0.01" value="0.45" aria-label="moment in the scene"><span id="scrubv"></span></div>
+<div class="idea" id="idea"><div style="flex:1;min-width:0"><span class="lab" id="ideast">An idea for your AI</span><p class="q" id="ideaq"></p><span class="small" id="ideahelp"></span></div><button id="ideacopy" style="display:none">Copy for your AI</button></div>
+</div></section>
 <div class="canvas" id="canvas"><div class="grid" id="grid"></div>
-<div class="cv-title"><span id="cvt"></span><span class="sp"></span><span class="hint">hover a line to see what it carries · right-click to add a tool</span>
-<button id="mode" title="switch between the simple view and every node"></button><button id="tipsbtn" title="how this works">Tips</button>
+<div class="cv-title"><span id="cvt"></span>
+<button class="mseg" id="mode" title="switch between the simple view and every node"><span data-mode="simple">Simple view</span><span data-mode="all">Show all nodes</span></button>
+<span class="sp"></span>
+<button id="tipsbtn" title="how this works">Tips</button>
 <button id="addn" title="add a tool node (or right-click the canvas or a wire)">+ Node</button><button id="tidy" title="put every node back in its place">Tidy</button><button id="fit" title="fit the graph (F)">Fit</button><span class="zoom" id="zoom">100%</span></div>
 <div id="world"><svg id="wires"></svg><div id="nodes"></div></div>
-<div class="cv-ask"><input id="gask" placeholder="Describe a change to this scene: “soft glow on the words”, “words behind the picture”, “blur the paper”…" aria-label="describe a change to this scene"></div>
-<canvas id="mini" width="336" height="208" title="map of the graph: click to go there"></canvas>
+<div class="cv-ask"><input id="gask" placeholder="Describe a change to this scene, for example “words behind the picture”" aria-label="describe a change to this scene"><button class="primary" id="gaskgo">Change</button></div>
+<canvas id="mini" width="256" height="144" title="map of the graph: click to go there"></canvas>
 <div class="tips" id="tips" style="display:none"><img class="mark lt" src="/fonts/venus-logo-light.svg" alt="Venus"><img class="mark dk" src="/fonts/venus-logo-dark.svg" alt="Venus"><h4>How the <em>scene</em> is built</h4><ol>
-<li><b>Each box is one part of the scene</b>: the paper, the photo, the words. Click one to change it on the right.</li>
+<li><b>Each box is one part of the scene</b>: the paper, the photo, the words. Click one to change it on the right. Drag a box to move it.</li>
 <li><b>Lines show what goes where.</b> Hover a line to read what it carries. Right-click it to add a tool, such as a blur or a glow.</li>
 <li><b>Or describe it in your words</b> in the box at the bottom: “soft glow on the words”, “blur the paper”.</li></ol>
 <p class="community">Venus is started by Anamorph Labs and grows with the people who use it. Have an idea? Ask your AI to <b>suggest it</b> (alvenus suggest). Anamorph Labs reviews every idea, builds the good ones, and thanks you by name.</p>
@@ -339,7 +438,7 @@ function layoutKey(sid) { return 'venus-graph-' + (simple ? 's-' : '') + S.file 
 function savedPos(sid) { try { return JSON.parse(localStorage.getItem(layoutKey(sid)) || '{}'); } catch (e) { return {}; } }
 function autoLayout(sid, G) {
   // the trunk runs left to right along the bottom; each layer's branch drops into its Merge from above
-  const pos = {}, gapX = 196, gapY = 118;
+  const pos = {}, gapX = 216, gapY = 118;
   const tallest = Math.max(1, ...Object.values(G.branches).map(b => b.length));
   const TY = 30 + tallest * gapY + 10;
   let x = 30;
@@ -347,9 +446,9 @@ function autoLayout(sid, G) {
     if (k.startsWith('merge:')) {
       const b = G.branches[k.slice(6)];
       b.forEach((bk, j) => pos[bk] = {x: x, y: TY - (b.length - j) * gapY});
-      pos[k] = simple ? {x: x + 77, y: TY + 9} : {x: x + 22, y: TY + 4};
-      x += 200;
-    } else { pos[k] = {x, y: TY}; x += k.startsWith('tool:') ? 176 : gapX; }
+      pos[k] = simple ? {x: x + 91, y: TY + 9} : {x: x + 30, y: TY + 4};
+      x += 216;
+    } else { pos[k] = {x, y: TY}; x += k.startsWith('tool:') ? 196 : gapX; }
   });
   (node(sid).use || []).forEach((u, i) => pos['style:' + u] = {x: x - gapX + 10 + i * 190, y: TY - tallest * gapY});
   return pos;
@@ -362,7 +461,7 @@ function nodeCard(k, sid) {
     const sp = node(sid).params, bits = {dark: sp.dark, background: sp.background};
     const tb = G.trunk.filter(x => x.startsWith('tool:') && toolNode(x)?.params.on === 'background');
     return `<div class="node paper ${sel.node === 'paper' ? 'sel' : ''}" data-k="paper"><span class="port o"></span>
-      <div class="hd" data-drag="paper">Paper<span class="sp"></span></div><div class="wd">${G.dz ? 'The page everything sits on' : 'The background of the scene'}</div><div class="bd">${summary(Object.fromEntries(Object.entries(bits).filter(([, v]) => v != null)), 'As designed')}</div>
+      <div class="hd" data-drag="paper">Paper<span class="sp"></span></div><div class="wd">${G.dz ? 'The page under everything' : 'The background of the scene'}</div>${(() => { const pb = Object.fromEntries(Object.entries(bits).filter(([, v]) => v != null)); return (Object.keys(pb).length ? `<div class="bd">${summary(pb)}</div>` : '') + askLine(null, null, idleLine(pb)); })()}
       <div class="ds"><input data-gdesc="background" placeholder="describe: blur the paper, darker…"></div></div>`;
   }
   if (k.startsWith('merge:')) {
@@ -379,21 +478,21 @@ function nodeCard(k, sid) {
     return `<div class="node tool ${sel.node === k ? 'sel' : ''} ${off ? 'off' : ''} ${aiTouched(id) ? 'ai' : ''}" data-k="${k}" ${l ? lc(l) : ''}>
       ${l ? `<span class="port t" style="--pc:${LAYER_COL[l]}"></span><span class="port b" ${end && G.dz ? `data-layer="${l}"` : ''} style="--pc:${LAYER_COL[l]}"></span>` : '<span class="port i"></span><span class="port o"></span>'}
       <div class="hd" data-drag="${k}">${esc(TOOL_NAME[p.tool] || p.tool)}${sfx ? `<span class="n">${esc(sfx)}</span>` : ''}<span class="sp"></span>
-      <button class="pw ${off ? '' : 'on'}" data-tpw="${esc(id)}" title="${off ? 'switched off: click to switch on' : 'on: click to switch off (D)'}"></button></div>
+      <button class="pw ${off ? '' : 'on'}" data-tpw="${esc(id)}" title="${off ? 'switched off: click to switch on' : 'on: click to switch off (D)'}"><svg viewBox="0 0 10 10"><path d="M5 1v4"/><path d="M2.6 3a3.2 3.2 0 1 0 4.8 0"/></svg></button></div>
       <div class="wd">${esc(TOOL_DOES[p.tool] || '')}${G.dz ? ' · on ' + esc(onWhat(on)) : ''}</div>
-      <div class="bd">${summary(shown, 'Usual amount')}</div>${askLine(n)}</div>`;
+      <div class="bd">${summary(shown, 'Usual amount')}</div>${askLine(n, null, off ? 'Switched off' : '')}</div>`;
   }
   if (k.startsWith('style:')) {
     const u = k.slice(6), s = node(u) || {params: {}};
     return `<div class="node style ${sel.node === k ? 'sel' : ''} ${aiTouched(u) ? 'ai' : ''}" data-k="${esc(k)}"><span class="port b" style="--pc:var(--accent)"></span>
       <div class="hd" data-drag="${esc(k)}">Style · ${esc(u)}<span class="sp"></span></div><div class="wd">A shared look for several scenes</div>
-      <div class="bd">${summary(s.params)}</div><div class="ds"><input data-desc="${esc(u)}" placeholder="describe this shared look…"></div></div>`;
+      <div class="bd">${summary(s.params)}</div>${askLine(s)}<div class="ds"><input data-desc="${esc(u)}" placeholder="describe this shared look…"></div></div>`;
   }
   if (k === 'out') {
     const sn = node(sid), sp = Object.fromEntries(Object.entries(sn.params).filter(([q]) => !['type', 'layers'].includes(q)));
     return `<div class="node out ${sel.node === 'out' ? 'sel' : ''} ${aiTouched(sid) ? 'ai' : ''}" data-k="out"><span class="port i"></span>
-      <div class="hd" data-drag="out">The scene<span class="sp"></span>${sn.locked ? '<span class="lk">locked</span>' : ''}</div><div class="wd">What you see: ${esc(typeName(sn.params.type).toLowerCase())}, ${S.scenes[sceneIdx(sid)].seconds} s</div>
-      <div class="bd">${summary(sp, 'As designed')}</div>${askLine(sn)}<div class="ds"><input data-desc="${sid}" placeholder="describe the whole scene…"></div></div>`;
+      <div class="hd" data-drag="out">The scene<span class="sp"></span>${sn.locked ? '<span class="lk">locked</span>' : ''}</div><div class="wd">${esc(typeName(sn.params.type))} · ${S.scenes[sceneIdx(sid)].seconds} s${(sn.use || []).length ? ' · style ' + esc(sn.use.join(', ')) : ''}</div>
+      ${(() => { const tr = simple && node(sid + '.in')?.params?.transition; const q = {...sp}; delete q.seconds; if (tr) q['Comes in'] = tr; return Object.keys(q).length ? `<div class="bd">${summary(q)}</div>` : ''; })()}${askLine(sn, null, sn.locked ? 'Locked' : 'Ready')}<div class="ds"><input data-desc="${sid}" placeholder="describe the whole scene…"></div></div>`;
   }
   const st = k.slice(3), part = partOf(st), pn = node(sid + '.' + part), p = stageParams(sid, st), off = stageOff(sid, st);
   const can = SC.bypass.includes(st), lk = stageLocked(sid, st);
@@ -402,20 +501,22 @@ function nodeCard(k, sid) {
   return `<div class="node ${sel.node === k ? 'sel' : ''} ${off ? 'off' : ''} ${aiTouched(sid + '.' + part) ? 'ai' : ''} ${Object.keys(p).length ? '' : 'empty'}" data-k="${k}" ${l ? lc(l) : ''}>
     ${trunk ? '<span class="port i"></span><span class="port o"></span>' : `${G.branches[l]?.[0] === k ? '' : `<span class="port t" style="--pc:${LAYER_COL[l]}"></span>`}<span class="port b" ${end && G.dz ? `data-layer="${l}"` : ''} style="--pc:${LAYER_COL[l]}"></span>`}
     <div class="hd" data-drag="${k}">${stageName(sid, st)}<span class="sp"></span>${lk ? '<span class="lk">locked</span>' : ''}
-    ${can ? `<button class="pw ${off ? '' : 'on'}" data-pw="${st}" title="${off ? 'switched off: click to switch on' : 'on: click to switch off (D)'}"></button>` : ''}</div>
-    <div class="wd">${esc(st === 'picture' && stageName(sid, st) === 'Picture' ? 'A photo behind it, if you add one' : DOES[st] || '')}</div><div class="bd">${summary(p, 'As designed')}</div>${askLine(pn, st)}
+    ${can ? `<button class="pw ${off ? '' : 'on'}" data-pw="${st}" title="${off ? 'switched off: click to switch on' : 'on: click to switch off (D)'}"><svg viewBox="0 0 10 10"><path d="M5 1v4"/><path d="M2.6 3a3.2 3.2 0 1 0 4.8 0"/></svg></button>` : ''}</div>
+    <div class="wd">${esc(off ? 'Switched off' : st === 'picture' && stageName(sid, st) === 'Picture' ? 'A photo behind it, if you add one' : DOES[st] || '')}</div>${Object.keys(p).length ? `<div class="bd">${summary(p)}</div>` : ''}${askLine(pn, st, idleLine(p, off))}
     <div class="ds"><input data-desc="${sid}.${part}" data-stage="${st}" placeholder="describe: ${st === 'words' ? 'bigger, glow…' : st === 'shape' ? 'no shape, red…' : st === 'look' ? 'colour photo, darker…' : st === 'in' ? 'whip, slide…' : st === 'marks' ? 'hide label, teal…' : 'blur, tilt left…'}"></div></div>`;
 }
 const toolNode = k => node(k.slice(5));
 function summary(p, empty = 'As designed') {
   const e = Object.entries(p);
-  return e.length ? e.slice(0, 2).map(([k, v]) => `<div>${esc(labelOf(k))} <b>${esc(short(plain(v)))}</b></div>`).join('') + (e.length > 2 ? `<div>+${e.length - 2} more</div>` : '') : `<div>${esc(empty)}</div>`;
+  return e.length ? e.slice(0, 2).map(([k, v]) => `<span>${esc(labelOf(k))} <b>${esc(short(plain(v)))}</b></span>`).join('') + (e.length > 2 ? `<span>+${e.length - 2} more</span>` : '') : `<span>${esc(empty)}</span>`;
 }
-function askLine(n, st) {
-  if (!n?.ask || (st && n.ask.stage && n.ask.stage !== st) || (st && !n.ask.stage && st !== stagesOf(sel.scene).find(x => partOf(x) === n.kind))) return '';
+function askLine(n, st, idle) {
+  const mine = n?.ask && !((st && n.ask.stage && n.ask.stage !== st) || (st && !n.ask.stage && st !== stagesOf(sel.scene).find(x => partOf(x) === n.kind)));
+  if (!mine) return idle ? `<div class="ask"><i></i>${esc(idle)}</div>` : '';
   const a = n.ask, done = a.status === 'done';
-  return `<div class="ask ${done ? 'done' : ''}" title="${esc(a.text)}">${done ? '✓ your AI: ' + esc(short(a.answer || 'done')) : a.status === 'waiting' ? '● waiting for your AI' : '● Venus did it · your AI can refine'}</div>`;
+  return `<div class="ask ${done ? 'ai' : a.status === 'waiting' ? 'wait' : ''}" title="${esc(a.text)}"><i></i>${done ? 'Your AI: ' + esc(short(a.answer || 'done')) : a.status === 'waiting' ? 'Waiting for your AI' : 'Venus did it · your AI can refine'}</div>`;
 }
+const idleLine = (p, off, end) => off ? 'Off in this scene' : end || (Object.keys(p || {}).length ? 'Set by you' : 'As designed');
 function drawCanvas() {
   const sid = sel.scene, box = $('#nodes');
   if (!sid || !node(sid)) { box.innerHTML = ''; $('#wires').innerHTML = ''; return; }
@@ -423,16 +524,17 @@ function drawCanvas() {
   const auto = autoLayout(sid, G), saved = savedPos(sid), sn = node(sid), i = sceneIdx(sid);
   P = {}; for (const k in auto) P[k] = saved[k] || auto[k];
   $('#cvt').innerHTML = `<b style="color:var(--ink)">Scene ${i + 1}</b> · ${esc(typeName(sn.params.type))} · ${S.scenes[i].seconds} s` + (sn.locked ? ' · locked' : '');
-  $('#mode').textContent = simple ? 'Show all nodes' : 'Simple view';
+  document.querySelectorAll('#mode [data-mode]').forEach(x => x.classList.toggle('on', (x.dataset.mode === 'simple') === simple));
   const keys = Object.keys(P);
   box.innerHTML = keys.map(k => nodeCard(k, sid).replace('<div class="node', `<div style="left:${P[k].x}px;top:${P[k].y}px" class="node`)).join('');
   // stack each branch by the real height of its cards, then sit the trunk under the tallest
-  const hgt = k => el(k)?.offsetHeight || 90, gap = 34;
-  const need = Math.max((sn.use || []).length ? 170 : 0, ...Object.values(G.branches).map(b => b.reduce((a, k) => a + hgt(k) + gap, 0)));
-  const TY = 24 + need + 8;
-  for (const k of G.trunk) if (!saved[k]) { P[k].y = k.startsWith('merge:') ? TY + (simple ? 9 : 4) : TY; el(k).style.top = P[k].y + 'px'; }
+  // the trunk is one straight line: every card on it is centred on the line, each layer's cards stack above its dot
+  const hgt = k => el(k)?.offsetHeight || 90, gap = 34, drop = 56;
+  const need = Math.max((sn.use || []).length ? 170 : 0, ...G.trunk.map(k => hgt(k) / 2), ...Object.values(G.branches).map(b => b.reduce((a, k) => a + hgt(k) + gap, 0) - gap + drop));
+  const TY = 24 + need;
+  for (const k of G.trunk) if (!saved[k]) { P[k].y = Math.round(TY - hgt(k) / 2); el(k).style.top = P[k].y + 'px'; }
   for (const [l, b] of Object.entries(G.branches)) {
-    let y = P['merge:' + l].y - gap;
+    let y = TY - drop;
     for (let j = b.length - 1; j >= 0; j--) { const k = b[j]; y -= hgt(k); if (!saved[k]) { P[k].y = y; el(k).style.top = y + 'px'; } y -= gap; }
   }
   (sn.use || []).forEach(u => { const k = 'style:' + u; if (!saved[k]) { P[k].y = 24; el(k).style.top = '24px'; } });
@@ -481,18 +583,18 @@ function drawWires() {
   let out = '';
   wires.forEach((w, n) => {
     const {A, B} = w; let d;
-    const ym = R => R.h < 40 ? R.y + R.h / 2 : R.y + 20;
+    const ym = R => R.y + R.h / 2;
     if (w.kind === 'trunk') { const x1 = A.x + A.w, y1 = ym(A), x2 = B.x, y2 = ym(B), m = Math.max(30, Math.abs(x2 - x1) / 2);
       d = `M${x1} ${y1} C${x1 + m} ${y1} ${x2 - m} ${y2} ${x2} ${y2}`; }
     else { const x1 = A.x + A.w / 2, y1 = A.y + A.h, x2 = B.x + B.w / 2, y2 = B.y, m = Math.max(30, Math.abs(y2 - y1) / 2);
       d = `M${x1} ${y1} C${x1} ${y1 + m} ${x2} ${y2 - m} ${x2} ${y2}`; }
     w.d = d;
-    const col = w.kind === 'style' ? 'var(--accent)' : w.layer ? LAYER_COL[w.layer] : 'var(--trunk)';
+    const col = w.kind === 'style' ? 'var(--q)' : w.layer ? LAYER_COL[w.layer] : 'var(--trunk)';
     const dash = w.kind === 'style' ? 'stroke-dasharray="6 4"' : w.off ? 'stroke-dasharray="4 4"' : '';
     const ins = w.kind !== 'style' && (w.branch || w.kind === 'trunk');
     const tip = (w.tip || '') + (w.off ? ' (switched off, so it passes through unchanged)' : '') + (ins ? '|Right-click to add a tool here' : '');
     const hit = `<path class="hit ${ins ? 'ins' : ''}" d="${d}" data-w="${n}" data-tip="${esc(tip)}"/>`;
-    out += hit + `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w.kind === 'trunk' ? 2.6 : 2}" ${dash} opacity="${w.kind === 'style' ? .8 : 1}"/>`;
+    out += hit + `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w.kind === 'trunk' ? 2 : 1.6}" ${dash} opacity="${w.kind === 'style' ? .8 : 1}"/>`;
   });
   $('#wires').innerHTML = out;
   drawMini();
@@ -511,9 +613,10 @@ function bounds() {
   return x0 > x1 ? {x0: 0, y0: 0, x1: 400, y1: 300} : {x0, y0, x1, y1};
 }
 function fit() {
-  const c = $('#canvas').getBoundingClientRect(), b = bounds(), pad = 50;
-  const z = Math.max(0.3, Math.min(1, (c.width - pad * 2 - 40) / (b.x1 - b.x0), (c.height - 150) / (b.y1 - b.y0)));
-  view[sel.scene] = {z, x: Math.max(16, (c.width - 190 - (b.x1 - b.x0) * z) / 2) - b.x0 * z, y: 40 - b.y0 * z + Math.max(0, (c.height - 150 - (b.y1 - b.y0) * z) / 2)};
+  // room between the toolbar (46 px) and the describe box (64 px)
+  const c = $('#canvas').getBoundingClientRect(), b = bounds(), top = 56, bottom = 66, W = c.width - 32, H = c.height - top - bottom;
+  const z = Math.max(0.3, Math.min(1, W / (b.x1 - b.x0), H / (b.y1 - b.y0)));
+  view[sel.scene] = {z, x: 16 + Math.max(0, (W - (b.x1 - b.x0) * z) / 2) - b.x0 * z, y: top + Math.max(0, (H - (b.y1 - b.y0) * z) / 2) - b.y0 * z};
   applyView();
 }
 function zoomAt(mx, my, z) {
@@ -526,10 +629,10 @@ function drawMini() {
   const ox = pad - b.x0 * k + ((W - pad * 2) - (b.x1 - b.x0) * k) / 2, oy = pad - b.y0 * k + ((H - pad * 2) - (b.y1 - b.y0) * k) / 2;
   const css = getComputedStyle(document.documentElement);
   x.clearRect(0, 0, W, H);
-  x.strokeStyle = css.getPropertyValue('--wire'); x.lineWidth = 2;
+  x.strokeStyle = css.getPropertyValue('--taupe'); x.lineWidth = 2;
   wires.forEach(w => { x.beginPath(); x.moveTo(ox + (w.A.x + w.A.w / 2) * k, oy + (w.A.y + w.A.h / 2) * k); x.lineTo(ox + (w.B.x + w.B.w / 2) * k, oy + (w.B.y + w.B.h / 2) * k); x.stroke(); });
   document.querySelectorAll('#nodes .node').forEach(e => {
-    x.fillStyle = e.classList.contains('sel') ? css.getPropertyValue('--accent') : e.classList.contains('ai') ? css.getPropertyValue('--ai') : css.getPropertyValue('--soft');
+    x.fillStyle = e.classList.contains('sel') ? css.getPropertyValue('--ink') : e.classList.contains('ai') ? css.getPropertyValue('--lb') : css.getPropertyValue('--taupe');
     x.fillRect(ox + e.offsetLeft * k, oy + e.offsetTop * k, Math.max(3, e.offsetWidth * k), Math.max(3, e.offsetHeight * k));
   });
   const v = V(), c = $('#canvas').getBoundingClientRect();
@@ -537,31 +640,47 @@ function drawMini() {
   x.strokeRect(ox + (-v.x / v.z) * k, oy + (-v.y / v.z) * k, c.width / v.z * k, c.height / v.z * k);
   cv._map = {k, ox, oy};
 }
+const LOCK_SVG = '<svg viewBox="0 0 10 10"><rect x="2" y="4.5" width="6" height="4.5" rx="1"/><path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5"/></svg>';
 function drawStrip() {
   $('#strip').innerHTML = S.scenes.map((s, i) => {
-    const inn = node(s.id + '.in')?.params?.transition;
-    return `<div class="clip ${s.unwritten ? 'todo' : ''} ${s.id === sel.scene ? 'sel' : ''} ${S.byAI.some(x => x === s.id || x.startsWith(s.id + '.')) ? 'ai' : ''}" draggable="true" data-scene="${esc(s.id)}" title="${esc(s.label)}">
-      <img loading="lazy" alt="" src="/api/preview?scene=${encodeURIComponent(s.id)}&at=0.75&k=${s.key}">
-      ${i ? `<span class="tr">${esc(inn || S.transition)}</span>` : ''}
-      <div class="t"><b>${i + 1}</b> ${esc(s.unwritten ? (s.beat || 'beat') + ' · to write' : typeName(s.type))} <span>${s.seconds} s${node(s.id).locked ? ' · locked' : ''}</span></div></div>`;
-  }).join('') + `<div class="clip" style="width:auto;justify-content:center;padding:0 12px;cursor:default;color:var(--soft)">${S.scenes.length} scenes · drag to reorder</div>`;
+    const inn = node(s.id + '.in')?.params?.transition || S.transition;
+    return `<div class="clip ${s.unwritten ? 'todo' : ''} ${s.id === sel.scene ? 'sel' : ''} ${S.byAI.some(x => x === s.id || x.startsWith(s.id + '.')) ? 'ai' : ''}" draggable="true" data-scene="${esc(s.id)}" title="${esc(s.label + (i ? ' · comes in with ' + inn : ''))}">
+      <div class="th"><img loading="lazy" alt="" src="/api/preview?scene=${encodeURIComponent(s.id)}&at=0.75&k=${s.key}">${s.unwritten ? `<span class="tw">To write</span>` : ''}${node(s.id).locked ? `<span class="tag">${LOCK_SVG} Locked</span>` : ''}</div>
+      <p class="t"><b>${i + 1}</b><span>${esc(s.unwritten ? (s.beat || 'Beat') : typeName(s.type))} · ${s.seconds} s</span></p></div>`;
+  }).join('') + `<button class="addsc" id="addsc" title="add a scene: a copy of the selected one, to change. ${S.scenes.length} scenes · drag one to reorder">+</button>`;
 }
+function viewerHead() {
+  const i = sceneIdx(sel.scene); if (i < 0) return;
+  const s = S.scenes[i], tr = i ? (node(s.id + '.in')?.params?.transition || S.transition) : null;
+  $('#vtitle').textContent = `Scene ${i + 1} of ${S.scenes.length}`;
+  $('#vmeta').textContent = [typeName(s.type), s.seconds + ' s', tr ? 'comes in with a ' + tr : ''].filter(Boolean).join(' · ');
+  $('#scrubv').textContent = `${(s.seconds * $('#scrub').value).toFixed(1)} s of ${s.seconds} s`;
+}
+function busy(on, text) { $('#busy').classList.toggle('on', on); if (text) $('#busytext').textContent = text; }
 function setPreview(force) {
   if (!sel.scene) return;
+  viewerHead();
   const s = S.scenes[sceneIdx(sel.scene)], at = $('#scrub').value, tok = ++pvToken;
   const url = `/api/preview?scene=${encodeURIComponent(s.id)}&at=${at}&k=${s.key}`;
-  const img = new Image(); $('#busy').classList.add('on'); $('#busy').textContent = 'drawing…';
-  img.onload = () => { if (tok !== pvToken) return; $('#pv').src = url; $('#busy').classList.remove('on'); };
-  img.onerror = async () => { if (tok !== pvToken) return; $('#busy').classList.remove('on');
+  const img = new Image(); busy(true, 'Drawing the moment');
+  img.onload = () => { if (tok !== pvToken) return; $('#pv').src = url; busy(false); };
+  img.onerror = async () => { if (tok !== pvToken) return; busy(false);
     try { await api(url); } catch (e) { toast('Preview: ' + e.message, 'bad'); } };
   img.src = url;
-  $('#vid').style.display = 'none'; $('#frame').style.display = 'flex';
+  $('#vid').style.display = 'none'; $('#frame').style.display = '';
 }
 function fitFrame() {
-  if (!S) return; const [a, b] = S.aspect.split(':').map(Number), r = $('#screen').getBoundingClientRect();
-  const k = Math.min((r.width - 16) / a, (r.height - 16) / b); $('#frame').style.width = a * k + 'px'; $('#frame').style.height = b * k + 'px';
+  // the frame sits on the left of the viewer at the largest size the row allows, at the video's own shape
+  if (!S) return; const [a, b] = S.aspect.split(':').map(Number), v = $('.viewer').getBoundingClientRect();
+  const H = v.height - 32, Wmax = Math.max(160, v.width * 0.46);
+  const k = Math.min(Wmax / a, H / b); $('#frame').style.width = Math.round(a * k) + 'px'; $('#frame').style.height = Math.round(b * k) + 'px';
+  $('#vid').style.maxWidth = Math.round(Wmax) + 'px'; $('#vid').style.maxHeight = H + 'px';
 }
 function showVideo(src) { const v = $('#vid'); v.src = src; v.style.display = 'block'; $('#frame').style.display = 'none'; v.play().catch(() => {}); }
+const PHASES = (() => { const c = '#E4E1DB', ring = '<circle cx="7" cy="7" r="6" fill="none" stroke="' + c + '" stroke-width=".8" opacity=".5"/>';
+  return '<svg viewBox="0 0 14 14"><defs><mask id="ph0"><rect width="14" height="14" fill="#fff"/><circle cx="4" cy="7" r="6" fill="#000"/></mask></defs>' + ring + '<circle cx="7" cy="7" r="6" fill="' + c + '" mask="url(#ph0)"/></svg>'
+    + '<svg viewBox="0 0 14 14">' + ring + '<path d="M7 1a6 6 0 0 1 0 12z" fill="' + c + '"/></svg><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="' + c + '"/></svg>'; })();
+$('#phase').innerHTML = PHASES;
 
 // ---------------------------------------------------------------- inspector
 function control(target, name, spec, value, locked, inherited) {
@@ -575,10 +694,13 @@ function control(target, name, spec, value, locked, inherited) {
   if (spec.type === 'number') {
     input = `<div class="rng"><input type="range" ${dis} id="${id}" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${v ?? spec.min}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="num">
       <input type="number" ${dis} min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${v ?? ''}" placeholder="auto" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="num" aria-label="${esc(name)}"></div>`;
+  } else if (spec.type === 'select' && spec.options.length <= 4) {
+    input = `<div class="chips">${spec.options.map(o => `<button ${dis} class="${o === v ? 'on' : ''}" ${o === value ? `data-reset="${esc(target)}" data-p="${esc(name)}"` : `data-set="${esc(target)}" data-p="${esc(name)}" data-v="${esc(JSON.stringify(o))}"`}>${esc(cap(String(o)))}</button>`).join('')}</div>`;
+  } else if (spec.type === 'bool') {
+    const on = v === true;
+    return `<div class="row"><div class="inline"><label>${esc(labelOf(name))} ${reset}</label><button ${dis} class="tog ${on ? 'on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(labelOf(name))}" data-set="${esc(target)}" data-p="${esc(name)}" data-v="${!on}"></button></div>${why}</div>`;
   } else if (spec.type === 'select') {
     input = `<select ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str"><option value="">${v == null ? '(design default)' : '(reset)'}</option>${spec.options.map(o => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
-  } else if (spec.type === 'bool') {
-    input = `<select ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="bool"><option value="">(default${spec.default != null ? ': ' + (spec.default ? 'yes' : 'no') : ''})</option><option value="true" ${value === true ? 'selected' : ''}>yes</option><option value="false" ${value === false ? 'selected' : ''}>no</option></select>`;
   } else if (spec.type === 'colour') {
     const hex = /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#888888';
     input = `<div class="col"><input type="color" ${dis} id="${id}" value="${hex}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">
@@ -593,22 +715,22 @@ function control(target, name, spec, value, locked, inherited) {
   } else if (spec.type === 'json') {
     input = `<textarea ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="json">${esc(value == null ? '' : JSON.stringify(value))}</textarea>`;
   } else {
-    input = spec.long ? `<textarea ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">${esc(value ?? '')}</textarea>`
+    input = ['text', 'caption', 'subtitle', 'big_words'].includes(name) ? `<textarea class="words" ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">${esc(value ?? '')}</textarea>`
+      : spec.long ? `<textarea ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">${esc(value ?? '')}</textarea>`
       : `<input type="text" ${dis} id="${id}" value="${esc(value ?? '')}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">`;
   }
   return `<div class="row"><label for="${id}">${esc(labelOf(name))} ${reset}</label>${input}${why}</div>`;
 }
 function askBox(id, stage) {
   const n = node(id), a = n?.ask;
-  let h = `<div class="sec describe"><h3>Describe it</h3><textarea id="dtext" placeholder="Say what you want, in your words: “warmer and slower”, “make this feel like the moment it breaks”"></textarea>
-    <div class="btns" style="margin-top:6px"><button class="primary" id="dgo" data-node="${esc(id)}" ${stage ? `data-stage="${stage}"` : ''}>Send</button><span class="why" style="color:var(--faint)">Simple asks happen now. Everything you write is kept here for your AI to read.</span></div>`;
+  let h = `<div class="sec describe"><h3>Describe it</h3><div class="dbox"><input type="text" id="dtext" placeholder="Say what you want, in your words" aria-label="describe a change"><button class="primary" id="dgo" data-node="${esc(id)}" ${stage ? `data-stage="${stage}"` : ''}>Change</button></div>`;
   if (a) {
-    h += `<div class="askbox"><div class="q">“${esc(a.text)}”</div>
-      ${a.applied?.length ? `<div style="margin-top:6px">Venus did: ${a.applied.map(esc).join('; ')}</div>` : ''}
-      ${a.left?.length ? `<div style="margin-top:2px">For your AI: ${a.left.map(esc).join('; ')}</div>` : ''}
-      <div class="st ${a.status}" style="margin-top:8px">${a.status === 'done' ? 'Your AI answered' : a.status === 'waiting' ? 'Waiting for your AI' : 'Done by Venus · your AI will look it over'}</div>
-      ${a.status === 'done' ? `<div class="ans">${esc(a.answer || 'Done')}</div>` : ''}</div>`;
-  }
+    h += `<div class="conv"><div class="you">“${esc(a.text)}”</div>
+      ${a.applied?.length ? `<div class="vdid">Venus did: <b>${a.applied.map(x => esc(String(x).replace(/^[\w]+\./, '').replace(' = ', ' '))).join(', ')}</b></div>` : ''}
+      ${a.left?.length ? `<div class="aiw"><span class="lab">For your AI</span><p>${a.left.map(esc).join(' ')}</p></div>` : ''}
+      ${a.status === 'done' ? `<div class="aiw"><span class="lab">Your AI answered</span><p>${esc(a.answer || 'Done')}</p></div>`
+        : `<div class="wait"><i></i>${a.status === 'waiting' ? 'Waiting for your AI' : 'Done by Venus · your AI will look it over'}</div>`}</div>`;
+  } else h += '<div class="why" style="margin-top:8px">Simple asks happen now. Everything you write is kept here for your AI to read.</div>';
   return h + '</div>';
 }
 const TOOL_WHY = {'blur.amount': 'how soft', 'glow.amount': 'how strong the glow', 'vignette.amount': 'how dark the edges',
@@ -621,16 +743,17 @@ function toolButtons(on) {
 }
 function drawInspector() {
   const el = $('#insp'), k = sel.node, sid = sel.scene;
-  if (!k) { el.innerHTML = '<div class="what">Click a node to edit it.</div>'; return; }
-  let h = '';
+  const FOOT = '<p class="foot">Your AI can misread a scene. What you set here always wins.</p>';
+  if (!k) { el.innerHTML = '<span class="lab">Inspector</span><div class="what">Click a node to edit it.</div>' + FOOT; return; }
+  let h = '<span class="lab">Inspector</span>';
   if (k === 'settings' || k === 'sound') {
     const n = node(k) || {params: {}};
-    h += `<h2>${k === 'settings' ? 'Video settings' : 'Sound'}</h2><div class="what">${esc(cap(SC.what[k]))}.</div>`;
+    h += `<h2><span class="t">${k === 'settings' ? 'Video settings' : 'Sound'}</span></h2><div class="what">${esc(cap(SC.what[k]))}.</div>`;
     for (const [p, spec] of Object.entries(SC.schema[k])) h += control(k, p, spec, n.params[p], n.locked);
     h += askBox(k);
   } else if (k.startsWith('style:')) {
     const u = k.slice(6), n = node(u) || {params: {}};
-    h += `<h2>Style · ${esc(u)}</h2><div class="what">A shared look. Every scene wired to it follows it; a scene's own setting still wins.
+    h += `<h2><span class="t">Style · ${esc(u)}</span></h2><div class="what">A shared look. Every scene wired to it follows it; a scene's own setting still wins.
       Used by: ${S.doc.nodes.filter(s => (s.use || []).includes(u)).map(s => esc(s.id)).join(', ')}</div>`;
     for (const [p, v] of Object.entries(n.params)) {
       const [part, name] = p.includes('.') ? p.split('.') : ['scene', p];
@@ -643,12 +766,12 @@ function drawInspector() {
     h += `<div class="btns"><button data-unuse="${esc(u)}">Unwire from ${esc(sid)}</button></div>` + askBox(u);
   } else if (k === 'paper') {
     const n = node(sid);
-    h += `<h2>Paper</h2><div class="what">${G?.dz ? 'The page everything sits on. A tool added here (blur, colour, dark edges) changes the paper only.' : 'The background of the scene. In this kind of scene a tool changes the whole picture.'}</div>`;
+    h += `<h2><span class="t">Paper</span></h2><div class="what">${G?.dz ? 'The page everything sits on. A tool added here (blur, colour, dark edges) changes the paper only.' : 'The background of the scene. In this kind of scene a tool changes the whole picture.'}</div>`;
     for (const p of ['dark', 'background']) h += control(sid, p, SC.schema.scene[p], n.params[p], n.locked);
     h += toolButtons(G?.dz ? 'background' : 'output') + askBox(sid);
   } else if (k.startsWith('merge:')) {
     const l = k.slice(6), i = G.order.indexOf(l);
-    h += `<h2>What sits on top</h2><div class="what">Here the ${LAYER_NAME[l].toLowerCase()} goes on top of what is already there. Change the order with the arrows${simple ? '' : ', or drag the dot under a branch onto another stack'}.</div>`;
+    h += `<h2><span class="t">What sits on top</span></h2><div class="what">Here the ${LAYER_NAME[l].toLowerCase()} goes on top of what is already there. Change the order with the arrows${simple ? '' : ', or drag the dot under a branch onto another stack'}.</div>`;
     h += `<div class="sec"><h3>Stack, bottom to top</h3>${G.order.map((x, j) => `<div class="rng" style="margin-bottom:4px"><span style="flex:1;${x === l ? 'font-weight:700' : ''}"><span style="color:${LAYER_COL[x]}">●</span> ${LAYER_NAME[x]}</span>
       <button data-lay="${x}" data-dir="-1" ${j === 0 || !G.dz ? 'disabled' : ''} title="lower">▼</button><button data-lay="${x}" data-dir="1" ${j === G.order.length - 1 || !G.dz ? 'disabled' : ''} title="higher">▲</button></div>`).reverse().join('')}
       ${G.dz ? '<div class="why">Top of the list is drawn last, over everything.</div>' : '<div class="why">This kind of scene keeps a fixed order.</div>'}
@@ -656,14 +779,14 @@ function drawInspector() {
     h += toolButtons(['picture', 'words', 'marks'].includes(l) ? l : null);
   } else if (k.startsWith('tool:')) {
     const id = k.slice(5), n = node(id), p = n.params, spec = SC.tools[p.tool], lk = !!node(sid)?.locked;
-    h += `<h2>${esc(TOOL_NAME[p.tool] || p.tool)} ${lk ? '<span class="lkd">locked</span>' : ''}</h2>
+    h += `<h2><span class="t">${esc(TOOL_NAME[p.tool] || p.tool)}</span>${lk ? '<span class="lkd">locked</span>' : ''}<button data-tpw="${esc(id)}" title="switch on or off (D)">${n.off ? 'Off' : 'On'}</button></h2>
       <div class="what">${esc(TOOL_DOES[p.tool] || '')}. It changes ${G.dz ? esc(onWhat(p.on)) : 'the whole picture'}.${n.off ? ' <b>Switched off.</b>' : ''}</div>`;
     for (const [q, [lo, hi, def]] of Object.entries(spec)) h += control(id, q, {type: 'number', min: lo, max: hi, step: 0.01, default: def, why: TOOL_WHY[p.tool + '.' + q] || ''}, p[q], lk);
     if (G.dz) h += `<div class="row"><label for="ton">Works on</label><select id="ton" data-tool="${esc(id)}" ${lk ? 'disabled' : ''}>${SC.toolOn[p.tool].filter(b => branchHere(b)).map(b => `<option value="${b}" ${b === p.on ? 'selected' : ''}>${BRANCH_NAME[b]}</option>`).join('')}</select></div>`;
-    h += `<div class="btns"><button data-tpw="${esc(id)}">${n.off ? 'Switch on' : 'Switch off'} (D)</button><button data-tcopy="${esc(id)}">Duplicate (Ctrl+D)</button><button data-trm="${esc(id)}">Delete (Del)</button></div>`;
+    h += `<div class="btns"><button data-tcopy="${esc(id)}">Duplicate (Ctrl+D)</button><button data-trm="${esc(id)}">Delete (Del)</button></div>`;
   } else if (k === 'out') {
     const n = node(sid), i = sceneIdx(sid);
-    h += `<h2>Scene ${i + 1} ${n.locked ? '<span class="lkd">locked</span>' : ''}</h2><div class="what">${esc(typeName(n.params.type))}. Its length, page and shared styles.</div>`;
+    h += `<h2><span class="t">Scene ${i + 1}</span><button id="lk" title="${n.locked ? 'locked: neither you nor your AI can change it. Click to unlock' : 'lock it, so neither you nor your AI changes it'}">${n.locked ? 'Locked' : 'Lock'}</button></h2><div class="what">${esc(typeName(n.params.type))}. Its length, page and shared styles.</div>`;
     for (const [p, spec] of Object.entries(SC.schema.scene)) h += control(sid, p, spec, n.params[p], n.locked);
     if (simple && stagesOf(sid).includes('in')) {
       const ip = node(sid + '.in')?.params || {}, ilk = stageLocked(sid, 'in');
@@ -672,16 +795,16 @@ function drawInspector() {
     const styles = S.doc.nodes.filter(x => x.kind === 'style');
     h += `<div class="sec"><h3>Shared styles</h3>${styles.map(s => `<label style="display:flex;gap:6px;margin-bottom:4px"><input type="checkbox" data-wire="${esc(s.id)}" ${(n.use || []).includes(s.id) ? 'checked' : ''}> ${esc(s.id)}</label>`).join('') || '<div class="why">None yet. A style is a look several scenes can share.</div>'}
       <div class="rng" style="margin-top:6px"><input type="text" id="newstyle" placeholder="new style name"><button id="mkstyle">Create and wire</button></div></div>`;
-    h += `<div class="sec"><h3>Scene</h3><div class="btns"><button id="lk">${n.locked ? 'Unlock' : 'Lock'} scene</button>
-      <button id="ml" ${i === 0 ? 'disabled' : ''}>◀ Move</button><button id="mr" ${i === S.scenes.length - 1 ? 'disabled' : ''}>Move ▶</button>
+    h += `<div class="sec"><h3>Scene</h3><div class="btns">      <button id="ml" ${i === 0 ? 'disabled' : ''}>◀ Move</button><button id="mr" ${i === S.scenes.length - 1 ? 'disabled' : ''}>Move ▶</button>
       <button id="cp">Copy</button><button id="rm">Remove</button></div></div>` + askBox(sid);
   } else {
     const st = k.slice(3), part = partOf(st), id = sid + '.' + part, n = node(id), lk = stageLocked(sid, st), off = stageOff(sid, st);
-    h += `<h2>${stageName(sid, st)} ${lk ? '<span class="lkd">locked</span>' : ''}</h2>
+    h += `<h2><span class="t">${stageName(sid, st)}</span>${n ? `<button id="lkp" data-node="${esc(id)}" title="${n.locked ? 'locked: click to unlock' : 'lock it, so neither you nor your AI changes it'}">${n.locked ? 'Locked' : 'Lock'}</button>` : lk ? '<span class="lkd">locked</span>' : ''}${SC.bypass.includes(st) ? `<button data-pw="${st}" title="switch on or off (D)">${off ? 'Off' : 'On'}</button>` : ''}</h2>
       <div class="what">${esc(cap(SC.what[part] || ''))}${off ? ' · <b>switched off</b>' : ''}</div>`;
     const spec = SC.schema[st] || {}, p = n?.params || {};
     const styled = S.scenes[sceneIdx(sid)].styled || {};
-    for (const name of paramsOf(st)) if (spec[name]) {
+    const ty = node(sid).params.type, notHere = {text: ['clip', 'image'], caption: ['title', 'text', 'quote']};  // words this kind of scene doesn't show
+    for (const name of paramsOf(st)) if (spec[name] && !(p[name] == null && (notHere[name] || []).includes(ty))) {
       const key = SC.partKeys[part]?.includes(name) ? name : part + '_' + name, inh = styled[key];
       h += control(id, name, spec[name], p[name], lk, inh && p[name] == null ? inh : null);
     }
@@ -692,10 +815,9 @@ function drawInspector() {
         h += control(id, name, ls[name], p[name], lk, inh && p[name] == null ? inh : null); }
       h += `<div class="btns"><button data-pw="look">${loff ? 'Switch the look on' : 'Switch the look off'}</button></div></div>`;
     }
-    h += `<div class="btns">${SC.bypass.includes(st) ? `<button data-pw="${st}">${off ? 'Switch on' : 'Switch off'} (D)</button>` : ''}
-      ${n ? `<button id="lkp" data-node="${esc(id)}">${n.locked ? 'Unlock' : 'Lock'} ${stageName(sid, st).toLowerCase()}</button>` : ''}</div>` + askBox(id, st);
+    h += askBox(id, st);
   }
-  el.innerHTML = h;
+  el.innerHTML = h + FOOT;
 }
 
 // ---------------------------------------------------------------- changes
@@ -729,14 +851,12 @@ function apply(state, mine) {
   if (!S.scenes.find(s => s.id === sel.scene)) sel.scene = S.scenes[0]?.id;
   const gone = k => k && ((k.startsWith('tool:') && !node(k.slice(5))) || (k.startsWith('style:') && !(node(sel.scene)?.use || []).includes(k.slice(6))));
   if (gone(sel.node)) sel.node = 'out';
-  $('#file').textContent = S.file + (S.design ? ' · ' + S.design : '') + ' · ' + S.aspect;
+  const base = S.file.replace(/\.nodes\.json$|\.json$/, '').replace(/[-_]+/g, ' ').trim();
+  $('#file').textContent = cap(base); $('#file').title = S.file + (S.design ? ' · ' + S.design : '');
   $('#undo').disabled = !S.canUndo; $('#redo').disabled = !S.canRedo;
-  const ai = S.byAI.length; $('#aichip').style.display = ai ? '' : 'none';
-  $('#aichip').textContent = `your AI changed ${ai} node${ai > 1 ? 's' : ''} · seen`;
-  const r = S.render, rs = r.state === 'running' ? `rendering… ${Math.round(Date.now() / 1000 - r.started)} s` : r.state === 'done' ? `rendered in ${r.seconds} s` : r.state === 'failed' ? 'render failed' : (S.built ? 'last render ' + S.built : 'not rendered yet');
-  $('#status').textContent = rs + (S.asks.length ? ` · ${S.asks.length} description${S.asks.length > 1 ? 's' : ''} for your AI` : '');
-  $('#full').style.display = r.state === 'done' ? '' : 'none';
-  $('#render').disabled = r.state === 'running';
+  const ai = S.byAI.length; $('#aichip').style.display = $('#aivr').style.display = ai ? '' : 'none';
+  $('#aitext').textContent = `${ai} changed by your AI`;
+  renderState();
   showIdea(S.idea, S.scenes.filter(s => s.unwritten).length);
   if (!mine && before && before.version !== S.version && S.byAI.length) toast('Your AI changed: ' + S.byAI.slice(0, 4).map(friendly).join(', '), 'ai');
   const keepFocus = document.activeElement && $('#insp').contains(document.activeElement) && mine;
@@ -744,13 +864,35 @@ function apply(state, mine) {
   const cur = before && before.scenes.find(s => s.id === sel.scene), now = S.scenes.find(s => s.id === sel.scene);
   if (!cur || !now || cur.key !== now.key || !$('#pv').src) setPreview();
 }
+function renderState() {
+  const r = S.render, total = Math.round(S.scenes.reduce((a, x) => a + x.seconds, 0));
+  const rs = r.state === 'done' ? `Rendered in ${r.seconds} s` : r.state === 'failed' ? 'Render failed' : r.state === 'stopped' ? 'Render stopped' : 'Saved';
+  $('#status').textContent = `${total} s · ${S.aspect} · ${rs}` + (S.asks.length ? ` · ${S.asks.length} for your AI` : '');
+  $('#status').title = r.state === 'failed' ? (r.log || []).join('\n') : '';
+  const run = r.state === 'running'; $('#top').classList.toggle('rendering', run);
+  if (run) {
+    const of = r.of || S.scenes.length, done = r.done || 0, stage = r.stage || 'drawing';
+    $('#rptext').textContent = stage === 'joining' ? 'Rendering · joining the scenes' : stage === 'checking' ? 'Rendering · watching it back'
+      : `Rendering · scene ${Math.min(of, done + 1)} of ${of}`;
+    // drawing is about half the time; joining runs on with no count of its own, so its share fills slowly with time
+    if (stage !== 'joining') delete renderState.joinAt; else renderState.joinAt ??= Date.now();
+    const f = stage === 'joining' ? 0.5 + 0.38 * (1 - Math.exp(-(Date.now() - renderState.joinAt) / 60000)) : stage === 'checking' ? 0.92 : 0.03 + 0.47 * done / Math.max(1, of);
+    $('#rpbar').style.width = Math.round(f * 100) + '%';
+  }
+  $('#full').style.display = r.state === 'done' ? '' : 'none';
+  $('#render').disabled = run;
+}
 function friendly(id) {
   const [sid, part] = id.split('.'); if (!node(sid) || node(sid).kind !== 'scene') return id;
   const t = node(id); if (t?.kind === 'tool') return sceneName(sid) + ' ' + (TOOL_NAME[t.params.tool] || 'tool').toLowerCase();
   return sceneName(sid) + (part ? ' ' + ({in: 'transition', picture: 'photo', mark: 'marks'}[part] || part) : '');
 }
 async function refresh(force) {
-  try { const st = await api('/api/state'); if (force || st.version !== version || JSON.stringify(st.render) !== JSON.stringify(S?.render)) apply(st, false); } catch (e) { $('#status').textContent = 'Studio is not running'; }
+  try { const st = await api('/api/state');
+    if (force || st.version !== version || !S) apply(st, false);
+    else if (JSON.stringify(st.render) !== JSON.stringify(S.render)) { const was = S.render.state; S.render = st.render; renderState();
+      if (was === 'running' && st.render.state === 'done') toast('Your video is ready. Press Show full video to watch it.'); }
+  } catch (e) { $('#status').textContent = 'Studio is not running'; }
 }
 function select(scene, nodeKey) { sel.scene = scene; sel.node = nodeKey || sel.node || 'out'; drawStrip(); drawCanvas(); drawInspector(); setPreview(); }
 
@@ -778,6 +920,9 @@ document.addEventListener('change', e => {
   else if (t.id === 'addst' && t.value) { queue(d.style, t.value, t.value.endsWith('size') ? 1 : t.value === 'seconds' ? 3 : t.value.endsWith('shape') ? 'none' : t.value.endsWith('photo') ? 'colour' : t.value === 'dark' ? true : 0); }
 });
 document.addEventListener('click', async e => {
+  if (!e.target.closest('#more,#moremenu')) $('#moremenu').classList.remove('on');
+  else if (e.target.closest('#moremenu button')) setTimeout(() => $('#moremenu').classList.remove('on'), 0);
+  const ab = e.target.closest('[data-ab]'); if (ab) return setWipe(ab.dataset.ab === 'a' ? 100 : 0);
   const t = e.target.closest('button,.node,.clip'); if (!t) return;
   const d = t.dataset;
   if (d.pw) { e.stopPropagation(); return op('/api/switch', {scene: sel.scene, stage: d.pw, on: stageOff(sel.scene, d.pw)}); }
@@ -797,13 +942,18 @@ document.addEventListener('click', async e => {
     case 'redo': return op('/api/redo', {});
     case 'vset': sel.node = 'settings'; return drawInspector();
     case 'sound': sel.node = 'sound'; return drawInspector();
-    case 'theme': { const r = document.documentElement, n = r.dataset.theme === 'dark' ? 'light' : 'dark'; r.dataset.theme = n; try { localStorage.setItem('venus-theme2', n); } catch (er) {} return drawCanvas(); }
+    case 'theme': { const r = document.documentElement, n = r.dataset.theme === 'dark' ? 'light' : 'dark'; r.dataset.theme = n; try { localStorage.setItem('venus-theme2', n); } catch (er) {} themeName(); return drawCanvas(); }
+    case 'more': return $('#moremenu').classList.toggle('on');
+    case 'rstop': return op('/api/render_stop', {}, 'Stopping the render');
+    case 'gaskgo': { const g = $('#gask'); describe(sel.scene, g.value); g.value = ''; return; }
+    case 'addsc': return op('/api/copy', {scene: sel.scene}, 'Added a copy of this scene after it: change it, or describe what it should be');
     case 'render': return render(false);
     case 'full': return showVideo('/api/video?t=' + Date.now());
-    case 'play': { $('#busy').classList.add('on'); $('#busy').textContent = 'making a quick draft…';
+    case 'play': { busy(true, 'Making a quick draft');
       const s = S.scenes[i]; try { const r = await fetch(`/api/play?scene=${encodeURIComponent(s.id)}&k=${s.key}`); if (!r.ok) throw new Error((await r.json()).error);
-        showVideo(URL.createObjectURL(await r.blob())); } catch (er) { toast('Play: ' + er.message, 'bad'); } $('#busy').classList.remove('on'); return; }
-    case 'holdA': holdA = $('#pv').src; $('#pa').src = holdA; ['#pa', '#wl', '#wipe', '#wipelab'].forEach(s => $(s).style.display = ''); wipe(); return toast('Held as A. Change something, then drag the wipe to compare.');
+        showVideo(URL.createObjectURL(await r.blob())); } catch (er) { toast('Play: ' + er.message, 'bad'); } busy(false); return; }
+    case 'holdA': holdA = $('#pv').src; $('#pa').src = holdA; $('#pa').style.display = ''; $('#abseg').style.display = ''; $('#frame').classList.add('cmp'); setWipe(0);
+      return toast('Held as A. Change something, then switch between A and Now, or drag across the picture.');
     case 'lk': return op('/api/lock', {node: sel.scene, on: !node(sel.scene).locked});
     case 'lkp': return op('/api/lock', {node: d.node, on: !node(d.node).locked});
     case 'ml': return op('/api/move', {scene: sel.scene, before: S.scenes[i - 1].id});
@@ -814,9 +964,10 @@ document.addEventListener('click', async e => {
     case 'dgo': return describe(d.node, $('#dtext').value, d.stage);
     case 'aichip': return;
     case 'fit': return fit();
-    case 'tidy': try { localStorage.removeItem(layoutKey(sel.scene)); } catch (er) {} drawCanvas(); return requestAnimationFrame(fit);
+    case 'tidy': return tidy();
     case 'addn': { const r = t.getBoundingClientRect(); return openMenu(r.left, r.bottom + 4, null); }
-    case 'mode': simple = !simple; try { localStorage.setItem('venus-simple', simple ? '1' : '0'); } catch (er) {}
+    case 'mode': if (e.target.dataset.mode && (e.target.dataset.mode === 'simple') === simple) return;
+      simple = !simple; try { localStorage.setItem('venus-simple', simple ? '1' : '0'); } catch (er) {}
       if (sel.node === 'st:look' || sel.node === 'st:in' || (simple && sel.node?.startsWith('merge:'))) sel.node = sel.node === 'st:look' ? 'st:picture' : 'out';
       view = {}; drawCanvas(); drawInspector(); return toast(simple ? 'Simple view: the look sits inside the photo, the transition inside the scene' : 'Every node is showing');
     case 'tipsbtn': $('#tips').style.display = ''; return;
@@ -835,6 +986,8 @@ async function describe(id, text, stage) {
 document.addEventListener('keydown', e => {
   if (e.target.dataset?.desc && e.key === 'Enter') { describe(e.target.dataset.desc, e.target.value, e.target.dataset.stage); e.target.value = ''; return; }
   if ((e.target.dataset?.gdesc || e.target.id === 'gask') && e.key === 'Enter') { describe(sel.scene, e.target.value); e.target.value = ''; return; }
+  if (e.target.id === 'dtext' && e.key === 'Enter') { $('#dgo').click(); return; }
+  if (e.key === 'Escape') $('#moremenu').classList.remove('on');
   if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); op(e.shiftKey ? '/api/redo' : '/api/undo', {}); }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); if (sel.node?.startsWith('tool:')) dupTool(sel.node.slice(5)); return; }
@@ -845,9 +998,36 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeMenu();
   if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { const i = sceneIdx(sel.scene) + (e.key === 'ArrowRight' ? 1 : -1); if (S.scenes[i]) select(S.scenes[i].id); }
 });
-$('#scrub').addEventListener('input', () => { clearTimeout($('#scrub')._t); $('#scrub')._t = setTimeout(setPreview, 120); });
-function wipe() { const p = $('#wipe').value; $('#pa').style.clipPath = `inset(0 ${100 - p}% 0 0)`; $('#wl').style.left = p + '%'; }
+$('#scrub').addEventListener('input', () => { viewerHead(); clearTimeout($('#scrub')._t); $('#scrub')._t = setTimeout(setPreview, 120); });
+function wipe() { const p = +$('#wipe').value; $('#pa').style.clipPath = `inset(0 ${100 - p}% 0 0)`; $('#wl').style.left = p + '%';
+  $('#wl').style.display = p > 0 && p < 100 ? '' : 'none';
+  document.querySelectorAll('#abseg [data-ab]').forEach(x => x.classList.toggle('on', x.dataset.ab === (p >= 50 ? 'a' : 'now'))); }
+function setWipe(p) { $('#wipe').value = p; wipe(); }
 $('#wipe').addEventListener('input', wipe);
+// with A held, drag across the picture to wipe between A and now
+$('#frame').addEventListener('pointerdown', e => {
+  if (!holdA) return; const f = $('#frame'), r = f.getBoundingClientRect(); f.setPointerCapture(e.pointerId);
+  const at = ev => setWipe(Math.max(0, Math.min(100, (ev.clientX - r.left) / r.width * 100)));
+  at(e); f.onpointermove = at; f.onpointerup = () => { f.onpointermove = null; };
+});
+function themeName() { $('#themename').textContent = document.documentElement.dataset.theme === 'dark' ? 'Night' : 'Day'; }
+themeName();
+// Tidy: every card slides back to its laid-out place, the lines following as they go
+function tidy() {
+  const before = {}; document.querySelectorAll('#nodes .node').forEach(e => before[e.dataset.k] = [e.offsetLeft, e.offsetTop]);
+  try { localStorage.removeItem(layoutKey(sel.scene)); } catch (er) {}
+  drawCanvas();
+  const moves = [];
+  document.querySelectorAll('#nodes .node').forEach(e => { const b = before[e.dataset.k]; if (!b) return;
+    const to = [e.offsetLeft, e.offsetTop]; if (b[0] === to[0] && b[1] === to[1]) return; moves.push([e, b, to]); e.style.left = b[0] + 'px'; e.style.top = b[1] + 'px'; });
+  if (!moves.length) return fit();
+  const t0 = performance.now(), D = 380, ease = x => 1 - Math.pow(1 - x, 3);
+  (function step(now) {
+    const f = ease(Math.min(1, (now - t0) / D));
+    for (const [e, b, to] of moves) { e.style.left = (b[0] + (to[0] - b[0]) * f) + 'px'; e.style.top = (b[1] + (to[1] - b[1]) * f) + 'px'; }
+    drawWires(); if (f < 1) requestAnimationFrame(step); else fit();
+  })(t0);
+}
 // ---------------------------------------------------------------- graph editing
 async function addTool(tool, on, before) {
   const r = await op('/api/tool_add', {scene: sel.scene, tool, on, before: before || undefined});
@@ -894,8 +1074,8 @@ $('#canvas').addEventListener('pointerdown', e => {
   const sx = e.clientX, sy = e.clientY;
   const port = e.target.closest('.port[data-layer]');
   if (port) { drag = {kind: 'wire', layer: port.dataset.layer, from: box(port.parentElement.dataset.k), sx, sy}; e.preventDefault(); return; }
-  const h = e.target.closest('[data-drag]');
-  if (h) { const n = h.parentElement, p = W2(e); drag = {kind: 'node', k: h.dataset.drag, el: n, dx: p.x - n.offsetLeft, dy: p.y - n.offsetTop, sx, sy}; return; }
+  const n = !e.target.closest('input,button,textarea,select') && e.target.closest('.node');  // any card moves, Paper and The scene too
+  if (n) { const p = W2(e); drag = {kind: 'node', k: n.dataset.k, el: n, dx: p.x - n.offsetLeft, dy: p.y - n.offsetTop, sx, sy}; return; }
   if (!e.target.closest('.node')) { const v = V(); drag = {kind: 'pan', x: e.clientX - v.x, y: e.clientY - v.y, sx, sy}; $('#canvas').classList.add('panning'); }
 });
 function overAt(e, sel) { const hide = drag?.el; if (hide) hide.style.pointerEvents = 'none'; const t = document.elementFromPoint(e.clientX, e.clientY); if (hide) hide.style.pointerEvents = ''; return t?.closest(sel); }
@@ -904,7 +1084,7 @@ document.addEventListener('pointermove', e => {
   if (!moved && Math.hypot(e.clientX - (drag.sx ?? e.clientX), e.clientY - (drag.sy ?? e.clientY)) < 3) return; moved = true;
   if (drag.kind === 'pan') { const v = V(); v.x = e.clientX - drag.x; v.y = e.clientY - drag.y; return applyView(); }
   if (drag.kind === 'node') {
-    const p = W2(e); drag.el.style.left = (p.x - drag.dx) + 'px'; drag.el.style.top = (p.y - drag.dy) + 'px'; drawWires();
+    const p = W2(e); drag.el.classList.add('drag'); drag.el.style.left = (p.x - drag.dx) + 'px'; drag.el.style.top = (p.y - drag.dy) + 'px'; drawWires();
     if (drag.k.startsWith('tool:')) { document.querySelectorAll('path.hot').forEach(x => x.classList.remove('hot'));
       const h = overAt(e, 'path.hit.ins'); if (h) h.nextElementSibling?.classList.add('hot'); }
     return;
@@ -919,7 +1099,7 @@ document.addEventListener('pointermove', e => {
   }
 });
 document.addEventListener('pointerup', e => {
-  const d = drag; drag = null; $('#canvas').classList.remove('panning'); if (!d) return;
+  const d = drag; drag = null; $('#canvas').classList.remove('panning'); if (!d) return; d.el?.classList.remove('drag');
   if (d.kind === 'node' && moved) {
     try { const k = layoutKey(sel.scene), saved = JSON.parse(localStorage.getItem(k) || '{}'); saved[d.k] = {x: d.el.offsetLeft, y: d.el.offsetTop}; localStorage.setItem(k, JSON.stringify(saved)); } catch (er) {}
     if (d.k.startsWith('tool:')) {  // dropped on a wire: the tool moves there
@@ -973,9 +1153,10 @@ $('#strip').addEventListener('drop', e => { const c = e.target.closest('.clip[da
 // ---- a new Venus: a quiet note in the header, one click to update, Studio restarts itself on the new version
 let UPD = null, updWait = null;
 function showUpd(c) {
-  UPD = c; const b = $('#upd'); if (!c || !c.update) { b.style.display = 'none'; return; }
+  UPD = c; const b = $('#upd'), show = on => { b.style.display = $('#updhr').style.display = on ? '' : 'none'; $('#more').classList.toggle('dot', on); };
+  if (!c || !c.update) return show(false);
   let later = 0; try { later = +(localStorage.getItem('venus-upd-later-' + c.latest) || 0); } catch (e) {}
-  b.style.display = Date.now() - later < 864e5 ? 'none' : ''; b.textContent = 'Venus ' + c.latest + ' is ready';
+  show(Date.now() - later >= 864e5); $('#updtext').textContent = 'Venus ' + c.latest + ' is ready';
 }
 async function checkUpd() {
   try {
@@ -1028,7 +1209,7 @@ function showIdea(idea, todo) {
   const b = $('#idea'); b.classList.toggle('on', !!idea);
   if (!idea) return;
   const st = idea.status === 'ready' && !todo ? 'ready to read' : idea.status === 'writing' || (todo && todo < S.scenes.length) ? 'your AI is writing' : 'waiting for your AI';
-  $('#ideast').textContent = st; $('#ideaq').textContent = '“' + idea.text + '”';
+  $('#ideast').textContent = 'An idea for your AI · ' + st; $('#ideaq').textContent = '“' + idea.text + '”';
   $('#ideahelp').textContent = st === 'ready to read' ? 'Read each scene, change anything, then press Render.' : st === 'your AI is writing' ? (todo ? `${todo} scene${todo === 1 ? '' : 's'} still to write; they fill in as it goes.` : 'Every scene is written; your AI is checking the story.') : 'In your AI’s chat, say:';
   $('#ideacopy').style.display = st === 'waiting for your AI' ? '' : 'none';
 }
@@ -1043,7 +1224,7 @@ window.addEventListener('resize', () => { fitFrame(); if (sel.scene) { drawWires
 (async () => {
   SC = await api('/api/schema'); const st = await api('/api/state'); sel.scene = st.scenes[0]?.id; sel.node = 'out'; apply(st, true);
   try { if (!localStorage.getItem('venus-tips-seen')) $('#tips').style.display = ''; } catch (e) {}
-  setInterval(() => refresh(false), 1000);
+  setInterval(() => { refresh(false); if (S?.render?.state === 'running') renderState(); }, 1000);
   setTimeout(checkUpd, 2500); setInterval(checkUpd, 6 * 3600e3);
 })();
 </script></body></html>

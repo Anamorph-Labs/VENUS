@@ -8,15 +8,12 @@
 @font-face{font-family:"Hanken Grotesk";src:url(/fonts/HankenGrotesk-normal.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
 @font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-normal.woff2) format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
 @font-face{font-family:"Newsreader";src:url(/fonts/Newsreader-italic.woff2) format("woff2");font-weight:200 800;font-style:italic;font-display:swap}
-/* the brand palette: mostly ivory, then panels, ink for text, deep blue rare so it always means something */
-:root{--bg:#F6F2EA;--panel:#FFFEFB;--panel2:#F5F1EA;--ink:#22201D;--soft:#5E5850;--faint:#8C8378;--line:#E8E4DD;--hair:rgba(34,32,29,.10);
---wire:#8C8378;--accent:#2B4A78;--onaccent:#F6F2EA;--soft-accent:#9DB7D9;--ai:#9DB7D9;--sel:#2B4A78;--off:#C9C1B5;--ok:#22201D;--bad:#22201D;
---node:#FFFEFB;--nodeHead:#F5F1EA;--input:#FFFFFF;--view:#ECE6DB;--shadow:0 10px 30px rgba(34,32,29,.05);--chipbg:#F5F1EA;
---l-shape:#C9C1B5;--l-picture:#9DB7D9;--l-words:#22201D;--l-marks:#8C8378;--l-graphic:#5E5850;--trunk:#5E5850}
-:root[data-theme="dark"]{--bg:#22201D;--panel:#2A2825;--panel2:#33302C;--ink:#F6F2EA;--soft:#C9C1B5;--faint:#8C8378;--line:#3B3833;--hair:rgba(246,242,234,.10);
---wire:#8C8378;--accent:#9DB7D9;--onaccent:#22201D;--soft-accent:#9DB7D9;--ai:#9DB7D9;--sel:#F6F2EA;--off:#5E5850;--ok:#F6F2EA;--bad:#F6F2EA;
---node:#2A2825;--nodeHead:#33302C;--input:#22201D;--view:#1B1A18;--shadow:0 10px 30px rgba(0,0,0,.18);--chipbg:#33302C;
---l-shape:#8C8378;--l-picture:#9DB7D9;--l-words:#F6F2EA;--l-marks:#C9C1B5;--l-graphic:#C9C1B5;--trunk:#C9C1B5}
+/* Studio brand kit, as in the editor: ivory and ink, neutral greys from #17181B (never warm), ink buttons; Night tokens */
+:root{--bg:#F6F2EA;--panel:#FFFEFB;--panel2:rgba(23,24,27,.045);--ink:#22201D;--soft:rgba(23,24,27,.70);--faint:rgba(23,24,27,.56);--line:rgba(23,24,27,.09);
+--hair:rgba(23,24,27,.14);--accent:#22201D;--onaccent:#F6F2EA;--soft-accent:#9DB7D9;--input:#FFFEFB;--shadow:0 10px 30px rgba(23,24,27,.05)}
+:root[data-theme="dark"]{--bg:#0C0D0F;--panel:#16171A;--panel2:#212226;--ink:#ECEAE6;--soft:#9A9893;--faint:#9A9893;--line:rgba(236,234,230,.08);
+--hair:rgba(236,234,230,.13);--accent:#ECEAE6;--onaccent:#0C0D0F;--soft-accent:#9DB7D9;--input:#16171A;--shadow:none}
+:root[data-theme="dark"] body{background:radial-gradient(60vw 50vh at 100% 0,rgba(43,74,120,.22),transparent 70%),radial-gradient(55vw 45vh at 0 100%,rgba(43,74,120,.19),transparent 70%),var(--bg);min-height:100vh}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Hanken Grotesk",ui-sans-serif,system-ui,sans-serif}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -24,8 +21,8 @@ button{background:var(--panel);border:1px solid var(--hair);border-radius:999px;
 button:hover{border-color:var(--faint)}
 button:disabled{opacity:.45;cursor:default}
 button.primary{background:var(--accent);border-color:var(--accent);color:var(--onaccent);font-weight:600}
-header{display:flex;align-items:center;gap:8px;padding:0 16px;height:56px;border-bottom:1px solid var(--line);background:var(--panel)}
-header img{height:32px;display:block}
+header{display:flex;align-items:center;gap:8px;padding:0 16px;height:52px;border-bottom:1px solid var(--line)}
+header img{height:28px;display:block}
 header .dk,:root[data-theme="dark"] header .lt{display:none}
 :root[data-theme="dark"] header .dk{display:block}
 header .sp{flex:1}
@@ -36,7 +33,7 @@ h1 em{font-style:italic}
 .card{background:var(--panel);border:1px solid var(--hair);border-radius:24px;padding:22px;box-shadow:var(--shadow)}
 textarea{width:100%;min-height:110px;resize:vertical;background:var(--input);border:1px solid var(--line);border-radius:16px;padding:14px 16px;
 font:18px/1.45 Newsreader,Georgia,serif}
-textarea:focus,select:focus{outline:2px solid var(--soft-accent);outline-offset:1px}
+textarea:focus,select:focus{outline:2px solid var(--hair);outline-offset:1px}
 .row{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 4px;align-items:center}
 .pick{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--faint);text-transform:uppercase;letter-spacing:.12em;font-weight:600}
 select{background:var(--input);border:1px solid var(--line);border-radius:999px;padding:7px 12px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink);font-size:14px}

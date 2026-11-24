@@ -792,6 +792,7 @@ def cmd_make(a: argparse.Namespace) -> None:
         try:
             from .selfcheck import review
 
+            story.progress("checking", len(sb["scenes"]), len(sb["scenes"]))
             changes = story.autofix(sb, review(out), nd.frozen(doc) if doc else frozenset())
         except Exception as e:
             print(f"   (self-review could not run: {e})")

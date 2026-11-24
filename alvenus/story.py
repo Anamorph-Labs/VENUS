@@ -218,6 +218,18 @@ def _push(d: float, fps: float, amount: float) -> str:
     return ",perspective=" + ":".join(f"x{i}='{a}{z}':y{i}='{b}{z}'" for i, (a, b) in enumerate(corners)) + ":interpolation=cubic:eval=frame"
 
 
+def progress(stage: str, done: int = 0, of: int = 0) -> None:
+    """Where a build stands, for Studio's progress bar: written to the file named by
+    VENUS_PROGRESS when it is set (Studio sets it for the render it starts)."""
+    p = os.environ.get("VENUS_PROGRESS")
+    if not p:
+        return
+    try:
+        Path(p).write_text(json.dumps({"stage": stage, "done": done, "of": of}), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: int) -> None:
     if sc.get("_design"):
         from .paper import scene_video
@@ -370,8 +382,26 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         cache.mkdir(parents=True, exist_ok=True)
         keys = [_scene_key(scenes[i], seg[i], w, h, fps) for i in range(len(scenes))]
         todo = [i for i in range(len(scenes)) if not (cache / f"{keys[i]}.mp4").exists()]
+        for left in cache.glob("venus-p-*"):  # working folders a stopped build left behind
+            if left.is_dir():
+                import shutil
+
+                shutil.rmtree(left, ignore_errors=True)
+        drawn = [len(scenes) - len(todo)]
+        progress("drawing", drawn[0], len(scenes))
+
+        def one(i: int) -> None:
+            # drawn under a working name, kept under its real one only when whole: a build that is
+            # stopped (Studio's Stop) or crashes never leaves a half scene that a later build would reuse
+            part = cache / f"part-{keys[i]}.mp4"
+            _scene_video(scenes[i], seg[i], w, h, fps, part, i)
+            part.replace(cache / f"{keys[i]}.mp4")
+            drawn[0] += 1
+            progress("drawing", drawn[0], len(scenes))
+
         with ThreadPoolExecutor(max(1, min(3, (os.cpu_count() or 2) - 1))) as pool:
-            list(pool.map(lambda i: _scene_video(scenes[i], seg[i], w, h, fps, cache / f"{keys[i]}.mp4", i), todo))
+            list(pool.map(one, todo))
+        progress("joining", len(scenes), len(scenes))
         for f in cache.glob("*.mp4"):  # only the current version of each scene is kept
             if f.stem not in keys:
                 f.unlink()

@@ -93,6 +93,7 @@ class Studio:
         self.text = ""
         self.by_ai: dict[str, float] = {}  # node id -> when the AI (or anything outside Studio) changed it
         self.render = {"state": "idle"}
+        self.proc = None  # the render running now, so Stop can end it
         self.playing: dict[str, str] = {}
         self.upd: dict = {}  # new-version check and the update in progress
         self.dirs: dict = {}  # the three directions, when asked for
@@ -203,7 +204,7 @@ class Studio:
                     "aspect": sb.get("aspect", "16:9"), "design": sb.get("design"), "transition": sb.get("transition", "crossfade"),
                     "byAI": [k for k, t in self.by_ai.items() if now - t < 600], "changed": changed,
                     "built": last.get("built"), "canUndo": bool(self.history), "canRedo": bool(self.future),
-                    "render": self.render, "asks": [n["id"] for n in nd.asks(doc)], "problems": nd.check(doc)}
+                    "render": self.render_state(), "asks": [n["id"] for n in nd.asks(doc)], "problems": nd.check(doc)}
 
     def _key(self, sb: dict, k: int) -> str:
         sc = sb["scenes"][k]
@@ -305,14 +306,49 @@ class Studio:
         except Exception:  # nosec B110 - learning is a bonus and must never stop a render
             pass
 
+        prog = self.cache / "render-progress.json"
+        prog.unlink(missing_ok=True)
+        self.render["progress"] = str(prog)
+
         def go():
-            r = subprocess.run([sys.executable, "-m", "alvenus", "make", str(self.path), "--out", str(out)],
-                               capture_output=True, text=True, cwd=str(self.path.parent))
-            tail = [x for x in (r.stdout + r.stderr).strip().splitlines() if x.strip()][-6:]
-            self.render = {"state": "done" if r.returncode == 0 else "failed", "video": out.name, "log": tail,
+            env = dict(os.environ, VENUS_PROGRESS=str(prog))
+            group = {"start_new_session": True} if os.name == "posix" else {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+            p = subprocess.Popen([sys.executable, "-m", "alvenus", "make", str(self.path), "--out", str(out)],  # nosec B603
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=str(self.path.parent), env=env, **group)
+            self.proc = p
+            text = p.communicate()[0] or ""
+            tail = [x for x in text.strip().splitlines() if x.strip()][-6:]
+            stopped = self.render.get("stopping")
+            self.render = {"state": "stopped" if stopped else "done" if p.returncode == 0 else "failed", "video": out.name, "log": tail,
                            "seconds": round(time.time() - self.render["started"])}
+            self.proc = None
 
         threading.Thread(target=go, daemon=True).start()
+
+    def stop_render(self) -> None:
+        """Stop the render in progress (the last finished video, if any, stays as it was)."""
+        p = getattr(self, "proc", None)
+        if self.render.get("state") != "running" or p is None:
+            raise ValueError("no render is running")
+        self.render["stopping"] = True
+        if os.name == "posix":  # the make and every ffmpeg it started
+            import signal
+            try:
+                os.killpg(p.pid, signal.SIGTERM)
+                return
+            except OSError:
+                pass
+        p.terminate()
+
+    def render_state(self) -> dict:
+        """The render, with where it stands while it runs (scene k of n)."""
+        r = {k: v for k, v in self.render.items() if k != "progress"}
+        if r.get("state") == "running" and self.render.get("progress"):
+            try:
+                r.update(json.loads(Path(self.render["progress"]).read_text(encoding="utf-8")))
+            except (OSError, ValueError):
+                pass
+        return r
 
     def start_directions(self) -> dict:
         """Lay the storyboard out three ways (your look, the opposite energy, tighter) with frames of each."""
@@ -633,6 +669,8 @@ def handler(st: Studio):
                     st.undo(redo=True)
                 elif op == "render":
                     st.start_render(bool(body.get("anyway")))
+                elif op == "render_stop":
+                    st.stop_render()
                 elif op == "directions":
                     return self._json(st.start_directions())
                 elif op == "direction_pick":

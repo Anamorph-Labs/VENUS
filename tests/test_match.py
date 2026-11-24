@@ -851,6 +851,35 @@ class Studio(unittest.TestCase):
         with self.assertRaises(SystemExit):
             nd.switch(doc, "scene2", "picture", on=False)
 
+    def test_a_build_says_where_it_stands(self):
+        import json, os, tempfile
+        from pathlib import Path
+        from alvenus import story
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "p.json"
+            story.progress("drawing", 1, 8)  # no file asked for: nothing is written
+            os.environ["VENUS_PROGRESS"] = str(f)
+            try:
+                story.progress("drawing", 3, 8)
+            finally:
+                del os.environ["VENUS_PROGRESS"]
+            self.assertEqual(json.loads(f.read_text()), {"stage": "drawing", "done": 3, "of": 8})
+
+    def test_studio_shows_render_progress(self):
+        import json, tempfile
+        from pathlib import Path
+        from types import SimpleNamespace
+        from alvenus.studio import Studio
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "p.json"
+            f.write_text(json.dumps({"stage": "drawing", "done": 2, "of": 8}))
+            st = SimpleNamespace(render={"state": "running", "started": 1.0, "progress": str(f)}, proc=None)
+            got = Studio.render_state(st)
+            self.assertEqual((got["stage"], got["done"], got["of"]), ("drawing", 2, 8))
+            self.assertNotIn("progress", got)  # where the file sits stays inside Studio
+            with self.assertRaises(ValueError):
+                Studio.stop_render(SimpleNamespace(render={"state": "idle"}, proc=None))
+
     def test_studio_schema_covers_every_stage(self):
         from alvenus import nodes as nd
         from alvenus.studio import schema
