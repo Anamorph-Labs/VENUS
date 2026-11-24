@@ -515,6 +515,14 @@ media linked, the unused takes on switched-off tracks above each line, and a
 marker per line saying which take was picked and why (the `.edl` is the plain
 fallback).
 
+Every finished video (cut, montage, make; never a --draft) ends with a small
+"Made with Venus" mark in the bottom corner for its last two seconds. It is on
+by default. If the creator asks for it gone, ask whether they mean this video
+or every video, then: `--no-mark` on the command, or `"venus_mark": false` in
+the storyboard (the Video settings switch in Studio), or `alvenus mark off` for
+every video on this computer (`alvenus mark on` brings it back). Never turn it
+off unless they ask.
+
 To find a shot in their footage by what is in it, ask it:
 `alvenus find "someone laughing" clips/` lists the best moments with times and a
 picture of them (it looks at every clip once with a free local model, then answers

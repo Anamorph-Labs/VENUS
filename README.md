@@ -19,7 +19,7 @@ you read the storyboard, and nothing is made until you press Render.
 - **From your clips and a song.** Every cut on the beat, the strongest moment on the drop, or the fast "creative edit" look with cut-outs and light.
 - **It checks the story, not only the pixels.** Does the hook make you stay, one idea per scene, a turn in the middle, an ending that lands, every number with its source. Then three directions to pick from at a glance.
 
-Free and private: everything runs on your computer. No account, no API keys, no uploads, no watermark. Free to use, including for paid client work; you may not resell Venus or offer it as a service (see [Licence](#licence)).
+Free and private: everything runs on your computer. No account, no API keys, no uploads. Each finished video ends with a small "Made with Venus" mark for its last two seconds; one switch turns it off (`alvenus mark off`). Free to use, including for paid client work; you may not resell Venus or offer it as a service (see [Licence](#licence)).
 
 ## Install in 3 steps
 

@@ -880,6 +880,47 @@ class Studio(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Studio.stop_render(SimpleNamespace(render={"state": "idle"}, proc=None))
 
+    def test_end_mark_is_on_unless_turned_off(self):
+        import os, tempfile
+        from pathlib import Path
+        from unittest import mock
+        from alvenus import endmark
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, {"VENUS_HOME": d}):
+            self.assertTrue(endmark.wanted())
+            self.assertFalse(endmark.wanted(flag_off=True))
+            self.assertFalse(endmark.wanted(storyboard={"venus_mark": False}))
+            endmark.set_home(False)
+            self.assertFalse(endmark.wanted())
+            self.assertTrue(endmark.wanted(storyboard={"venus_mark": True}))  # one video can still ask for it
+            endmark.set_home(True)
+            self.assertTrue(endmark.wanted())
+        for side in ("light", "dark"):
+            self.assertTrue((Path(endmark.__file__).with_name("mark") / f"made-with-venus-{side}.png").exists())
+        tall, margin, bottom = endmark.place(1920, 1080)
+        self.assertEqual(endmark.place(1080, 1920)[0], tall)  # the same size on every shape
+        self.assertGreater(bottom, margin)
+
+    def test_end_mark_lands_on_the_last_seconds_only(self):
+        import shutil, subprocess, tempfile
+        from pathlib import Path
+        if not shutil.which("ffmpeg"):
+            self.skipTest("no ffmpeg")
+        from alvenus import endmark
+        from alvenus.media import duration
+        with tempfile.TemporaryDirectory() as d:
+            v = Path(d) / "v.mp4"
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=0x17181B:s=320x180:d=4:r=30",
+                            "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", "4", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                            "-c:a", "aac", str(v)], check=True)
+            endmark.apply(v)
+            self.assertAlmostEqual(duration(v), 4.0, delta=0.15)
+            def corner(t):
+                out = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(t), "-i", str(v), "-frames:v", "1", "-vf",
+                                      "crop=80:18:228:150,format=gray", "-f", "rawvideo", "-"], capture_output=True).stdout
+                return max(out) if out else 0
+            self.assertLess(corner(0.5), 60)      # the story is untouched
+            self.assertGreater(corner(3.8), 90)  # the ivory mark on the dark corner at the end
+
     def test_studio_pages_carry_every_screen(self):
         from pathlib import Path
         import alvenus

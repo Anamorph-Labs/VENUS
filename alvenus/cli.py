@@ -166,6 +166,27 @@ def _kit() -> dict | None:
         return None
 
 
+def end_mark(a: argparse.Namespace, out: Path, sb: dict | None = None) -> None:
+    """The small "Made with Venus" mark on a finished video (never on drafts); see endmark.py."""
+    if getattr(a, "draft", False):
+        return
+    from . import endmark
+
+    if endmark.wanted(getattr(a, "no_mark", False), sb):
+        print("   " + endmark.apply(out))
+
+
+def cmd_mark(a: argparse.Namespace) -> None:
+    from . import endmark
+
+    if a.state in ("on", "off"):
+        p = endmark.set_home(a.state == "on")
+        print(f"the \"Made with Venus\" mark is now {a.state} for every video on this computer ({p})")
+    else:
+        print(f"the \"Made with Venus\" mark is {'on' if endmark.home_default() else 'off'} on this computer; "
+              "change it with: alvenus mark on | off (one video: --no-mark, or \"venus_mark\": false in the storyboard)")
+
+
 def cmd_cut(a: argparse.Namespace) -> None:
     if not getattr(a, "accent", None):
         from . import brand
@@ -501,6 +522,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
         review += "\n## Finishing\n\n" + "".join(f"- {n}\n" for n in finish_notes)
     review += self_review(out, script, kit=_kit())
     out.with_suffix(".notes.md").write_text(review, encoding="utf-8")
+    end_mark(a, out)
     print()
     for c in choices:
         pick = f"take {c.take.index} ({sources[c.take.source].name})" if c.take else "MISSING"
@@ -743,6 +765,7 @@ def cmd_montage(a: argparse.Namespace) -> None:
     pos = [sum(x.length for x in shots[:k]) for k in range(len(shots))]
     write_sheet(out, [(p + s.length / 2, f"{k + 1} {Path(s.clip).stem[:18]}") for k, (p, s) in enumerate(zip(pos, shots))])
     print(self_review(out).strip())
+    end_mark(a, out)
     print(f"wrote {out} ({sum(s.length for s in shots):.1f}s) in {time.time() - t0:.0f}s")
     print(f"to change it, edit {plan_path} and run: alvenus montage --plan {plan_path}")
 
@@ -963,6 +986,7 @@ def cmd_make(a: argparse.Namespace) -> None:
     from . import brand
 
     print(self_review(out, kit=brand.load(sb.get("brand"), src.parent)).strip())
+    end_mark(a, out, sb)
     print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s; why it is cut this way: {out.with_suffix('.why.md')}")
 
 
@@ -1459,6 +1483,7 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--script", help="text file, one spoken line per row")
     c.add_argument("--takes", nargs="+", help="recording(s) or folder(s) of clips, video or audio")
     c.add_argument("--draft", action="store_true", help="quick look: a third of the size, fastest settings, plus a sheet of every scene")
+    c.add_argument("--no-mark", action="store_true", help="leave off the small \"Made with Venus\" mark at the end (alvenus mark off: for every video)")
     c.add_argument("--out", help="output MP4 (an .edl timeline, .srt captions and .notes.md review are written beside it)")
     c.add_argument("--captions", action="store_true", help="burn the script lines in as captions")
     c.add_argument("--aspect", default="16:9", choices=sorted(ASPECTS), help="frame shape: 16:9 wide, 9:16 vertical, 1:1 square, 4:5 feed")
@@ -1532,6 +1557,7 @@ def main(argv: list[str] | None = None) -> None:
     mo.add_argument("--clips", nargs="+", help="clip files or folders")
     mo.add_argument("--music", help="the song")
     mo.add_argument("--draft", action="store_true", help="quick look: a third of the size, fastest settings, plus a sheet of every scene")
+    mo.add_argument("--no-mark", action="store_true", help="leave off the small \"Made with Venus\" mark at the end (alvenus mark off: for every video)")
     mo.add_argument("--out", help="output MP4")
     mo.add_argument("--plan", help="a .montage.json from an earlier run, edited or not")
     mo.add_argument("--aspect", choices=sorted(ASPECTS), help="default 9:16")
@@ -1581,6 +1607,7 @@ def main(argv: list[str] | None = None) -> None:
     mk = sub.add_parser("make", help="build a video from a storyboard (scenes of clips, images, titles, numbers, charts, maps...)")
     mk.add_argument("storyboard", nargs="?", help="storyboard JSON or node file (see: alvenus make --example sb.json; alvenus nodes init)")
     mk.add_argument("--draft", action="store_true", help="quick look: a third of the size, fastest settings, plus a sheet of every scene")
+    mk.add_argument("--no-mark", action="store_true", help="leave off the small \"Made with Venus\" mark at the end (alvenus mark off: for every video)")
     mk.add_argument("--out", help="output MP4")
     mk.add_argument("--aspect", choices=sorted(ASPECTS), help="overrides the storyboard's aspect")
     mk.add_argument("--style", choices=list(PRESETS), help="a style pack: look, colour, transitions and titles (the storyboard's own settings still win)")
@@ -1684,6 +1711,9 @@ def main(argv: list[str] | None = None) -> None:
 
     so.set_defaults(func=run_studio)
 
+    mkk = sub.add_parser("mark", help="the small \"Made with Venus\" mark at the end of each video: on by default")
+    mkk.add_argument("state", nargs="?", choices=("on", "off"), help="on or off for every video on this computer; nothing to see where it stands")
+    mkk.set_defaults(func=cmd_mark)
     br = sub.add_parser("brand", help="the creator's brand kit: Venus uses its colours first and checks videos against it")
     br.add_argument("what", choices=["set", "show", "check"])
     br.add_argument("video", nargs="?", help="check: the finished video")
