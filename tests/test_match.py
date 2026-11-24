@@ -921,6 +921,22 @@ class Studio(unittest.TestCase):
             self.assertLess(corner(0.5), 60)      # the story is untouched
             self.assertGreater(corner(3.8), 90)  # the ivory mark on the dark corner at the end
 
+    def test_studio_knows_when_the_ai_is_connected(self):
+        import tempfile
+        from pathlib import Path
+        from alvenus import nodes as nd
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "x.nodes.json"
+            self.assertIsNone(nd.ai_seen(f))
+            nd.ai_mark(f)
+            self.assertLess(nd.ai_seen(f), 5)
+        found, rest = nd.understand("move it to the top, much longer", "words")
+        self.assertIn(("words", "caption_place", "top"), found)
+        self.assertEqual(rest, [])
+        page = (Path(nd.__file__).parent / "studio.html").read_text(encoding="utf-8")
+        for bit in ('id="aicopy"', "const aiOn", "Your AI is on it"):
+            self.assertIn(bit, page)
+
     def test_studio_pages_carry_every_screen(self):
         from pathlib import Path
         import alvenus

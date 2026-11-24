@@ -1249,8 +1249,10 @@ def cmd_nodes(a: argparse.Namespace) -> None:
         import time as _time
 
         end = _time.time() + (a.timeout or 0)
+        nd.ai_mark(f)  # Studio shows the person that their AI is connected
         while a.action == "listen" and not nd.asks(doc) and _time.time() < end:
             _time.sleep(1.0)  # wait for the person to describe something in Studio
+            nd.ai_mark(f)
             doc = nd.read(f)
         print(nd.asks_text(doc, str(f)))
         return
@@ -1316,6 +1318,7 @@ def cmd_nodes(a: argparse.Namespace) -> None:
         if len(ids) < 2:
             raise SystemExit('answer a description: alvenus nodes answer FILE scene3.words "made the words bigger and slower"')
         nd.answer(doc, ids[0], " ".join(ids[1:]))
+        nd.ai_mark(f)
         done = [f"answered {ids[0]}"]
     elif a.action in ("off", "on") and len(ids) == 1 and (nd.find(doc, ids[0]) or {}).get("kind") == "tool":
         nd.toggle_tool(doc, ids[0], a.action == "on", a.force)

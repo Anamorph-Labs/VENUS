@@ -16,6 +16,7 @@ so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 - Studio: edit each caption card (its words, its big word, where it sits), and set how clear the voice stays over the music.
 - A clip that ends before its scene does now holds its last frame instead of cutting the video short.
 - Studio: tall videos get their own full-height picture beside the node graph, square ones a bigger picture, a line to drag it bigger or smaller, and Big view (double-click the picture; Esc closes).
+- Studio: a description waiting for your AI says plainly whether your AI is connected, and if not, gives you a message to paste in your AI chat. Venus also does more simple asks itself ("at the top", "at the bottom", "much longer", "bold").
 - Studio: the Tips card fits any window and closes with ×, Esc or a click outside; a caption's place shows "auto" when Venus picks it.
 
 ## 0.9.0 (24 Nov 2026)

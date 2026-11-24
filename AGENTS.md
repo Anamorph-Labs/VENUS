@@ -932,6 +932,8 @@ once; every description stays on the node for you:
 3. Answer in a few plain words, which the creator sees under their description:
    `alvenus nodes answer FILE scene4.words "slowed the words so 'broken' lands last"`.
 4. Run `listen` again while Studio is open, so the creator never waits on you.
+   Studio shows the creator whether you are connected (you read the descriptions
+   in the last 3 minutes); if not, it offers them a message to paste to you.
 
 Stages can be switched off to compare, as in a finishing app: `alvenus nodes off
 FILE scene3 shape` (look, shape, words, marks), `nodes on` to bring it back; a

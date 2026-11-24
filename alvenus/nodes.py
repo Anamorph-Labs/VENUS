@@ -761,11 +761,16 @@ def _rules():
         (r"\b(slower|calmer|gentler)\b", "words", "speed", mul(1.4, 0.05, 1.5, 0.3)),
         (r"\b(later|wait)\b", "words", "delay", add(0.5, 0, 5, 0.25)),
         (r"\b(sooner|earlier|straight away|immediately)\b", "words", "delay", 0.0),
+        (r"\b(at the top|move (it )?up|to the top|top of the (frame|screen|picture))\b", "words", "caption_place", "top"),
+        (r"\b(at the bottom|move (it )?down|to the bottom|bottom of the (frame|screen|picture))\b", "words", "caption_place", "bottom"),
+        (r"\b(in the middle of the (frame|screen|picture)|vertically centred|vertically centered)\b", "words", "caption_place", "middle"),
         (r"\b(centre|center|centred|centered|middle)\b", "words", "align", "centre"),
         (r"\b(left)\b", "words", "align", "left"),
         (r"\b(right)\b", "words", "align", "right"),
         (r"\b(caps|capitals|uppercase|all caps)\b", "words", "caps", True),
         (r"\b(lowercase|no caps|sentence case)\b", "words", "caps", False),
+        (r"\b(bold|heavier)\b", "words", "size", mul(1.1, 0.4, 2.5)),
+        (r"\b(much longer|hold (it )?longer|a lot longer)\b", "scene", "seconds", add(1.6, 0.8, 15, 3.0)),
         (r"\b(longer|hold)\b", "scene", "seconds", add(0.8, 0.8, 15, 3.0)),
         (r"\b(shorter|tighter)\b", "scene", "seconds", add(-0.6, 0.8, 15, 3.0)),
         (r"\bdark (page|background|mood)\b|\bdarker page\b", "scene", "dark", True),
@@ -932,6 +937,28 @@ def _graph_change(doc: dict, sid: str, item) -> str:
         have.pop("off", None)
         return f"{have['id']} {json.dumps(params) if params else 'on'}"
     return "added " + add_tool(doc, sid, tool, on, **params) + f" on the {on}"
+
+
+def ai_mark(path) -> None:
+    """Note that the person's AI is reading this node file right now (Studio shows it as connected)."""
+    import time
+    from pathlib import Path
+
+    try:
+        Path(str(path) + ".ai").write_text(str(time.time()), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def ai_seen(path) -> float | None:
+    """Seconds since the person's AI last read the descriptions, or None if it never has."""
+    import time
+    from pathlib import Path
+
+    try:
+        return max(0.0, time.time() - float(Path(str(path) + ".ai").read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return None
 
 
 def asks(doc: dict, every: bool = False) -> list[dict]:

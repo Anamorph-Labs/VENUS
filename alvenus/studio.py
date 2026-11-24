@@ -214,7 +214,8 @@ class Studio:
                     "aspect": sb.get("aspect", "16:9"), "design": sb.get("design"), "transition": sb.get("transition", "crossfade"),
                     "byAI": [k for k, t in self.by_ai.items() if now - t < 600], "changed": changed,
                     "built": last.get("built"), "canUndo": bool(self.history), "canRedo": bool(self.future),
-                    "render": self.render_state(), "asks": [n["id"] for n in nd.asks(doc)], "problems": nd.check(doc)}
+                    "render": self.render_state(), "asks": [n["id"] for n in nd.asks(doc)], "problems": nd.check(doc),
+                    "aiSeen": nd.ai_seen(self.path), "path": str(self.path.resolve())}
 
     def _key(self, sb: dict, k: int) -> str:
         sc = sb["scenes"][k]

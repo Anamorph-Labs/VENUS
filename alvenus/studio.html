@@ -272,6 +272,8 @@ aside .what{color:var(--q);font-size:13px;margin:8px 0 16px}
 .conv .aiw p{margin:6px 0 0;font:400 15.5px/1.4 Newsreader,Georgia,serif;color:var(--blue)}
 .conv .wait{display:flex;gap:7px;align-items:center;font-size:12.5px;color:var(--q)}
 .conv .wait i{width:6px;height:6px;border-radius:50%;background:var(--lb)}
+.conv .aicon{display:flex;flex-direction:column;gap:6px;align-items:flex-start;margin-top:8px}
+.conv .aicon .why{margin:0}
 .conv .wait.done i{background:var(--blue)}
 aside .foot{margin-top:auto;padding-top:18px;font-size:11.5px;color:var(--q)}
 .btns{display:flex;flex-wrap:wrap;gap:6px}
@@ -648,7 +650,21 @@ function askLine(n, st, idle) {
   const mine = n?.ask && !((st && n.ask.stage && n.ask.stage !== st) || (st && !n.ask.stage && st !== stagesOf(sel.scene).find(x => partOf(x) === n.kind)));
   if (!mine) return idle ? `<div class="ask"><i></i>${esc(idle)}</div>` : '';
   const a = n.ask, done = a.status === 'done';
-  return `<div class="ask ${done ? 'ai' : a.status === 'waiting' ? 'wait' : ''}" title="${esc(a.text)}"><i></i>${done ? 'Your AI: ' + esc(short(a.answer || 'done')) : a.status === 'waiting' ? 'Waiting for your AI' : 'Venus did it · your AI can refine'}</div>`;
+  return `<div class="ask ${done ? 'ai' : a.status === 'waiting' ? 'wait' : ''}" title="${esc(a.text)}"><i></i>${done ? 'Your AI: ' + esc(short(a.answer || 'done')) : a.status === 'waiting' ? (aiOn() ? 'Your AI is on it' : 'Saved for your AI') : 'Venus did it · your AI can refine'}</div>`;
+}
+// is the creator's AI connected? It marks the node file each time it reads the descriptions (alvenus nodes listen / asks)
+const aiOn = (st = S) => st?.aiSeen != null && st.aiSeen < 180;
+function aiMessage() {
+  const f = S?.path || S?.file || 'FILE.nodes.json';
+  return `In Venus Studio I described changes I want. Please run: alvenus nodes asks "${f}" ` +
+    `and make each change (look first with alvenus nodes show), answer each one with alvenus nodes answer, ` +
+    `then keep running alvenus nodes listen "${f}" while I keep working in Studio, so you pick up the next ones on your own.`;
+}
+async function copyForAI() {
+  const t = aiMessage();
+  try { await navigator.clipboard.writeText(t); }
+  catch (e) { const x = document.createElement('textarea'); x.value = t; document.body.appendChild(x); x.select(); try { document.execCommand('copy'); } catch (er) {} x.remove(); }
+  toast('Copied. Paste it in your AI chat (Claude, ChatGPT, Gemini…).', 'ai');
 }
 const idleLine = (p, off, end) => off ? 'Off in this scene' : end || (Object.keys(p || {}).length ? 'Set by you' : 'As designed');
 function drawCanvas() {
@@ -881,7 +897,9 @@ function askBox(id, stage) {
       ${a.applied?.length ? `<div class="vdid">Venus did: <b>${a.applied.map(x => esc(String(x).replace(/^[\w]+\./, '').replace(' = ', ' '))).join(', ')}</b></div>` : ''}
       ${a.left?.length ? `<div class="aiw"><span class="lab">For your AI</span><p>${a.left.map(esc).join(' ')}</p></div>` : ''}
       ${a.status === 'done' ? `<div class="aiw"><span class="lab">Your AI answered</span><p>${esc(a.answer || 'Done')}</p></div>`
-        : `<div class="wait"><i></i>${a.status === 'waiting' ? 'Waiting for your AI' : 'Done by Venus · your AI will look it over'}</div>`}</div>`;
+        : a.status === 'waiting' && !aiOn() ? `<div class="wait"><i></i>Saved for your AI, which isn't connected right now</div>
+          <div class="aicon"><button id="aicopy">Copy for your AI</button><span class="why">Paste it in your AI chat. Your AI makes the change and answers here.</span></div>`
+        : `<div class="wait"><i></i>${a.status === 'waiting' ? 'Your AI is on it' : 'Done by Venus · your AI will look it over'}</div>`}</div>`;
   } else h += '<div class="why" style="margin-top:8px">Simple asks happen now. Everything you write is kept here for your AI to read.</div>';
   return h + '</div>';
 }
@@ -1049,6 +1067,7 @@ function friendly(id) {
 async function refresh(force) {
   try { const st = await api('/api/state');
     if (force || st.version !== version || !S) apply(st, false);
+    else if (aiOn(st) !== aiOn(S)) { S.aiSeen = st.aiSeen; drawCanvas(); if (!/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) drawInspector(); }
     else if (JSON.stringify(st.render) !== JSON.stringify(S.render)) { const was = S.render.state; S.render = st.render; renderState();
       if (was === 'running' && st.render.state === 'done') toast('Your video is ready. Press Watch it.'); }
   } catch (e) { $('#status').textContent = 'Studio is not running'; }
@@ -1118,6 +1137,7 @@ document.addEventListener('click', async e => {
       const s = S.scenes[i]; try { const r = await fetch(`/api/play?scene=${encodeURIComponent(s.id)}&k=${s.key}`); if (!r.ok) throw new Error((await r.json()).error);
         showVideo(URL.createObjectURL(await r.blob())); } catch (er) { toast('Play: ' + er.message, 'bad'); } busy(false); return; }
     case 'big': return openBig();
+    case 'aicopy': return copyForAI();
     case 'holdA': holdA = $('#pv').src; $('#pa').src = holdA; $('#pa').style.display = ''; $('#abseg').style.display = ''; $('#frame').classList.add('cmp'); setWipe(0);
       return toast('Held as A. Change something, then switch between A and Now, or drag across the picture.');
     case 'lk': return op('/api/lock', {node: sel.scene, on: !node(sel.scene).locked});
@@ -1146,7 +1166,9 @@ $('#aichip').onclick = () => op('/api/clear', {});
 async function describe(id, text, stage) {
   text = (text || '').trim(); if (!text) return;
   try { const r = await api('/api/describe', {node: id, text, stage}); apply(r.state, true);
-    toast(r.did.length ? 'Done now: ' + r.did.join('; ') + (node(id)?.ask?.left?.length ? ' · the rest is waiting for your AI' : '') : 'Saved for your AI to read'); }
+    if ($('#insp').contains(document.activeElement)) { document.activeElement.blur(); drawInspector(); }  // show the answer box at once
+    const left = node(id)?.ask?.left?.length, later = aiOn() ? 'your AI is on it' : 'saved for your AI: use Copy for your AI on the right';
+    toast(r.did.length ? 'Done now: ' + r.did.join('; ') + (left ? ' · the rest: ' + later : '') : left ? cap(later) : 'Saved for your AI to read'); }
   catch (e) { toast(e.message, 'bad'); }
 }
 function closeTips() { $('#tips').style.display = 'none'; try { localStorage.setItem('venus-tips-seen', '1'); } catch (er) {} }
