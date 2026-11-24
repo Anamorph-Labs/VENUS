@@ -6,6 +6,7 @@ It checks what a careful editor would on a last pass:
 - no rapid flashing (more than three flashes in a second can harm people
   with photosensitive epilepsy, so broadcasters screen for it)
 - sound and picture the same length and starting together, and no dead silence
+- pace: no lone shot too quick to see, and a video cut to the beat stays on it
 
 Everything runs locally with FFmpeg and numpy."""
 
@@ -26,7 +27,7 @@ CAPTION_STYLES = {"Cap", "CapBox"}  # captions follow the voice, so they are rea
 
 class Finding(str):
     """A plain-language problem that also says what kind it is and when, so
-    Venus can fix it: kind is reading, contrast, black, flash, sync or silence."""
+    Venus can fix it: kind is reading, contrast, black, flash, sync, silence or pace."""
 
     def __new__(cls, text: str, kind: str, times=(), **extra):
         f = super().__new__(cls, text)
@@ -253,6 +254,54 @@ def _sound(video: Path, info: dict, total: float) -> list[str]:
     return notes
 
 
+def _pace(video: Path, total: float) -> list[str]:
+    """Pace: a shot too quick to take in on its own, and stretches where a video
+    cut to the beat drifts off it."""
+    from .read import cuts_of, frames
+
+    fr, fps = frames(video, width=96, fps_cap=25.0)
+    if len(fr) < 10:
+        return []
+    cuts = [c / fps for c in cuts_of(fr)]
+    edges = [0.0] + cuts + [total]
+    lens = [b - a for a, b in zip(edges, edges[1:])]
+    notes = []
+    def plain(t0: float, t1: float) -> bool:  # a white flash or a dip to black is a transition, not a shot
+        m = float(fr[int(t0 * fps): max(int(t0 * fps) + 1, int(t1 * fps))].mean())
+        return m > 225 or m < 30
+    blips = [edges[i] for i in range(1, len(lens) - 1) if lens[i] < 0.4 and lens[i - 1] >= 1.0 and lens[i + 1] >= 1.0
+             and not plain(edges[i], edges[i + 1])]
+    if blips:
+        when = ", ".join(f"{t:.1f}s" for t in blips[:5])
+        notes.append(Finding(f"{'a shot' if len(blips) == 1 else f'{len(blips)} shots'} too quick to take in ({when}): under 0.4 s "
+                             "between longer shots, so the eye catches a flicker, not a picture. Hold it longer, or make it part of a run of quick cuts",
+                             "pace", blips))
+    if len(cuts) >= 8:
+        try:
+            from .beats import SR, beat_grid
+            from .media import load_audio
+
+            period, first, conf = beat_grid(load_audio(video, SR))
+        except Exception:
+            return notes
+        if period > 0 and conf >= 0.25:
+            grid = period / 2  # cuts on the beat or the half beat
+            on = [abs(((c - first) / grid) - round((c - first) / grid)) * grid <= 0.07 for c in cuts]
+            if sum(on) >= 0.6 * len(on):  # this video is cut to the music: hold it to that everywhere
+                k = 0
+                while k + 4 <= len(on):
+                    if sum(on[k:k + 4]) <= 1:
+                        j = k + 4
+                        while j < len(on) and not on[j]:
+                            j += 1
+                        notes.append(Finding(f"the cuts drift off the beat from {cuts[k]:.1f}s to {cuts[j - 1]:.1f}s, while the rest land on it",
+                                             "pace", [cuts[k]]))
+                        k = j
+                    else:
+                        k += 1
+    return notes
+
+
 def review(video: Path, ass: Path | None = None, spoken=()) -> list[str]:
     """Plain-language problems found in a finished video ([] = all clear)."""
     video = Path(video)
@@ -273,6 +322,10 @@ def review(video: Path, ass: Path | None = None, spoken=()) -> list[str]:
         notes += _contrast(video, Path(ass), events, w, h, total)
     notes += _picture(video, fps, total)
     notes += _sound(video, info, total)
+    try:
+        notes += _pace(video, total)
+    except Exception:  # a check that can't run never stops the video
+        pass
     return notes
 
 

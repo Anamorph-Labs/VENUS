@@ -25,6 +25,30 @@ beat, loudness, colour numbers) apart from guesses (what a shot shows, what kind
 of shot it is): say which is which, and check a guess against the picture
 before you rely on it. If you can't tell, say "I can't tell" and ask.
 
+**Brand kit first.** If the creator has a brand kit (`alvenus brand show`, or
+"brand" in the storyboard), every colour comes from it. At the start of a new
+video, say once that you'll use their kit and ask if this one should differ;
+then don't ask again. Suggest a change only when the kit would hurt the video
+(the check says "brand-contrast"). Save a new kit with
+`alvenus brand set --colour NAME=#RRGGBB ... --background NAME --text NAME --accent NAME`.
+A colour they approve for one video goes in the storyboard's `"brand_exceptions"`.
+**No kit?** Ask the creator, once, which colours they'd like for this video
+(their own words: "warm and calm", "black, white and one red"). Turn the answer
+into colours, show them, and use them; offer to save them as their kit with
+`alvenus brand set` so next time nobody has to ask. If they have no preference,
+use the chosen look's own colours and skip every brand check.
+
+**Watch every reference before the first draft.** When the creator gives
+references, read each one (`alvenus read`, look at its sheet) before you plan
+anything, and tell them in a line per reference what you are taking from it
+(its rhythm, its opening, its colour...). Never start a draft from a reference
+you haven't read.
+
+**On feedback, change only what they flagged.** Keep everything they didn't
+mention (pace, voice, music, pictures, timing) exactly as it was. If a fix would
+touch something else, say so and ask first. When they say a part is fine, it is
+locked.
+
 **Read [CRAFT.md](CRAFT.md) first.** It is the craft guide: how a good editor
 reads a cut, gives notes and respects the creator's taste. Everything below is
 how Venus helps you follow it.
@@ -445,10 +469,23 @@ suits calm, long-form or documentary pieces.
   speaker's face on the hook, the turn and the payoff: the audience needs the
   person there. Choose the moment inside the B-roll file with `@SECONDS`. Only
   use clips the creator gave you.
-- **Music** sets the mood: ask what they have, or use the reference's feel. It
-  dips under the voice by itself; raise `--music-lufs` (e.g. -18) for an energetic
-  piece, lower it (-26) for an intimate one. Only use music the creator has the
-  right to use.
+- **Music** sets the mood. **Ask for the creator's own music first.** If you
+  ever use something they didn't give (a Venus sound, a placeholder), say so
+  plainly. Read it before you cut: `alvenus listen song.mp3 --voice voice.wav`
+  gives its tempo, bars, sections (where it lifts and drops), hits and the
+  moments it stops dead, and where the voice speaks and pauses. Place moments
+  on those, never on a guess.
+- **Under a voice** the music sits well below it (12 dB down while someone
+  speaks; `--music-duck` / storyboard `"music_duck"` only if the creator asks for
+  more or less). It eases down before each phrase and back up after it, always in
+  a gap, never on a word; a short breath keeps it down. Sound effects get a
+  little room, so they sit just above the music. Raise `--music-lufs` (e.g. -18)
+  for an energetic piece, lower it (-26) for an intimate one. Only use music the
+  creator has the right to use.
+- **Never split joined words.** Inside a phrase the words run together; Venus
+  only cuts in real quiet and takes back any cut that would split two words.
+  When you place voice pieces yourself, cut only in the gaps `alvenus listen`
+  lists.
 - **Title** sits over the opening seconds, so the hook still starts at once. Keep
   it to a few words. **End card**: a short call to action ("Follow for part two").
 
@@ -558,7 +595,23 @@ It also reads the cut by the craft guide ([CRAFT.md](CRAFT.md)): an opening
 question the ending never answers, "3 reasons" with only 2 delivered, a cut that
 lands mid-sentence, a point made twice, a word like "REM" the viewer may not know,
 "he" before we know who, the same shot held 8 s or more, a scene that serves
-neither the promise nor its neighbours. Every finding names its moment
+neither the promise nor its neighbours. It also guards the setup: the point
+said in the first third before it is earned (`payoff-early`), an answer to a
+question the video never asked (`answer-unasked`), and a story that opens on
+what happened next (`setup-missing`). A colour that isn't in the brand kit is
+weak (`off-brand`).
+
+**The same person looks the same.** In a story, tag who and what is in each
+picture: `"cast": ["father", "daughter (young)", "watch"]`. Then
+`alvenus cast sb.json` lays each one's pictures side by side on
+`sb.cast.jpg` and measures how alike they are; a picture flagged "may look
+different" is a measurement to check, not a verdict. Look at the sheet, swap
+any picture that is not the same person or object, and show the sheet with the
+board. The check asks for tags (`cast-untagged`) when a story follows people.
+
+After every render the self-review also checks **pace**: a lone shot too quick
+to take in (under 0.4 s between longer shots), and stretches where a video cut
+to the beat drifts off it. Fix those moments only. Every finding names its moment
 (`at 0:15-0:18`). The board opens with **The promise** (`brief.promise`, else
 `point`) and **One question**: ask the creator that question first, not the
 whole list. When the first 3 seconds are weak it lists **up to 3 better
@@ -827,5 +880,7 @@ ships, its author is thanked and credited by name (CONTRIBUTING.md has the detai
   suggest a fix and let the creator decide (CRAFT.md).
 - Say what you are unsure about. A confident wrong cut costs the creator more than
   a question.
+- Brand kit first; watch every reference before the first draft; on feedback change
+  only what was flagged; ask for the creator's music before using any other.
 - Never assume a topic, theme, audience, length, look or music the creator didn't give.
   Ask, or offer choices. A guess presented as a fact is the worst mistake you can make.

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .cut import Clip, positions, subtitle_filter
 from .style import LOOKS, ass_filter, write_ass
-from .media import duration, has_video, run
+from .media import duration, has_video, load_audio, run
 
 
 @dataclass
@@ -56,7 +56,7 @@ def finish(
     lower_thirds=(), card_lines=(), all_words=None, stats=(), charts=(), sfx: list | None = None,
     line_charts=(), quotes=(), progress: bool = False, scene_marks=(),
     maps=(), timelines=(), kinetic_lines=(), titles=(), split_labels=(), title_style: str = "track",
-    more_events=(), camera=(), talk: dict | None = None,
+    more_events=(), camera=(), talk: dict | None = None, music_duck: float = 12.0, sfx_gain: float = 0.0,
 ) -> list[str]:
     """srt: classic one-line captions; words: timed words for animated captions;
     sfx: None for no sound effects, else [(time, kind)] for the cut's own
@@ -254,6 +254,7 @@ def finish(
                   f"afade=t=in:d=0.3,adelay={round(cut_len * 1000)}:all=1[hiss]",
                   "[ap0][hiss]amix=inputs=2:normalize=0:duration=first[ap]"]
         a = "ap"
+    fx_times: list[float] = []
     if sfx is not None:
         from .sfx import write_track
 
@@ -271,9 +272,10 @@ def finish(
         ev += [(t0 + 0.1, "hit") for _, t0, _ in titles]
         if end_card:
             ev += [(cut_len, "whoosh"), (cut_len + 0.2, "hit")]
+        fx_times = [t for t, _ in ev]
         if ev:
             track = out.with_suffix(".sfx.wav")
-            write_track(track, ev, total)
+            write_track(track, ev, total, sfx_gain)
             k, n_in = n_in, n_in + 1
             args += ["-i", str(track)]
             parts += [f"[{a}]aformat=sample_rates=48000:channel_layouts=stereo[vfx]",
@@ -283,19 +285,24 @@ def finish(
         k, n_in = n_in, n_in + 1
         args += ["-stream_loop", "-1", "-i", str(music)]
         fade_out = min(2.5, total / 3)
+        from . import listen
+
+        keys = listen.duck_keys(listen.phrases_of(listen.loudness(load_audio(base, listen.SR))), total, music_duck)
+        keys = listen.make_room(keys, fx_times, total)
+        gain_track = out.with_suffix(".gain.wav")
+        listen.write_gain(gain_track, keys, total + 0.5)
+        g, n_in = n_in, n_in + 1
+        args += ["-i", str(gain_track)]
         parts += [
-            f"[{a}]asplit[voice][key]",
+            f"[{a}]aformat=sample_rates=48000:channel_layouts=stereo,apad=whole_dur={total + 0.5:.3f}[vst]",
             f"[{k}:a]aformat=sample_rates=48000:channel_layouts=stereo,loudnorm=I={music_lufs:g}:TP=-3,"
             f"atrim=0:{total:.3f},asetpts=PTS-STARTPTS,afade=t=in:d=1,afade=t=out:st={total - fade_out:.3f}:d={fade_out:.3f}[mus]",
-            # The voice drives a compressor on the music: whenever someone
-            # speaks, the music dips about 10 dB; a slow release keeps it from
-            # pumping up in the short gaps between lines.
-            f"[key]aformat=channel_layouts=stereo,apad=whole_dur={total + 0.5:.3f}[keyst]",
-            "[mus][keyst]sidechaincompress=threshold=0.03:ratio=4:attack=20:release=900:makeup=1[duck]",
-            f"[voice]aformat=sample_rates=48000:channel_layouts=stereo,apad=whole_dur={total + 0.5:.3f}[vst]",
-            # The limiter holds back a moment and ends early: give it a little
-            # more voice than needed, so sound and picture finish together
-            # (-t trims both to length).
+            # The music's level is planned from where the voice speaks (listen.py): it
+            # eases down before each phrase and back up after it, always in a gap,
+            # never on a word; short breaths keep it down. It also makes a little
+            # room for each sound effect, so the effects sit just above it.
+            f"[{g}:a]aformat=sample_rates=48000:channel_layouts=stereo[gain]",
+            "[mus][gain]amultiply[duck]",
             "[vst][duck]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.89:level=false[ao]",
         ]
     else:
@@ -308,6 +315,7 @@ def finish(
     ]
     run(args)
     out.with_suffix(".sfx.wav").unlink(missing_ok=True)
+    out.with_suffix(".gain.wav").unlink(missing_ok=True)
     return notes
 
 

@@ -31,10 +31,11 @@ def run(args: list[str]) -> subprocess.CompletedProcess:
     return proc
 
 
-def load_audio(path: str | Path, sr: int = 16000) -> np.ndarray:
-    """Decode any audio/video file to mono float32 at `sr` Hz."""
+def load_audio(path: str | Path, sr: int = 16000, start: float | None = None, end: float | None = None) -> np.ndarray:
+    """Decode any audio/video file to mono float32 at `sr` Hz (only start..end, if given)."""
+    rng = (["-ss", f"{start:.3f}"] if start is not None else []) + (["-to", f"{end:.3f}"] if end is not None else [])
     proc = subprocess.run(
-        ["ffmpeg", "-nostdin", "-v", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"],
+        ["ffmpeg", "-nostdin", "-v", "error", *rng, "-i", str(path), "-vn", "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"],
         capture_output=True,
     )
     if proc.returncode != 0:

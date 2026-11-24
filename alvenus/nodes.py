@@ -36,7 +36,7 @@ PART_KEYS = {
     "mark": ("callout", "note"),
     "graphic": ("value", "label", "bars", "points", "items", "title", "pins", "route", "image", "left", "right"),
 }
-SOUND_KEYS = ("music", "music_lufs", "voiceover", "sound_effects")
+SOUND_KEYS = ("music", "music_lufs", "music_duck", "voiceover", "sound_effects", "sfx_volume")
 # The stages of a scene as a node editor shows them (stage, part it lives in,
 # its params), in the order the picture is made. Each stage can be switched
 # off ("off": ["shape"] on the part) to compare with and without it.

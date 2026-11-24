@@ -195,7 +195,33 @@ def take_clips(
         clips.append(Clip(source, cur, min(a1 + pad, b0), line))
         cur = max(b0 - pad, a1)
     clips.append(Clip(source, cur, e, line, hold=hold))
-    return clips
+    return keep_joined_words(path, clips) if path is not None else clips
+
+
+def keep_joined_words(path: Path, clips: list[Clip]) -> list[Clip]:
+    """Every cut inside a take must sit in real quiet. Where the voice never
+    drops (one word slurred into the next), the cut is taken back and the
+    words stay together as spoken; a cut a little off the quiet is moved onto it."""
+    from . import listen
+    from .media import load_audio
+
+    if len(clips) < 2:
+        return clips
+    t0, t1 = clips[0].start, clips[-1].end
+    try:
+        db = listen.loudness(load_audio(path, listen.SR, t0, t1))
+    except Exception:
+        return clips
+    out = [clips[0]]
+    for c in clips[1:]:
+        p = out[-1]
+        a, b = listen.quiet_point(db, p.end - t0, 0.06), listen.quiet_point(db, c.start - t0, 0.06)
+        if a is None or b is None:
+            out[-1] = Clip(p.source, p.start, c.end, p.line, hold=c.hold)
+            continue
+        p.end, c.start = min(c.end, t0 + a), max(t0 + a, t0 + b)
+        out.append(c)
+    return out
 
 
 def write_srt(path: Path, clips: list[Clip], script: list[str]) -> None:

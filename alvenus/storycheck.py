@@ -148,8 +148,9 @@ def check(sb: dict, learn: bool = True) -> list[Finding]:
 
     if not scenes:
         return [Finding("weak", 0, "", "there are no scenes", "write the scenes", "empty")]
-    from . import pictures
+    from . import brand, pictures
 
+    brand.board_findings(sb, add)
     for i, sc in enumerate(scenes, 1):
         if why := empty(sc):
             add("empty", "weak", i, f"{why}", f"write it: {sc.get('_job') or 'what this scene is for'}")
@@ -340,6 +341,10 @@ COUNTED = re.compile(r"\b(\d{1,2}|two|three|four|five|six|seven|eight|nine|ten)\
 ORDINAL = re.compile(r"^\s*(#?\d{1,2}[.):]?|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|one|two|three|four|five|"
                      r"six|seven|eight|nine|ten|number \w+|last|finally)\b", re.I)
 CALLBACK = re.compile(r"\b(remember|as we saw|like before|that's why|which is why|this is why|back to)\b", re.I)
+ANSWER = re.compile(r"\b(no answer|the answer|answered|replied|so (?:he|she|they|i|we) (?:said|gave|told))\b", re.I)
+ASKED = re.compile(r"\b(asked|asks|ask|question|wondered|wants to know)\b", re.I)
+AFTER = re.compile(r"^(so|then|after that|afterwards|that's when|because of that|later|in the end)\b", re.I)
+PEOPLE = re.compile(r"\b(he|she|him|her|his|they|dad|mum|mom|father|mother|son|daughter|friend|boy|girl|man|woman)\b", re.I)
 DANGLING = {"and", "or", "but", "because", "the", "a", "an", "of", "to", "with", "so", "that", "which", "when", "if", "is", "are",
             "was", "your", "my", "our", "their", "for", "into", "than"}
 KNOWN_CAPS = {"I", "OK", "TV", "AI", "US", "UK", "USA", "EU", "UN", "CEO", "NASA", "DIY", "FAQ", "PM", "AM", "GPS", "DNA", "PC", "VS",
@@ -367,6 +372,7 @@ def craft(sb: dict, scenes: list[dict], add) -> None:
     said twice, stretches where nothing changes, and cuts that land mid-thought."""
     n = len(scenes)
     b = sb.get("brief") or {}
+    kind = b.get("kind") or ""
     words = [words_of(sc) for sc in scenes]
     roots = [_roots(w) for w in words]
     prom = promise(sb)
@@ -406,6 +412,34 @@ def craft(sb: dict, scenes: list[dict], add) -> None:
         if (m := CALLBACK.search(line)) and not (roots[i - 1] - _roots(m.group(0))) & set().union(*roots[: i - 1]):
             add("callback-unset", "note", i, f"\"{m.group(0)}\" points back to something the video never set up",
                 "set it up in an earlier scene, or drop the callback")
+
+    # setup before payoff: the big reveal is earned, not spent early; nothing answers a question never asked
+    point = str(b.get("point") or "")
+    pc = _content(point)
+    if pc and n >= 5:
+        for i in range(2, max(2, n // 3) + 1):
+            if len(pc & _content(words[i - 1])) >= max(2, (len(pc) * 2 + 2) // 3):
+                add("payoff-early", "note", i, f"the point (\"{point}\") is already said here, before the setup has earned it",
+                    "build to it: set up who, what and why first, and keep the reveal for the end (or open on it only as a deliberate flash-forward)")
+                break
+    asked = False
+    for i in range(1, n + 1):
+        line = " ".join(words[i - 1])
+        if ANSWER.search(line) and not asked:
+            add("answer-unasked", "note", i, f"\"{ANSWER.search(line).group(0)}\" answers a question the video never asked",
+                "show the question first (who asks, what), so the answer lands")
+            break
+        asked = asked or "?" in line or bool(ASKED.search(line))
+    if kind in ("story", "narrative", "trailer") and n >= 3 and AFTER.match(_line_of(scenes[0])):
+        add("setup-missing", "note", 1, f"the video opens on what happened next (\"{' '.join(_line_of(scenes[0]).split()[:5])}...\")",
+            "open on the setup: who, where, what they want; then this")
+
+    # the same people and things look the same: tag them so Venus can check
+    pic = [sc for sc in scenes if sc.get("type") in PICTURE and sc.get("file")]
+    people = sum(1 for w in words if PEOPLE.search(" ".join(w)))
+    if len(pic) >= 3 and people >= 2 and not any(sc.get("cast") for sc in scenes):
+        add("cast-untagged", "note", 0, "the story follows people, but no scene says who is in its picture",
+            "add \"cast\": [\"name\"] to each picture scene, then run alvenus cast to check each one looks the same throughout")
 
     # clarity: who, what
     for i, sc in enumerate(scenes[:2], 1):

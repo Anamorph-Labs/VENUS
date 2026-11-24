@@ -157,7 +157,21 @@ def extras_of(a, spans: dict, n_lines: int) -> dict:
     return ex
 
 
+def _kit() -> dict | None:
+    from . import brand
+
+    try:
+        return brand.load()
+    except (OSError, ValueError):
+        return None
+
+
 def cmd_cut(a: argparse.Namespace) -> None:
+    if not getattr(a, "accent", None):
+        from . import brand
+
+        kit = _kit()
+        a.accent = (brand.role(kit, "accent") if kit else None) or "#FFD23F"
     need_ffmpeg()
     draft_mode(a)
     missing = [f"--{k}" for k in ("script", "takes", "out") if not getattr(a, k)]
@@ -406,7 +420,8 @@ def cmd_cut(a: argparse.Namespace) -> None:
 
         genre.EXTRAS = extras_of(a, line_spans(clips), len(script))
         finish_notes = finish(base, out, ASPECTS[a.aspect], fps, line_spans(clips), cutaways, music, a.music_lufs,
-                              a.title, a.end_card, srt=srt if a.captions and not pop else None,
+                              music_duck=getattr(a, "music_duck", 12.0), sfx_gain=getattr(a, "sfx_volume", 0.0), title=a.title, end_card=a.end_card,
+                              srt=srt if a.captions and not pop else None,
                               words=words if pop else None, look=a.look, accent=a.accent,
                               lower_thirds=lower_thirds, card_lines=card_lines, all_words=words,
                               stats=stats, charts=charts, sfx=sfx, line_charts=line_charts, quotes=quotes,
@@ -484,7 +499,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
     review = review_notes(script, choices, takes, sources, total_length(clips))
     if finish_notes:
         review += "\n## Finishing\n\n" + "".join(f"- {n}\n" for n in finish_notes)
-    review += self_review(out, script)
+    review += self_review(out, script, kit=_kit())
     out.with_suffix(".notes.md").write_text(review, encoding="utf-8")
     print()
     for c in choices:
@@ -740,17 +755,88 @@ def cmd_sfx(a: argparse.Namespace) -> None:
     print("made by Venus from numbers (no samples), free to use in anything")
 
 
-def self_review(out: Path, spoken=()) -> str:
-    """Venus watches the finished video once more; never fails the run."""
+def self_review(out: Path, spoken=(), kit: dict | None = None) -> str:
+    """Venus watches the finished video once more; never fails the run.
+    With a brand kit, it also looks for colours that aren't the kit's."""
     try:
         from .selfcheck import review
 
         notes = review(out, spoken=spoken)
+        if kit:
+            from . import brand
+
+            notes += brand.check_video(out, kit)
     except Exception as e:
         return f"\n## Self-review\n\n- could not run: {e}\n"
     if not notes:
         return "\n## Self-review\n\nAll clear: text readable and on long enough, no stray black, no flashing, sound and picture in step.\n"
     return "\n## Self-review\n\n" + "".join(f"- {n}\n" for n in notes)
+
+
+def cmd_brand(a: argparse.Namespace) -> None:
+    from . import brand
+
+    if a.what == "set":
+        if a.file:
+            kit = brand.load(Path(a.file))
+        else:
+            cols = dict(c.split("=", 1) for c in a.colour or [])
+            kit = brand.load({"name": a.name or "", "colours": cols, "background": a.background, "text": a.text, "accent": a.accent})
+        if not kit:
+            raise SystemExit("no colours: give a kit file, or --colour NAME=#RRGGBB (as many as the brand has)")
+        for role in ("background", "text", "accent"):
+            if kit.get(role) and not brand.role(kit, role):
+                raise SystemExit(f"--{role} {kit[role]!r} is not one of the kit's colours ({', '.join(kit['colours'])})")
+        p = brand.home_kit()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({k: v for k, v in kit.items() if v}, indent=1), encoding="utf-8")
+        print(f"brand kit saved: {p}. Every video now uses it first; a storyboard can say \"brand\": false to go without.")
+        return
+    kit = brand.load(Path(a.kit)) if a.kit else brand.load()
+    if not kit:
+        raise SystemExit("no brand kit yet: alvenus brand set --colour NAME=#RRGGBB ... --background NAME --text NAME --accent NAME")
+    if a.what == "show":
+        print(json.dumps(kit, indent=1))
+        bg, tx = brand.role(kit, "background"), brand.role(kit, "text")
+        if bg and tx:
+            c = brand.contrast(bg, tx)
+            print(f"text on background: contrast {c:.1f}:1 ({'easy to read' if c >= 4.5 else 'hard to read: suggest a change to the creator'})")
+        return
+    if not a.video:
+        raise SystemExit("brand check needs the video")
+    notes = brand.check_video(Path(a.video), kit)
+    print("\n".join(notes) if notes else "every flat colour in the video is from the brand kit (or a blend of two of its colours)")
+
+
+def cmd_cast(a: argparse.Namespace) -> None:
+    from . import cast, story
+    from .approval import content
+
+    p = Path(a.storyboard)
+    sb = story.load(p, json.loads(json.dumps(content(p))))
+    sheet = p.with_name((p.name[:-5] if p.name.endswith(".json") else p.name) + ".cast.jpg")
+    notes, data = cast.check(sb, sheet, measure=not a.no_measure)
+    if a.json:
+        print(json.dumps({"sheet": str(sheet) if data else None, "notes": notes, "cast": data}, indent=1))
+        return
+    for name, rows in data.items():
+        print(f"{name}: scenes " + ", ".join(str(r["scene"]) + (" (may look different)" if r["odd"] else "") for r in rows))
+    print("\n".join(notes) if notes else "each one looks alike across their scenes (measured); still glance at the sheet")
+    if data:
+        print(f"sheet: {sheet} (show it to the creator before approving)")
+
+
+def cmd_listen(a: argparse.Namespace) -> None:
+    from . import listen
+
+    if not a.music and not a.voice:
+        raise SystemExit("listen needs a song, --voice FILE, or both")
+    m = listen.music_map(Path(a.music)) if a.music else None
+    v = listen.voice_map(Path(a.voice)) if a.voice else None
+    if a.json:
+        print(json.dumps({"music": m, "voice": v}, indent=1))
+    else:
+        print(listen.report(m, v))
 
 
 def cmd_review(a: argparse.Namespace) -> None:
@@ -874,7 +960,9 @@ def cmd_make(a: argparse.Namespace) -> None:
                   "the rest were kept from the last build")
     elif redrawn is not None and len(redrawn) < len(sb["scenes"]):
         print(f"   redrew {len(redrawn)} of {len(sb['scenes'])} scenes; the rest were kept from the last build")
-    print(self_review(out).strip())
+    from . import brand
+
+    print(self_review(out, kit=brand.load(sb.get("brand"), src.parent)).strip())
     print(f"wrote {out} ({duration(out):.1f}s) in {time.time() - t0:.0f}s; why it is cut this way: {out.with_suffix('.why.md')}")
 
 
@@ -1409,11 +1497,14 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--broll", action="append", metavar="LINE=FILE[@SEC]", help="lay a cutaway shot over a line, voice kept, e.g. --broll 3=market.mp4@4.5 (repeatable)")
     c.add_argument("--music", help="music file to play under the cut; it dips whenever someone speaks")
     c.add_argument("--music-lufs", type=float, default=-22.0, help="music loudness between lines (voice sits at -16)")
+    c.add_argument("--music-duck", type=float, default=12.0,
+                   help="how far the music dips under the voice, in dB (default 12: well under it). Lower only if the creator asks")
+    c.add_argument("--sfx-volume", type=float, default=0.0, help="sound effects louder (+) or softer (-), in dB")
     c.add_argument("--title", help="opening title, shown over the first seconds")
     c.add_argument("--end-card", help="text on a closing card after the last line (e.g. a call to action)")
     c.add_argument("--look", default="natural", choices=sorted(LOOKS), help="colour grade for the whole cut, B-roll included")
     c.add_argument("--caption-style", default="pop", choices=["pop", "classic", "bracket", "keyword"], help="pop: short phrases, each word lights up as it is said; classic: one plain line; bracket: one word at a time, small mono [word] at chest height (interviews); keyword: each phrase small with its key word big in gold italic serif above (podcasts)")
-    c.add_argument("--accent", default="#FFD23F", help="accent colour for captions, title bar and end card, as #RRGGBB")
+    c.add_argument("--accent", help="accent colour for captions, title bar and end card, as #RRGGBB (default: the brand kit's accent)")
     c.add_argument("--transition", default="cut", choices=list(TRANSITIONS), help="how a new scene (after a blank line in the script) comes in")
     c.add_argument("--title-style", default="track", choices=list(TITLE_STYLES), help="how the opening title and end card animate in")
     c.add_argument("--transition-seconds", type=float, default=0.5, help="length of that transition")
@@ -1593,6 +1684,27 @@ def main(argv: list[str] | None = None) -> None:
 
     so.set_defaults(func=run_studio)
 
+    br = sub.add_parser("brand", help="the creator's brand kit: Venus uses its colours first and checks videos against it")
+    br.add_argument("what", choices=["set", "show", "check"])
+    br.add_argument("video", nargs="?", help="check: the finished video")
+    br.add_argument("--file", help="set: a kit JSON file")
+    br.add_argument("--colour", action="append", help="set: NAME=#RRGGBB, once per brand colour")
+    br.add_argument("--name", help="set: the brand's name")
+    br.add_argument("--background", help="set: which colour is the background")
+    br.add_argument("--text", help="set: which colour the words are")
+    br.add_argument("--accent", help="set: the accent colour")
+    br.add_argument("--kit", help="show/check: a kit file instead of the saved one")
+    br.set_defaults(func=cmd_brand)
+    ca = sub.add_parser("cast", help="check that each person and key object looks the same in every scene (scenes say \"cast\")")
+    ca.add_argument("storyboard")
+    ca.add_argument("--json", action="store_true")
+    ca.add_argument("--no-measure", action="store_true", help="only the sheet, no likeness model")
+    ca.set_defaults(func=cmd_cast)
+    li = sub.add_parser("listen", help="read a song and a voice precisely: tempo, bars, sections, hits, stops; spoken phrases and the gaps between")
+    li.add_argument("music", nargs="?", help="the song")
+    li.add_argument("--voice", help="a voiceover or any speech track")
+    li.add_argument("--json", action="store_true", help="every time, for your AI")
+    li.set_defaults(func=cmd_listen)
     rv = sub.add_parser("review", help="check a finished video: reading time, contrast, black frames, flashing, sound and picture")
     rv.add_argument("video")
     rv.set_defaults(func=cmd_review)

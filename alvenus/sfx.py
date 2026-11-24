@@ -214,7 +214,7 @@ def export_pack(folder: Path) -> list[Path]:
     return out
 
 
-def write_track(path: Path, events: list[tuple[float, str]], total: float) -> None:
+def write_track(path: Path, events: list[tuple[float, str]], total: float, gain_db: float = 0.0) -> None:
     """All the sound effects on one stereo track, each placed so its peak lands
     on its moment."""
     out = np.zeros((int(total * SR) + 1, 2))
@@ -232,6 +232,7 @@ def write_track(path: Path, events: list[tuple[float, str]], total: float) -> No
         e = min(len(out), s + len(y))
         if e > s:
             out[s:e] += y[: e - s]
+    out *= 10 ** (gain_db / 20)
     pcm = (np.clip(out, -1, 1) * 32767).astype("<i2")
     with wave.open(str(path), "wb") as w:
         w.setnchannels(2)

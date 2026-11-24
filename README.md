@@ -149,12 +149,22 @@ track|reveal|type|block|stamp` sets how the title and end card animate in.
 Self-review: every cut, montage and storyboard video is watched once more before
 it is handed over: text on screen long enough to read and readable against what
 is behind it, no stray black, no rapid flashing (a seizure risk), sound and picture
-in step, no dead silence, no text running off the frame. Findings go in
+in step, no dead silence, no text running off the frame, no lone shot too quick to
+see, cuts that stay on the beat, and (with a brand kit) no colour outside the kit. Findings go in
 `.notes.md`; `alvenus review VIDEO` runs it on any video. For storyboard videos
 and music edits Venus also fixes what it can by itself (a longer scene for text
 that needs it, a darker picture behind faint text, a dissolve instead of a
 flashing cut, calmer shots where a music edit flashes too much) and builds again;
 the fixed storyboard is saved beside the video (`--no-fix` to only report).
+
+Brand kit first: `alvenus brand set --colour ivory=#F4EFE6 --colour ink=#151515 ...
+--background ivory --text ink --accent ...` and every video takes its colours from the kit;
+the story check flags any other colour, and `alvenus brand check VIDEO` finds them in a
+finished video. Music under a voice sits well below it and moves only in the gaps between
+phrases, never on a word (`alvenus listen song.mp3 --voice voice.wav` shows the song's
+tempo, sections, hits and stops, and where the voice speaks). In a story, scenes can say who
+is in each picture (`"cast"`), and `alvenus cast` checks each person and object looks the
+same throughout.
 
 Drafts: add `--draft` to `cut`, `montage` or `make` for a quick look at a third of
 the size with the fastest settings (a 30 s storyboard video in about 30 s). Every

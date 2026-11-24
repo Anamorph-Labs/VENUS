@@ -66,6 +66,12 @@ def load(path: Path, data: dict | None = None) -> dict:
             raise SystemExit(f"{path}: can't read the storyboard ({e})")
     base = path.parent
     problems = []
+    from . import brand
+
+    try:
+        brand.apply(sb, brand.load(sb.get("brand"), base))
+    except (OSError, ValueError) as e:
+        problems.append(f"brand: the kit can't be read ({e})")
     for key in ("music", "voiceover"):
         if sb.get(key):
             sb[key] = str((base / sb[key]).resolve()) if not Path(sb[key]).is_absolute() else sb[key]
@@ -572,6 +578,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     try:
         notes += finish(base, out, size, fps, spans, music=Path(sb["music"]) if sb.get("music") else None,
                         music_lufs=float(sb.get("music_lufs", -16.0 if not sb.get("voiceover") else -22.0)),
+                        music_duck=min(24.0, max(0.0, float(sb.get("music_duck", 12.0)))),
+                        sfx_gain=min(12.0, max(-12.0, float(sb.get("sfx_volume", 0.0)))),
                         end_card=sb.get("end_card"), card_len=float(sb.get("end_card_seconds", 2.5)), words=words or None, look=sb.get("look", "natural"),
                         accent=sb.get("accent", "#FFD23F"), all_words=all_words, stats=stats, charts=charts,
                         sfx=None if sb.get("sound_effects") is False else sfx, line_charts=lcharts, quotes=quotes,
