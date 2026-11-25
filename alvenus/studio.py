@@ -18,6 +18,7 @@ import copy
 import os
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -124,6 +125,75 @@ def schema() -> dict:
                   "show": flag("show the automatic label or arrow", True)},
         "graphic": {k: {"type": "json", "why": ""} for k in nd.PART_KEYS["graphic"]},
     }
+
+
+
+# Where the finished video is going: Venus draws at 1080p; a copy is made to suit
+# the place it will be posted. 4K is the 1080p video enlarged with care: YouTube
+# streams 4K uploads at a higher quality, so the video looks sharper there.
+EXPORTS = {
+    "made": {"name": "as made", "scale": 1, "crf": 20},
+    "instagram": {"name": "Instagram", "scale": 1, "crf": 18, "cap": 12},
+    "youtube": {"name": "YouTube", "scale": 2, "crf": 16},
+}
+QUALITY = {"small": 24, "standard": 20, "best": 16}
+
+
+def export_job(export: dict | None) -> dict | None:
+    """The extra copy to make after a render (None: the render itself is the file)."""
+    e = export or {}
+    base = dict(EXPORTS.get(e.get("for") or "made", EXPORTS["made"]))
+    if e.get("size") in ("1080", "4k"):
+        base["scale"] = 2 if e["size"] == "4k" else 1
+    if e.get("quality") in QUALITY:
+        base["crf"] = QUALITY[e["quality"]]
+    if (e.get("for") or "made") == "made" and base["scale"] == 1 and base["crf"] == 20:
+        return None
+    bits = [b for b in ((e.get("for") if e.get("for") in ("instagram", "youtube") else ""), "4k" if base["scale"] == 2 else "",
+                        {16: "best", 24: "small"}.get(base["crf"], "")) if b]
+    base["tag"] = "-".join(bits) or "copy"
+    # a ceiling on the bitrate, so a grainy look can't swell the file: what the platforms ask for, and no more
+    cap = min(base.get("cap", 99), 30 if base["scale"] == 2 else {16: 20, 20: 14, 24: 6}.get(base["crf"], 14))
+    base["rate"] = ["-maxrate", f"{cap}M", "-bufsize", f"{cap * 2}M"]
+    return base
+
+
+def _dims(p: Path) -> tuple[int, int]:
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", str(p)],
+                         capture_output=True, text=True, check=True).stdout.strip()  # nosec B603
+    w, h = out.split(",")[:2]
+    return int(w), int(h)
+
+
+# The videos opened lately, from any folder, for Recent videos (kept on this computer only).
+def _recent_file() -> Path:
+    return Path(os.environ.get("VENUS_HOME") or Path.home() / ".venus") / "recent.json"
+
+
+def recent() -> list[dict]:
+    try:
+        rows = json.loads(_recent_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out = []
+    for r in rows if isinstance(rows, list) else []:
+        p = Path(str(r.get("path", "")))
+        if p.name.endswith(".nodes.json") and p.exists():
+            out.append({"path": str(p), "name": str(r.get("name") or p.name[:-len(".nodes.json")]), "folder": p.parent.name,
+                        "at": time.strftime("%d %b, %H:%M", time.localtime(float(r.get("t", 0)) or p.stat().st_mtime))})
+    return out[:12]
+
+
+def remember(path: Path, name: str = "") -> None:
+    f = _recent_file()
+    try:
+        rows = json.loads(f.read_text(encoding="utf-8")) if f.exists() else []
+        rows = [r for r in rows if isinstance(r, dict) and r.get("path") != str(path)] if isinstance(rows, list) else []
+        rows.insert(0, {"path": str(path), "name": name, "t": time.time()})
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(rows[:20], indent=1), encoding="utf-8")
+    except OSError:
+        pass  # a list of recent videos is a nicety; never stop Studio for it
 
 
 class Studio:
@@ -505,7 +575,7 @@ class Studio:
                 "openings": storycheck.openings(sb, f),
                 "unwritten": [x.scene for x in f if x.level == "weak" and x.what.startswith("no ") and x.what.endswith(" yet")]}
 
-    def start_render(self, anyway: bool = False) -> None:
+    def start_render(self, anyway: bool = False, export: dict | None = None) -> None:
         chk = self.story_check()
         if chk["unwritten"]:
             raise ValueError("not written yet: scene " + ", ".join(map(str, chk["unwritten"])) +
@@ -543,7 +613,19 @@ class Studio:
             text = p.communicate()[0] or ""
             tail = [x for x in text.strip().splitlines() if x.strip()][-6:]
             stopped = self.render.get("stopping")
-            self.render = {"state": "stopped" if stopped else "done" if p.returncode == 0 else "failed", "video": out.name, "log": tail,
+            files, ok = [out.name], p.returncode == 0 and not stopped
+            if ok and (job := export_job(export)):
+                try:
+                    prog.write_text(json.dumps({"stage": "exporting"}), encoding="utf-8")
+                    files.insert(0, self.export(out, job).name)
+                except (OSError, subprocess.CalledProcessError) as e:
+                    tail.append(f"the {job['name']} copy could not be made ({e})")
+            if ok:
+                try:
+                    self.save_version("Rendered", auto=True)
+                except (OSError, ValueError):
+                    pass
+            self.render = {"state": "stopped" if stopped else "done" if p.returncode == 0 else "failed", "video": files[0], "files": files, "log": tail,
                            "started": self.render["started"], "seconds": round(time.time() - self.render["started"])}
             self.proc = None
 
@@ -563,6 +645,95 @@ class Studio:
             except OSError:
                 pass
         p.terminate()
+
+    def export(self, src: Path, job: dict) -> Path:
+        """A copy of the finished video made for where it is going (see export_job)."""
+        import shutil
+
+        out = src.with_name(f"{src.stem}-{job['tag']}.mp4")
+        part = out.with_name("." + out.name + ".part.mp4")
+        w, h = _dims(src)
+        k = job["scale"]
+        vf = f"scale={round(w * k / 2) * 2}:{round(h * k / 2) * 2}:flags=lanczos" if k != 1 else "null"
+        cmd = ["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(src), "-vf", vf, "-c:v", "libx264", "-preset", "medium",
+               "-crf", str(job["crf"]), "-profile:v", "high", "-pix_fmt", "yuv420p", *job.get("rate", []),
+               "-c:a", "aac", "-b:a", "256k" if k != 1 else "192k", "-ar", "48000", "-movflags", "+faststart", str(part)]
+        subprocess.run(cmd, check=True, capture_output=True)  # nosec B603
+        shutil.move(str(part), str(out))
+        return out
+
+    # ------------------------------------------------------- saved versions
+    def _vdir(self) -> Path:
+        stem = self.path.name[:-len(".nodes.json")] if self.path.name.endswith(".nodes.json") else self.path.stem
+        return self.path.with_name(stem + ".versions")
+
+    def save_version(self, name: str = "", auto: bool = False) -> dict:
+        """Keep the video as it is now, to come back to (a copy of the node file beside it)."""
+        name = re.sub(r"\s+", " ", str(name or "")).strip()[:60] or ("Rendered" if auto else "Saved by you")
+        with self.lock:
+            text = self.text
+        d = self._vdir()
+        d.mkdir(exist_ok=True)
+        old = sorted(d.glob("*.nodes.json"))
+        if old and old[-1].read_text(encoding="utf-8") == text:  # nothing changed since the last one: just rename it
+            if not auto:
+                meta = old[-1].with_suffix("").with_suffix(".txt")
+                meta.write_text(name, encoding="utf-8")
+            return self._vinfo(old[-1])
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        f = d / f"{stamp}.nodes.json"
+        n = 1
+        while f.exists():
+            n += 1
+            f = d / f"{stamp}-{n}.nodes.json"
+        f.write_text(text, encoding="utf-8")
+        f.with_suffix("").with_suffix(".txt").write_text(name, encoding="utf-8")
+        autos = [x for x in sorted(d.glob("*.nodes.json")) if self._vinfo(x)["name"] == "Rendered"]
+        for x in autos[:-20]:  # keep the last 20 automatic ones; the ones you named stay
+            x.unlink(missing_ok=True)
+            x.with_suffix("").with_suffix(".txt").unlink(missing_ok=True)
+        return self._vinfo(f)
+
+    def _vinfo(self, f: Path) -> dict:
+        meta = f.with_suffix("").with_suffix(".txt")
+        name = meta.read_text(encoding="utf-8").strip() if meta.exists() else "Saved"
+        try:
+            doc = json.loads(f.read_text(encoding="utf-8"))
+            sb = nd.effective(nd.to_storyboard(doc))
+            scenes, secs = len(sb["scenes"]), round(sum(float(x.get("seconds", 3.0)) for x in sb["scenes"]))
+        except (OSError, ValueError, KeyError, SystemExit):
+            scenes, secs = 0, 0
+        return {"id": f.name[:-len(".nodes.json")], "name": name, "scenes": scenes, "seconds": secs,
+                "at": time.strftime("%d %b, %H:%M", time.localtime(f.stat().st_mtime))}
+
+    def versions(self) -> list[dict]:
+        d = self._vdir()
+        return [self._vinfo(f) for f in sorted(d.glob("*.nodes.json"), reverse=True)] if d.is_dir() else []
+
+    def restore_version(self, vid: str) -> None:
+        """Go back to a saved version (Undo brings you back to where you were)."""
+        if not re.fullmatch(r"[0-9]{8}-[0-9]{6}(-[0-9]+)?", str(vid)):
+            raise ValueError("no such version")
+        f = self._vdir() / f"{vid}.nodes.json"
+        if not f.exists():
+            raise ValueError("no such version")
+        saved = json.loads(f.read_text(encoding="utf-8"))
+        if not (isinstance(saved, dict) and "venus_nodes" in saved):
+            raise ValueError("that version can't be read")
+        self.change(lambda d: (d.clear(), d.update(copy.deepcopy(saved))))
+
+    def reveal(self, name: str) -> None:
+        """Show a finished video in the computer's own file window."""
+        p = self._inside(name)
+        if not p.exists():
+            raise ValueError("that file is not there any more")
+        if sys.platform == "darwin":
+            cmd = ["open", "-R", str(p)]
+        elif os.name == "nt":
+            cmd = ["explorer", "/select,", str(p)]
+        else:
+            cmd = ["xdg-open", str(p.parent)]
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # nosec B603
 
     def render_state(self) -> dict:
         """The render, with where it stands while it runs (scene k of n)."""
@@ -721,7 +892,7 @@ def home_handler(folder: Path):
                 from . import brief as br
                 from .presets import PRESETS
 
-                return self._json({"home": True, "folder": str(folder), "projects": projects(),
+                return self._json({"home": True, "folder": str(folder), "projects": projects(), "recent": recent(),
                                    "kinds": [[k, br.NAMES[k], br.RECIPES[k]["about"]] for k in br.KINDS],
                                    "looks": [[k, v.get("about", ""), look_name(k)] for k, v in PRESETS.items() if not v.get("talk")]})
             if u.path == "/api/state":
@@ -742,9 +913,11 @@ def home_handler(folder: Path):
                     return self._json({"opening": e["nodes"], "id": e["id"]})
                 if u.path == "/api/open":
                     known = {p["path"] for p in projects()}
-                    if body.get("path") not in known:
+                    elsewhere = {r["path"] for r in recent()}
+                    if body.get("path") not in known | elsewhere:
                         raise ValueError("that video is not in this folder")
-                    threading.Timer(0.6, lambda: restart([str(folder / body["path"])])).start()
+                    go = body["path"] if body["path"] in elsewhere and body["path"] not in known else str(folder / body["path"])
+                    threading.Timer(0.6, lambda: restart([go])).start()
                     return self._json({"opening": body["path"]})
             except (ValueError, OSError) as e:
                 return self._json({"error": str(e)}, 400)
@@ -838,6 +1011,10 @@ def handler(st: Studio):
                     return self._file(st.wave(q.get("which", "music")), "image/png")
                 if u.path == "/api/media":
                     return self._json({"media": st.media()})
+                if u.path == "/api/versions":
+                    return self._json({"versions": st.versions()})
+                if u.path == "/api/recent":
+                    return self._json({"recent": [r for r in recent() if Path(r["path"]) != st.path]})
                 if u.path == "/api/thumb":
                     f, kind = st.thumb(q["file"])
                     return self._file(f, kind)
@@ -912,7 +1089,18 @@ def handler(st: Studio):
                 elif op == "redo":
                     st.undo(redo=True)
                 elif op == "render":
-                    st.start_render(bool(body.get("anyway")))
+                    st.start_render(bool(body.get("anyway")), body.get("export") if isinstance(body.get("export"), dict) else None)
+                elif op == "version_save":
+                    return self._json({"saved": st.save_version(str(body.get("name") or "")), "state": st.state()})
+                elif op == "version_restore":
+                    st.restore_version(str(body.get("id", "")))
+                elif op == "reveal":
+                    st.reveal(str(body.get("file", "")))
+                elif op == "open_recent":  # another video from Recent videos: Studio starts again on it
+                    if str(body.get("path")) not in {r["path"] for r in recent()}:
+                        raise ValueError("that video is not in Recent videos")
+                    threading.Timer(0.6, lambda: restart([str(body["path"])])).start()
+                    return self._json({"restarting": True})
                 elif op == "render_stop":
                     st.stop_render()
                 elif op == "directions":
@@ -959,6 +1147,7 @@ def serve(path: Path | None, port: int = 8765, open_browser: bool = True) -> Non
     _PORT[0] = p
     if st:
         st.port = p
+        remember(st.path, str(((nd.find(st.doc, "settings") or {}).get("params") or {}).get("title") or ""))
     url = f"http://127.0.0.1:{p}/"
     print(f"Venus is open at {url} (press Ctrl+C to close it)")
     if st is None:

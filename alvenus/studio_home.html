@@ -101,6 +101,8 @@ h2{margin:48px 0 14px}
 <li><span class="n">2</span><b>Your AI writes each scene</b><p>Tell it: <em>“Venus has a new idea for you”</em>. The scenes fill in as it goes.</p></li>
 <li><span class="n">3</span><b>You read, change, render</b><p>Change anything in the editor, then press Render when you like it.</p></li>
 </ol>
+<h2 class="lab" id="rh" style="display:none">Recently opened</h2>
+<div class="list" id="recent"></div>
 <h2 class="lab" id="ph" style="display:none">Your videos</h2>
 <div class="list" id="projects"></div>
 </main>
@@ -136,6 +138,10 @@ $('#idea').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKe
   const h = await (await fetch('/api/home')).json();
   $('#kind').innerHTML += h.kinds.map(([k, n, about]) => `<option value="${k}" title="${esc(about)}">${esc(n[0].toUpperCase() + n.slice(1))}</option>`).join('');
   $('#look').innerHTML += h.looks.map(([k, about, name]) => `<option value="${k}" title="${esc(about)}">${esc(name || k)}</option>`).join('');
+  const row = (path, name, sub) => `<button class="proj" data-p="${esc(path)}"><span class="th"><svg viewBox="0 0 12 12"><path d="M3 2l7 4-7 4z"/></svg></span><span class="tx"><b>${esc(name)}</b><span>${esc(sub)}</span></span><svg class="ar" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></svg></button>`;
+  const opener = async e => { const b = e.target.closest('.proj'); if (!b) return; b.disabled = true; try { await post('/api/open', {path: b.dataset.p}); waitForEditor(); } catch (er) { b.disabled = false; $('#err').textContent = er.message; $('#err').style.display = 'block'; } };
+  const here = new Set(h.projects.map(p => h.folder.replace(/\/$/, '') + '/' + p.path)), rec = (h.recent || []).filter(r => !here.has(r.path)).slice(0, 5);
+  if (rec.length) { $('#rh').style.display = ''; $('#recent').innerHTML = rec.map(r => row(r.path, r.name ? r.name : pretty(r.path.split(/[\\/]/).pop().replace(/\.nodes\.json$/, '')), r.folder + ' · ' + r.at)).join(''); $('#recent').onclick = opener; }
   if (h.projects.length) {
     $('#ph').style.display = '';
     $('#projects').innerHTML = h.projects.map(p => `<button class="proj" data-p="${esc(p.path)}"><span class="th"><svg viewBox="0 0 12 12"><path d="M3 2l7 4-7 4z"/></svg></span><span class="tx"><b>${esc(pretty(p.name))}</b><span>${esc(p.at)}</span></span><svg class="ar" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></svg></button>`).join('');

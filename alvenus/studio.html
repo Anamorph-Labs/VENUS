@@ -332,6 +332,16 @@ padding:18px 20px;box-shadow:var(--pop);display:none;max-height:calc(100vh - 90p
 .row.drop,.clip.drop,.screen.drop .frame{outline:2px dashed var(--blue);outline-offset:3px}
 .dropveil{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;pointer-events:none;background:rgba(23,24,27,.12)}
 .dropveil.on{display:flex}.dropveil span{background:var(--panel);border:1px solid var(--hair2);border-radius:999px;padding:10px 18px;font-size:14px;box-shadow:var(--pop)}
+.xrow{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:10px;margin:10px 0}.xrow label{font-size:12px;color:var(--mut)}
+.exportbox{max-width:560px}.xfoot{display:flex;gap:8px;margin-top:14px}.xfoot .sp{flex:1}
+.listbox{max-width:640px}.vlist{display:flex;flex-direction:column;gap:8px;overflow:auto;max-height:calc(100vh - 300px)}
+.vrow{display:flex;align-items:center;gap:12px;border:1px solid var(--hair2);border-radius:12px;padding:9px 12px;background:var(--panel)}.vrow .vt{flex:1;min-width:0}.vrow .vt b{display:block;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vrow .vt span{font-size:12px;color:var(--mut)}
+.keys{display:grid;grid-template-columns:max-content 1fr;gap:9px 18px;margin:4px 0 0;font-size:13px}.keys dt{color:var(--ink);white-space:nowrap}.keys dd{margin:0;color:var(--mut)}
+kbd{display:inline-block;min-width:20px;padding:1px 6px;border:1px solid var(--hair2);border-bottom-width:2px;border-radius:6px;font:12px/1.5 inherit;text-align:center;background:var(--panel)}
+.guide{display:none;position:fixed;inset:0;z-index:80}.guide.on{display:block}
+.gring{position:fixed;border-radius:14px;box-shadow:0 0 0 2px var(--ink),0 0 0 9999px rgba(23,24,27,.38);transition:all .25s ease;pointer-events:none}
+.gcard{position:fixed;width:300px;max-width:calc(100vw - 32px);background:var(--panel);border:1px solid var(--hair);border-radius:16px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.2);transition:all .25s ease}
+.gcard h4{margin:4px 0 6px;font-family:Newsreader,serif;font-weight:400;font-size:21px}.gcard p{margin:0;font-size:13px;color:var(--mut);line-height:1.5}.gfoot{display:flex;gap:8px;margin-top:14px}.gfoot .sp{flex:1}
 .clist{overflow:auto;max-height:calc(100vh - 230px);display:flex;flex-direction:column;gap:10px;padding:2px}
 .crow{border:1px solid var(--hair2);border-radius:14px;background:var(--panel);padding:10px 12px;display:grid;grid-template-columns:120px 1fr;gap:6px 12px}
 .crow .cw{font-size:12px;color:var(--mut)}.crow .cw b{display:block;color:var(--ink);font-weight:600;font-size:13px}.crow .cw button{margin-top:6px;font-size:11px;padding:3px 8px}
@@ -477,6 +487,9 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <button id="vset">Video settings</button>
 <button id="media" title="photos, clips and sound in this project">Media</button>
 <button id="capsbtn" title="every scene's words in one list, to read through and fix">Captions list</button>
+<button id="versbtn" title="versions you kept, to go back to">Saved versions</button>
+<button id="recentbtn" title="videos you opened lately">Recent videos</button>
+<button id="keysbtn" title="keyboard shortcuts (?)">Keyboard shortcuts <small>?</small></button>
 <button id="sound">Sound</button><hr>
 <button id="theme" title="light or dark">Theme <small id="themename">Day</small></button>
 </div></header>
@@ -495,7 +508,7 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <input type="range" id="wipe" min="0" max="100" value="0" style="display:none" aria-label="before and after wipe"><span id="wipelab" style="display:none"></span></div>
 <div class="slider"><span>Moment</span><input type="range" id="scrub" min="0.05" max="0.98" step="0.01" value="0.45" aria-label="moment in the scene"><span id="scrubv"></span></div>
 <div class="done" id="done"><span class="tick"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></span><div class="dtx"><span class="lab">Your video</span><h4 id="donet"></h4><div class="small" id="dones"></div></div>
-<div class="btns"><button class="primary" id="watch"><svg viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M4 3l9 5-9 5z" fill="currentColor" stroke="none"/></svg>Watch it</button><button class="xb" id="donex" title="hide this until the next render" aria-label="hide"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div></div>
+<div class="btns"><button class="primary" id="watch"><svg viewBox="0 0 16 16" style="width:12px;height:12px"><path d="M4 3l9 5-9 5z" fill="currentColor" stroke="none"/></svg>Watch it</button><button id="reveal" title="show the file in its folder">Open folder</button><button class="xb" id="donex" title="hide this until the next render" aria-label="hide"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div></div>
 <div class="idea" id="idea"><div style="flex:1;min-width:0"><span class="lab" id="ideast">An idea for your AI</span><p class="q" id="ideaq"></p><span class="small" id="ideahelp"></span></div><button id="ideacopy" style="display:none">Copy for your AI</button></div>
 </div></section>
 <div class="canvas" id="canvas"><div class="grid" id="grid"></div>
@@ -535,6 +548,25 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <div class="dirbox mediabox capsbox" id="capsbox" role="dialog" aria-label="captions list"><div class="dirhead"><div><span class="lab">Captions list</span><h3>Every scene's words</h3></div><button class="xb" id="capsclose" title="close" aria-label="close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
 <p class="small" style="margin:0 0 10px">Read the whole video's words top to bottom and fix them here. Click a word to make it the big word on that scene's caption.</p>
 <div class="clist" id="clist"></div></div>
+<div class="dirbox mediabox exportbox" id="exportbox" role="dialog" aria-label="render"><div class="dirhead"><div><span class="lab">Render</span><h3>Make the finished video</h3></div><button class="xb" id="exportclose" title="close" aria-label="close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+<div class="xrow"><label>Made for</label><div class="chips" data-xk="for"><button data-xv="made">Anywhere</button><button data-xv="instagram">Instagram</button><button data-xv="youtube">YouTube</button></div></div>
+<div class="xrow"><label>Size</label><div class="chips" data-xk="size"><button data-xv="1080">1080p</button><button data-xv="4k">4K</button></div></div>
+<div class="xrow"><label>Quality</label><div class="chips" data-xk="quality"><button data-xv="small">Smaller file</button><button data-xv="standard">Standard</button><button data-xv="best">Best</button></div></div>
+<p class="small" id="xwhy"></p>
+<div class="xfoot"><span class="sp"></span><button id="exportcancel">Cancel</button><button class="primary" id="exportgo">Render</button></div></div>
+<div class="dirbox mediabox listbox" id="versbox" role="dialog" aria-label="saved versions"><div class="dirhead"><div><span class="lab">Saved versions</span><h3>Go back to an earlier version</h3></div><button class="xb" id="versclose" title="close" aria-label="close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+<div class="mkst"><input type="text" id="vname" placeholder="Name this version, e.g. Before the new music"><button class="primary" id="vsave">Save this version</button></div>
+<p class="small" style="margin:8px 0">Every render is kept here too. Going back is safe: Undo brings you to where you were.</p>
+<div class="vlist" id="vlist"></div></div>
+<div class="dirbox mediabox listbox" id="recentbox" role="dialog" aria-label="recent videos"><div class="dirhead"><div><span class="lab">Recent videos</span><h3>Open another video</h3></div><button class="xb" id="recentclose" title="close" aria-label="close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+<div class="vlist" id="rlist"></div></div>
+<div class="dirbox mediabox listbox" id="keysbox" role="dialog" aria-label="keyboard shortcuts"><div class="dirhead"><div><span class="lab">Keyboard shortcuts</span><h3>Quicker with the keys</h3></div><button class="xb" id="keysclose" title="close" aria-label="close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+<dl class="keys"><dt><kbd>Space</kbd></dt><dd>Play or pause the whole video</dd><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous or next scene</dd>
+<dt><kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>Undo</dd><dt><kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Z</kbd></dt><dd>Redo</dd>
+<dt><kbd>D</kbd></dt><dd>Switch the selected part or tool on or off</dd><dt><kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>D</kbd></dt><dd>Duplicate the selected tool</dd>
+<dt><kbd>Delete</kbd></dt><dd>Remove the selected tool</dd><dt><kbd>F</kbd></dt><dd>Fit the boxes to the window</dd>
+<dt>Double-click the picture</dt><dd>Big view</dd><dt><kbd>Esc</kbd></dt><dd>Close a window or menu</dd><dt><kbd>?</kbd></dt><dd>This list</dd></dl></div>
+<div class="guide" id="guide" role="dialog" aria-label="getting started"><div class="gring" id="gring"></div><div class="gcard" id="gcard"><span class="lab" id="gstep"></span><h4 id="gt"></h4><p id="gp"></p><div class="gfoot"><button id="gskip">Skip</button><span class="sp"></span><button class="primary" id="gnext">Next</button></div></div></div>
 <div class="dropveil" id="dropveil"><span>Drop on a scene or the picture to use it there, or anywhere to add it to Media</span></div>
 <input type="file" id="filepick" multiple hidden>
 <div class="toast" id="toast"></div><div class="wtip" id="wtip"></div>
@@ -898,6 +930,46 @@ function setMedia(target, p, path, kind) {  // a photo or clip into a scene (its
   toast(`${path.split('/').pop()} is in ${sceneName(sid).toLowerCase()} now. Undo brings the old one back.`);
 }
 let shelfFor = null;
+// ---------------------------------------------------------------- render choices, saved versions, recent videos, shortcuts, guide
+let EXP = {for: 'made', size: '1080', quality: 'standard'};
+try { EXP = {...EXP, ...JSON.parse(localStorage.getItem('venus-export') || '{}')}; } catch (e) {}
+const XPRESET = {made: {size: '1080', quality: 'standard'}, instagram: {size: '1080', quality: 'best'}, youtube: {size: '4k', quality: 'best'}};
+function drawExport() {
+  document.querySelectorAll('#exportbox [data-xk]').forEach(g => g.querySelectorAll('[data-xv]').forEach(b => b.classList.toggle('on', EXP[g.dataset.xk] === b.dataset.xv)));
+  const why = {made: 'Plays well anywhere.', instagram: 'Sized and encoded the way Instagram likes it, so it loses less when it is posted.', youtube: 'YouTube streams 4K uploads at a higher quality, so the video looks sharper there.'}[EXP.for];
+  $('#xwhy').textContent = why + (EXP.size === '4k' ? ' Venus draws the video at 1080p; the 4K file is that video enlarged with care, and takes a few minutes more.' : '')
+    + (EXP.quality === 'small' ? ' Smaller file: quicker to send, a little softer.' : EXP.quality === 'best' ? ' Best: the sharpest picture, a bigger file.' : '');
+}
+function openExport() { drawExport(); $('#exportbox').classList.add('on'); }
+async function openVersions() {
+  $('#versbox').classList.add('on'); $('#moremenu').classList.remove('on'); $('#vlist').innerHTML = '<p class="small">Looking…</p>';
+  let v = []; try { v = (await api('/api/versions')).versions || []; } catch (e) {}
+  $('#vlist').innerHTML = v.map(x => `<div class="vrow"><div class="vt"><b>${esc(x.name)}</b><span>${esc(x.at)} · ${x.scenes} scenes · ${x.seconds} s</span></div><button data-vback="${esc(x.id)}">Go back to this</button></div>`).join('')
+    || '<p class="small">No saved versions yet. Save one above, or render: every render is kept here.</p>';
+}
+async function openRecent() {
+  $('#recentbox').classList.add('on'); $('#moremenu').classList.remove('on'); $('#rlist').innerHTML = '<p class="small">Looking…</p>';
+  let v = []; try { v = (await api('/api/recent')).recent || []; } catch (e) {}
+  $('#rlist').innerHTML = v.map(x => `<div class="vrow"><div class="vt"><b>${esc(x.name)}</b><span>${esc(x.folder)} · opened ${esc(x.at)}</span></div><button data-ropen="${esc(x.path)}">Open</button></div>`).join('')
+    || '<p class="small">Videos you open in Studio show here.</p>';
+}
+const closeBoxes = () => { let any = false; ['capsbox', 'exportbox', 'versbox', 'recentbox', 'keysbox'].forEach(id => { if ($('#' + id).classList.contains('on')) { $('#' + id).classList.remove('on'); any = true; } }); return any; };
+const GUIDE = [
+  ['#strip', 'Your video, scene by scene', 'Each card is one scene. Click one to work on it. Drag the end of a scene on the timeline above to make it longer or shorter, or drag a scene to move it.'],
+  ['#insp', 'Change anything here', 'Pick a part of the scene, like the words or the photo, and change it here. Your AI sees every change you make, and you see every change it makes.'],
+  ['#render', 'Render when it looks right', 'Render makes the finished video, for anywhere, Instagram or YouTube. Press ? at any time for the keyboard shortcuts.']];
+let gi = 0;
+function guide(i) {
+  gi = i; const [sel_, t, p] = GUIDE[i], el = document.querySelector(sel_), r = el.getBoundingClientRect(), pad = 6;
+  $('#guide').classList.add('on'); const g = $('#gring');
+  Object.assign(g.style, {left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px'});
+  $('#gstep').textContent = `Step ${i + 1} of ${GUIDE.length}`; $('#gt').textContent = t; $('#gp').textContent = p; $('#gnext').textContent = i === GUIDE.length - 1 ? 'Start' : 'Next';
+  const c = $('#gcard'), cw = Math.min(300, innerWidth - 32), ch = c.offsetHeight || 170;
+  let x = r.left - cw - 18, y = r.top;                                  // left of it, else above, else below
+  if (x < 16) { x = Math.min(innerWidth - cw - 16, Math.max(16, r.left)); y = r.top - ch - 18; if (y < 16) y = Math.min(innerHeight - ch - 16, r.bottom + 18); }
+  c.style.left = x + 'px'; c.style.top = Math.max(16, Math.min(innerHeight - ch - 16, y)) + 'px';
+}
+function endGuide() { $('#guide').classList.remove('on'); try { localStorage.setItem('venus-guide-seen', '1'); localStorage.setItem('venus-tips-seen', '1'); } catch (er) {} }
 function drawCaps() {
   const cs = node('settings')?.params || {}, on = cs.captions !== false;
   let t = 0; const rows = [];
@@ -1290,7 +1362,7 @@ async function flush() {
   catch (e) { toast(e.message, 'bad'); refresh(true); }
 }
 async function render(anyway) {
-  try { const r = await api('/api/render', {anyway}); apply(r.state, true); $('#storybox').classList.remove('on'); toast('Rendering the full video. Keep working; it shows here when done.'); }
+  try { const r = await api('/api/render', {anyway, export: EXP}); apply(r.state, true); $('#storybox').classList.remove('on'); toast('Rendering the full video. Keep working; it shows here when done.'); }
   catch (e) {
     if (e.message.startsWith('STORY:')) {
       const c = JSON.parse(e.message.slice(6)), w = Array.isArray(c) ? c : c.weak;
@@ -1331,18 +1403,18 @@ function renderState() {
   const run = r.state === 'running'; $('#top').classList.toggle('rendering', run);
   if (run) {
     const of = r.of || S.scenes.length, done = r.done || 0, stage = r.stage || 'drawing';
-    $('#rptext').textContent = stage === 'joining' ? 'Rendering · joining the scenes' : stage === 'checking' ? 'Rendering · watching it back'
+    $('#rptext').textContent = stage === 'joining' ? 'Rendering · joining the scenes' : stage === 'checking' ? 'Rendering · watching it back' : stage === 'exporting' ? 'Rendering · making the copy for where it goes'
       : `Rendering · scene ${Math.min(of, done + 1)} of ${of}`;
     // drawing is about half the time; joining runs on with no count of its own, so its share fills slowly with time
     if (stage !== 'joining') delete renderState.joinAt; else renderState.joinAt ??= Date.now();
-    const f = stage === 'joining' ? 0.5 + 0.38 * (1 - Math.exp(-(Date.now() - renderState.joinAt) / 60000)) : stage === 'checking' ? 0.92 : 0.03 + 0.47 * done / Math.max(1, of);
+    const f = stage === 'joining' ? 0.5 + 0.38 * (1 - Math.exp(-(Date.now() - renderState.joinAt) / 60000)) : stage === 'checking' ? 0.92 : stage === 'exporting' ? 0.96 : 0.03 + 0.47 * done / Math.max(1, of);
     $('#rpbar').style.width = Math.round(f * 100) + '%';
   }
   const fin = r.state === 'done' && renderState.hid !== (r.started || 0); $('#done').classList.toggle('on', fin);
   if (fin) {
     const m = Math.floor((r.seconds || 0) / 60), sec = Math.round((r.seconds || 0) % 60);
     $('#donet').textContent = ($('#file').textContent || 'Your video') + ' is ready';
-    $('#dones').textContent = [total + ' s', S.aspect, 'made in ' + (m ? `${m} min ${sec} s` : `${sec} s`), r.video].filter(Boolean).join(' · ');
+    $('#dones').textContent = [total + ' s', S.aspect, 'made in ' + (m ? `${m} min ${sec} s` : `${sec} s`), (r.files || [r.video]).join(' and ')].filter(Boolean).join(' · ');
   }
   $('#render').disabled = run;
 }
@@ -1401,6 +1473,9 @@ document.addEventListener('click', async e => {
     if (d.shelf) return openMedia({target: m.mt, p: m.mp, kind: m.mk});
     const [f] = await pickFiles(m.mk === 'audio' ? 'audio/*' : 'image/*,video/*', false); if (!f) return;
     const path = await uploadFile(f); if (path) setMedia(m.mt, m.mp, path, kindOf(f.name)); return; }
+  if (d.xv) { const k = t.closest('[data-xk]').dataset.xk; EXP[k] = d.xv; if (k === 'for') Object.assign(EXP, XPRESET[d.xv]); return drawExport(); }
+  if (d.vback) { const r = await op('/api/version_restore', {id: d.vback}, 'Back to that version. Undo brings you back to where you were.'); if (r) closeBoxes(); return; }
+  if (d.ropen) { try { await api('/api/open_recent', {path: d.ropen}); toast('Opening…'); setTimeout(() => location.reload(), 1600); } catch (er) { toast(er.message, 'bad'); } return; }
   if (d.bigw) { const [sid, wd] = JSON.parse(d.bigw); queue(sid + '.words', 'caption_big', wd); return; }
   if (d.goscene) { $('#capsbox').classList.remove('on'); select(d.goscene); return; }
   if (d.use) { const m = JSON.parse(d.use); setMedia(m.target, m.p, m.path, m.kind); $('#mediabox').classList.remove('on'); return; }
@@ -1420,7 +1495,7 @@ document.addEventListener('click', async e => {
     case 'more': return $('#moremenu').classList.toggle('on');
     case 'rstop': return op('/api/render_stop', {}, 'Stopping the render');
     case 'addsc': return op('/api/copy', {scene: sel.scene}, 'Added a copy of this scene after it: change it, or describe what it should be');
-    case 'render': return render(false);
+    case 'render': return openExport();
     case 'watch':
       if (watching) { watching = false; $('#watch').lastChild.textContent = 'Watch it'; return select(sel.scene); }
       watching = true; $('.viewer').classList.add('watching'); showVideo('/api/video?t=' + Date.now()); $('#vtitle').textContent = 'The full video';
@@ -1435,6 +1510,15 @@ document.addEventListener('click', async e => {
     case 'aicopy': return copyForAI();
     case 'media': return openMedia();
     case 'capsbtn': return openCaps();
+    case 'versbtn': return openVersions();
+    case 'recentbtn': return openRecent();
+    case 'keysbtn': $('#moremenu').classList.remove('on'); return $('#keysbox').classList.add('on');
+    case 'exportclose': case 'exportcancel': case 'versclose': case 'recentclose': case 'keysclose': return closeBoxes();
+    case 'exportgo': $('#exportbox').classList.remove('on'); try { localStorage.setItem('venus-export', JSON.stringify(EXP)); } catch (er) {} return render(false);
+    case 'vsave': { const r = await op('/api/version_save', {name: $('#vname').value}); if (r) { $('#vname').value = ''; toast('Saved: ' + r.saved.name); openVersions(); } return; }
+    case 'reveal': return op('/api/reveal', {file: S.render.video});
+    case 'gnext': return gi < GUIDE.length - 1 ? guide(gi + 1) : endGuide();
+    case 'gskip': return endGuide();
     case 'capsclose': return $('#capsbox').classList.remove('on');
     case 'mediaclose': return $('#mediabox').classList.remove('on');
     case 'mediaadd': { const fs = await pickFiles(''); for (const f of fs) await uploadFile(f); return openMedia(); }
@@ -1479,10 +1563,12 @@ document.addEventListener('keydown', e => {
   if ((e.target.dataset?.gdesc || e.target.id === 'gask') && e.key === 'Enter') { describe(sel.scene, e.target.value); e.target.value = ''; return; }
   if (e.target.id === 'dtext' && e.key === 'Enter') { $('#dgo').click(); return; }
   if (e.key === 'Escape' && closeBig()) return;
-  if (e.key === 'Escape' && $('#capsbox').classList.contains('on')) { $('#capsbox').classList.remove('on'); return; }
+  if (e.key === 'Escape' && $('#guide').classList.contains('on')) { endGuide(); return; }
+  if (e.key === 'Escape' && closeBoxes()) return;
   if (e.key === 'Escape' && $('#mediabox').classList.contains('on')) { $('#mediabox').classList.remove('on'); return; }
   if (e.key === 'Escape') { $('#moremenu').classList.remove('on'); if ($('#tips').style.display !== 'none') closeTips(); }
   if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  if (e.key === '?') { $('#keysbox').classList.toggle('on'); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); op(e.shiftKey ? '/api/redo' : '/api/undo', {}); }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); if (sel.node?.startsWith('tool:')) dupTool(sel.node.slice(5)); return; }
   if (e.key.toLowerCase() === 'd' && sel.node?.startsWith('st:') && SC.bypass.includes(sel.node.slice(3))) op('/api/switch', {scene: sel.scene, stage: sel.node.slice(3), on: stageOff(sel.scene, sel.node.slice(3))});
@@ -1714,7 +1800,7 @@ function dirCards(list) {
     <div class="why">${x.seconds} s · ${esc(x.why)}</div><button data-tag="${esc(x.tag)}" class="${x.tag === 'A' ? '' : 'primary'}">${x.tag === 'A' ? 'Keep this one' : 'Use ' + esc(x.tag)}</button></div>`).join('');
 }
 $('#dirclose').addEventListener('click', () => $('#dirbox').classList.remove('on'));
-$('#scrim').addEventListener('click', () => { $('#capsbox').classList.remove('on'); $('#dirbox').classList.remove('on'); $('#storybox').classList.remove('on'); $('#mediabox').classList.remove('on'); });
+$('#scrim').addEventListener('click', () => { closeBoxes(); $('#dirbox').classList.remove('on'); $('#storybox').classList.remove('on'); $('#mediabox').classList.remove('on'); });
 $('#dirbtns').addEventListener('click', async e => {
   const b = e.target.closest('button[data-tag]'); if (!b) return;
   const r = await op('/api/direction_pick', {tag: b.dataset.tag}, `Direction ${b.dataset.tag} is in. Undo brings back what you had.`);
@@ -1740,7 +1826,7 @@ $('#newv').addEventListener('click', async () => {
 window.addEventListener('resize', () => { fitFrame(); if (sel.scene) { drawWires(); applyView(); } });
 (async () => {
   SC = await api('/api/schema'); const st = await api('/api/state'); sel.scene = st.scenes[0]?.id; sel.node = 'out'; apply(st, true);
-  try { if (!localStorage.getItem('venus-tips-seen')) $('#tips').style.display = ''; } catch (e) {}
+  try { if (!localStorage.getItem('venus-guide-seen') && !localStorage.getItem('venus-tips-seen')) setTimeout(() => guide(0), 900); } catch (e) {}
   setInterval(() => { refresh(false); if (S?.render?.state === 'running') renderState(); }, 1000);
   setTimeout(checkUpd, 2500); setInterval(checkUpd, 6 * 3600e3);
 })();
