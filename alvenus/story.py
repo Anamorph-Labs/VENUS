@@ -514,7 +514,10 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                 sc = {**sc, "big_words": list(sc.get("big_words") or []) + [re.sub(r"[^\w']", "", m) for m in marked]}
             sc = {**sc, **{k: plain(str(sc[k])) for k in ("text", "caption") if sc.get(k)}}
         if sc.get("caption") and sb.get("captions", True):
-            cw = spread(sc["caption"], i, t0, t1)
+            short = t1 - t0 < 2.0  # a short scene: every word lands early, then the card holds still until the cut
+            cw = spread(sc["caption"], i, t0, t1, 0.4 if short else 0.75)
+            if short and cw:
+                cw[-1].end = max(cw[-1].end, t1 - 0.02)
             big = {x.lower() for x in str(sc.get("caption_big") or "").split()}
             for x in cw:  # the word the creator chose to be big (Studio's caption card)
                 x.mark = x.mark or x.text.lower().strip(",.?!;:'\"") in big
