@@ -429,6 +429,47 @@ class Studio:
                                 str(out)], check=True, capture_output=True)
         return out, "image/jpeg"
 
+    def clip_info(self, rel: str) -> dict:
+        from .media import duration
+
+        p = self._inside(rel)
+        return {"duration": round(duration(p), 3), "kind": MEDIA_KIND.get(p.suffix.lower())}
+
+    def filmstrip(self, rel: str) -> Path:
+        """Ten small frames across a clip, side by side, to pick where it starts."""
+        from .media import duration
+
+        p = self._inside(rel)
+        tag = hashlib.sha256(f"strip:{p}:{p.stat().st_mtime_ns}".encode()).hexdigest()[:14]
+        out = self.cache / f"strip-{tag}.jpg"
+        if not out.exists():
+            d = max(0.5, duration(p))
+            subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(p), "-vf",
+                            f"fps={10 / d:.5f},scale=120:-2,tile=10x1", "-frames:v", "1", "-q:v", "5", str(out)],
+                           check=True, capture_output=True)
+        return out
+
+    def wave(self, which: str) -> Path:
+        """The music or the voice as a thin waveform, over the length of the whole video."""
+        with self.lock:
+            sb = self.storyboard()
+        f = sb.get({"music": "music", "voice": "voiceover"}[which])
+        if not f:
+            raise ValueError(f"no {which} yet")
+        p = self._inside(f) if not Path(f).is_absolute() else Path(f)
+        if not p.exists():
+            raise ValueError(f"{which} file not found")
+        total = sum(float(x.get("seconds", 3.0)) for x in sb["scenes"]) or 1
+        tag = hashlib.sha256(f"wave:{p}:{p.stat().st_mtime_ns}:{total:.2f}".encode()).hexdigest()[:14]
+        out = self.cache / f"wave-{tag}.png"
+        if not out.exists():
+            col = "0x2B4A78" if which == "voice" else "0x5A5F6B"
+            subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", *([] if which == "voice" else ["-stream_loop", "-1"]),
+                            "-t", f"{total:.2f}", "-i", str(p), "-filter_complex",
+                            f"[0:a]aformat=channel_layouts=mono,apad=whole_dur={total:.2f},showwavespic=s=1600x40:colors={col}:scale=sqrt",
+                            "-frames:v", "1", str(out)], check=True, capture_output=True)
+        return out
+
     def story_check(self) -> dict:
         """The story check on what is on screen, for the creator to read before Render."""
         from . import storycheck
@@ -766,6 +807,12 @@ def handler(st: Studio):
                     return self._file(st.play(q["scene"]), "video/mp4")
                 if u.path == "/api/draft":
                     return self._file(st.draft(), "video/mp4")
+                if u.path == "/api/clipinfo":
+                    return self._json(st.clip_info(q["file"]))
+                if u.path == "/api/filmstrip":
+                    return self._file(st.filmstrip(q["file"]), "image/jpeg")
+                if u.path == "/api/wave":
+                    return self._file(st.wave(q.get("which", "music")), "image/png")
                 if u.path == "/api/media":
                     return self._json({"media": st.media()})
                 if u.path == "/api/thumb":

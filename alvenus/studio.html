@@ -70,7 +70,7 @@ header .sp{flex:1}
 .moremenu small{color:var(--q);font-size:12px}
 .moremenu hr{border:0;border-top:1px solid var(--hair);margin:5px 6px}
 /* left column */
-.left{--sh:118px;--gmin:240px;display:grid;grid-template-rows:var(--vh,292px) minmax(var(--gmin),1fr) 38px var(--sh);min-width:0;min-height:0;border-right:1px solid var(--hair)}
+.left{--sh:118px;--gmin:240px;--th:58px;display:grid;grid-template-rows:var(--vh,292px) minmax(var(--gmin),1fr) var(--th) var(--sh);min-width:0;min-height:0;border-right:1px solid var(--hair)}
 /* viewer */
 .viewer{position:relative;display:flex;gap:22px;padding:16px 20px;align-items:stretch;border-bottom:1px solid var(--hair);min-height:0;min-width:0}
 /* the line under the viewer: drag it to make the picture bigger or smaller */
@@ -78,7 +78,7 @@ header .sp{flex:1}
 .vsplit::after{content:"";position:absolute;left:50%;top:3px;width:44px;height:4px;margin-left:-22px;border-radius:2px;background:var(--hair2);opacity:0;transition:opacity .15s}
 .vsplit:hover::after,.vsplit.on::after{opacity:1}
 /* tall videos: the picture gets its own column, full height, beside the controls and the node graph, so neither is squeezed */
-.left.tallv{grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto minmax(var(--gmin),1fr) 38px var(--sh)}
+.left.tallv{grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto minmax(var(--gmin),1fr) var(--th) var(--sh)}
 .left.tallv .viewer{display:contents}
 .left.tallv .screen{grid-column:1;grid-row:1/3;padding:16px 20px;border-right:1px solid var(--hair);align-items:flex-start}
 .left.tallv .vside{grid-column:2;grid-row:1;padding:16px 20px;border-bottom:1px solid var(--hair)}
@@ -234,13 +234,21 @@ border-radius:24px;box-shadow:var(--pop);padding:18px 22px 16px}
 .tline{display:flex;align-items:center;gap:10px;padding:0 16px;border-top:1px solid var(--hair);min-width:0}
 .tline .pa{height:26px;width:26px;padding:0;border-radius:50%;display:grid;place-items:center;flex:none}
 .tline .pa svg{width:10px;height:10px}
-.tline .track{position:relative;flex:1;height:18px;cursor:pointer;touch-action:none;min-width:0}
-.tline .seg{position:absolute;top:5px;height:8px;background:var(--chip);border-right:2px solid var(--panel);box-sizing:border-box}
+.tline .track{position:relative;flex:1;height:42px;cursor:pointer;touch-action:none;min-width:0}
+.tline .seg{position:absolute;top:2px;height:20px;background:var(--chip);border-right:2px solid var(--panel);box-sizing:border-box;font-size:10px;line-height:20px;color:var(--q);padding-left:5px;overflow:hidden;white-space:nowrap;cursor:grab}
+.tline .seg .eg{position:absolute;right:0;top:0;bottom:0;width:8px;cursor:col-resize;z-index:2}
+.tline .seg .eg::after{content:"";position:absolute;left:3px;top:4px;bottom:4px;width:2px;border-radius:1px;background:var(--ink);opacity:0;transition:opacity .12s}
+.tline .seg:hover .eg::after,.tline .seg.sizing .eg::after{opacity:.6}
+.tline .seg.lift{opacity:.55;z-index:3;box-shadow:var(--pop)}
+.tline .ins{position:absolute;top:0;width:2px;height:24px;margin-left:-1px;background:var(--blue);pointer-events:none;display:none}
+.tline .lane{position:absolute;left:0;right:0;top:26px;height:14px;border-radius:3px;overflow:hidden;background:var(--chip);pointer-events:none}
+.tline .lane img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;opacity:.85}
+.tline .lane i{position:absolute;left:6px;top:0;font:normal 9.5px/14px "Hanken Grotesk",sans-serif;color:var(--q);letter-spacing:.04em;text-transform:uppercase}
 .tline .seg:first-child{border-radius:4px 0 0 4px}.tline .seg:last-of-type{border-radius:0 4px 4px 0}
 .tline .seg.sel{background:var(--hair2)}
 :root:not([data-theme="dark"]) .tline .seg{background:rgba(34,32,29,.09)}:root:not([data-theme="dark"]) .tline .seg.sel{background:rgba(34,32,29,.22)}
-.tline .done{position:absolute;left:0;top:5px;height:8px;border-radius:4px;background:var(--blue);opacity:.55;pointer-events:none}
-.tline .head{position:absolute;top:0;width:2px;height:18px;margin-left:-1px;background:var(--ink);border-radius:1px;pointer-events:none}
+.tline .done{position:absolute;left:0;top:2px;height:20px;border-radius:4px;background:var(--blue);opacity:.55;pointer-events:none}
+.tline .head{position:absolute;top:0;width:2px;height:42px;margin-left:-1px;background:var(--ink);border-radius:1px;pointer-events:none}
 .tline .tt{font-size:12px;color:var(--q);font-variant-numeric:tabular-nums;white-space:nowrap;flex:none}
 /* moving one caption row by hand */
 .frame.moving{cursor:move}
@@ -315,6 +323,9 @@ padding:18px 20px;box-shadow:var(--pop);display:none;max-height:calc(100vh - 90p
 .dirbox .dirhead{display:flex;align-items:center;justify-content:space-between}
 .dirbox h3{font:400 22px/1.2 Newsreader,Georgia,serif;margin:0}
 .dirbox img{width:100%;border-radius:12px;margin:8px 0 12px;display:none}
+.film{position:relative;height:46px;border-radius:8px;overflow:hidden;background:var(--frame);cursor:ew-resize;touch-action:none}
+.film img{width:100%;height:100%;object-fit:fill;display:block;opacity:.75}
+.film .win{position:absolute;top:0;bottom:0;border:2px solid #F6F2EA;border-radius:6px;box-shadow:0 0 0 999px rgba(12,13,15,.45)}
 /* media: a file box with Browse, the media shelf, and the drop veil */
 .mfile{display:flex;gap:6px;align-items:center}.mfile input{flex:1;min-width:0}.mfile button{flex:0 0 auto}
 .row.drop,.clip.drop,.screen.drop .frame{outline:2px dashed var(--blue);outline-offset:3px}
@@ -436,7 +447,7 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 /* a narrow window: one column that scrolls, the panel under the picture and graph */
 @media (max-width:900px){body{overflow:auto}.app{height:auto;min-height:100vh;grid-template-columns:1fr;grid-template-rows:52px auto auto}
   header{position:sticky;top:0;z-index:30;background:var(--ground)}
-  .left,.left.tallv{border-right:0;grid-template-rows:auto 420px 38px var(--sh)}
+  .left,.left.tallv{border-right:0;grid-template-rows:auto 420px var(--th) var(--sh)}
   .left.tallv{grid-template-columns:auto minmax(0,1fr)}
   aside{grid-column:1;border-top:1px solid var(--hair);overflow:visible}.vsplit{display:none}
   .viewer{flex-direction:column}.moremenu{position:fixed;top:48px}}
@@ -917,8 +928,10 @@ function sceneAt(t) { const sp = spansAll(); let i = sp.findIndex(([, b]) => t <
 function headOfSel() { const i = sceneIdx(sel.scene); if (i < 0) return 0; const [a, b] = spansAll()[i]; return a + (b - a) * +$('#scrub').value; }
 function drawTimeline() {
   const sp = spansAll(); allTotal = (sp.length ? sp[sp.length - 1][1] : 0) || 1;
-  $('#track').innerHTML = S.scenes.map((s, i) => `<div class="seg ${s.id === sel.scene ? 'sel' : ''}" style="left:${sp[i][0] / allTotal * 100}%;width:${(sp[i][1] - sp[i][0]) / allTotal * 100}%" title="${i + 1}. ${esc(s.label || typeName(s.type))}"></div>`).join('')
-    + '<div class="done" id="tdone"></div><div class="head" id="thead"></div>';
+  const snd = node('sound')?.params || {}, k = S.version;
+  $('#track').innerHTML = S.scenes.map((s, i) => `<div class="seg ${s.id === sel.scene ? 'sel' : ''}" data-i="${i}" style="left:${sp[i][0] / allTotal * 100}%;width:${(sp[i][1] - sp[i][0]) / allTotal * 100}%" title="${i + 1}. ${esc(firstWords(s) || s.label || typeName(s.type))} · ${s.seconds} s · drag the edge to change its length, drag it to move it">${i + 1}<span class="eg"></span></div>`).join('')
+    + `<div class="lane">${snd.music ? `<img alt="" src="/api/wave?which=music&k=${encodeURIComponent(snd.music)}-${allTotal.toFixed(1)}" onerror="this.remove()">` : ''}${snd.voiceover ? `<img alt="" src="/api/wave?which=voice&k=${encodeURIComponent(snd.voiceover)}-${allTotal.toFixed(1)}" onerror="this.remove()">` : ''}<i>${[snd.music && 'music', snd.voiceover && 'voice'].filter(Boolean).join(' + ') || 'no music or voice yet: Media or Sound'}</i></div>`
+    + '<div class="ins" id="tins"></div><div class="done" id="tdone"></div><div class="head" id="thead"></div>';
   if (!allPlaying) tlHead(headOfSel());
 }
 function tlHead(t, frac) {  // frac: share of the whole, while the whole video plays (its real length may differ a little)
@@ -960,9 +973,33 @@ $('#vid').addEventListener('timeupdate', () => {
     const [i, m] = sceneAt(f * allTotal); $('#scrub').value = Math.max(0.05, Math.min(0.98, m));
     if (S.scenes[i].id !== sel.scene) select(S.scenes[i].id); else setPreview();
   };
-  tr.addEventListener('pointerdown', e => { down = true; tr.setPointerCapture(e.pointerId); go(at(e)); });
-  tr.addEventListener('pointermove', e => { if (down) go(at(e)); });
-  tr.addEventListener('pointerup', e => { if (down) { down = false; go(at(e), true); } });
+  let size = null, lift = null;  // dragging a scene's right edge changes its length; dragging the scene moves it
+  const place = (secs) => { let t = 0; const tot = secs.reduce((a, b) => a + b, 0) || 1;
+    tr.querySelectorAll('.seg').forEach((g, j) => { g.style.left = t / tot * 100 + '%'; g.style.width = secs[j] / tot * 100 + '%'; t += secs[j]; }); };
+  tr.addEventListener('pointerdown', e => {
+    tr.setPointerCapture(e.pointerId); const g = e.target.closest('.seg');
+    if (g && e.target.classList.contains('eg') && !allPlaying) {
+      const i = +g.dataset.i; size = {i, x: e.clientX, secs: S.scenes.map(x => +x.seconds), w: tr.getBoundingClientRect().width, tot: allTotal}; g.classList.add('sizing'); return; }
+    if (g && !allPlaying) { lift = {i: +g.dataset.i, x: e.clientX, g, moved: false}; return; }
+    down = true; go(at(e));
+  });
+  tr.addEventListener('pointermove', e => {
+    if (size) { const v = Math.round(Math.max(0.8, Math.min(15, size.secs[size.i] + (e.clientX - size.x) / size.w * size.tot)) * 10) / 10;
+      const secs = size.secs.slice(); secs[size.i] = v; size.v = v; place(secs); $('#ttime').textContent = `Scene ${size.i + 1}: ${v.toFixed(1)} s`; return; }
+    if (lift) { const dx = e.clientX - lift.x; if (!lift.moved && Math.abs(dx) < 6) return; lift.moved = true; lift.g.classList.add('lift'); lift.g.style.transform = `translateX(${dx}px)`;
+      const r = tr.getBoundingClientRect(), f = (e.clientX - r.left) / r.width, sp = spansAll(); let to = sp.findIndex(([a, b]) => f * allTotal < (a + b) / 2); if (to < 0) to = sp.length;
+      lift.to = to; const ins = $('#tins'); ins.style.display = 'block'; ins.style.left = (to < sp.length ? sp[to][0] : allTotal) / allTotal * 100 + '%'; return; }
+    if (down) go(at(e));
+  });
+  tr.addEventListener('pointerup', e => {
+    if (size) { const {i, v} = size; size = null; tr.querySelector('.sizing')?.classList.remove('sizing');
+      if (v != null && v !== +S.scenes[i].seconds) { queue(S.scenes[i].id, 'seconds', v); toast(`Scene ${i + 1} is ${v} s now. Undo brings it back.`); } else drawTimeline(); return; }
+    if (lift) { const {i, to, moved} = lift; lift = null; $('#tins').style.display = 'none';
+      if (!moved) { go(at(e), true); return; }
+      if (to == null || to === i || to === i + 1) { drawTimeline(); return; }
+      const id = S.scenes[i].id; op('/api/move', to >= S.scenes.length ? {scene: id, after: S.scenes[S.scenes.length - 1].id} : {scene: id, before: S.scenes[to].id}); return; }
+    if (down) { down = false; go(at(e), true); }
+  });
 })();
 // ---------------------------------------------------------------- moving one caption row by hand (stack captions)
 function moveSeg() {
@@ -1022,7 +1059,7 @@ const leftVar = (k, d) => parseFloat(getComputedStyle($('.left')).getPropertyVal
 function viewerRow(px) {
   const left = $('.left'); if (!left) return; left.classList.toggle('tallv', shapeKey() === 'tall'); if (shapeKey() === 'tall') return;
   if (narrow()) { left.style.setProperty('--vh', 'auto'); return; }
-  const room = left.getBoundingClientRect().height - leftVar('--sh', 118) - 38 - leftVar('--gmin', 240);
+  const room = left.getBoundingClientRect().height - leftVar('--sh', 118) - leftVar('--th', 58) - leftVar('--gmin', 240);
   let h = px; const easy = room - 60;  // by default keep the node graph a little roomier than its smallest
   if (h == null) { try { h = +localStorage.getItem('venus-vh-' + shapeKey()) || null; } catch (e) { h = null; } }
   if (h == null) h = {wide: Math.min(292, Math.max(200, easy)), square: Math.max(292, easy * 0.75)}[shapeKey()];
@@ -1032,7 +1069,7 @@ function fitFrame(keepRow) {
   // the frame sits on the left of the viewer at the largest size the row allows, at the video's own shape
   if (!S) return; if (keepRow !== true) viewerRow(); const [a, b] = S.aspect.split(':').map(Number);
   const tall = $('.left').classList.contains('tallv'), L = $('.left').getBoundingClientRect(), v = tall ? null : $('.viewer').getBoundingClientRect();
-  let H = tall ? L.height - leftVar('--sh', 118) - 38 - 32 : v.height - 32, Wmax = tall ? Math.max(160, L.width * 0.4) : Math.max(160, v.width * 0.46);
+  let H = tall ? L.height - leftVar('--sh', 118) - leftVar('--th', 58) - 32 : v.height - 32, Wmax = tall ? Math.max(160, L.width * 0.4) : Math.max(160, v.width * 0.46);
   if (narrow()) { Wmax = tall ? Math.min(300, L.width * 0.45) : Math.min(640, L.width - 40); H = tall ? Wmax * b / a : Wmax * b / a; }
   const k = Math.min(Wmax / a, H / b); $('#frame').style.width = Math.round(a * k) + 'px'; $('#frame').style.height = Math.round(b * k) + 'px';
   $('#vid').style.maxWidth = Math.round(Wmax) + 'px'; $('#vid').style.maxHeight = H + 'px';
@@ -1189,6 +1226,7 @@ function drawInspector() {
       const key = SC.partKeys[part]?.includes(name) ? name : part + '_' + name, inh = styled[key];
       h += control(id, name, spec[name], p[name], lk, inh && p[name] == null ? inh : null);
     }
+    if (st === 'picture' && kindOf(p.file || '') === 'clip') h += `<div class="row"><label>Where the clip starts</label><div class="film" id="film" data-file="${esc(p.file)}" data-t="${esc(id)}" data-from="${+p.from || 0}" data-len="${S.scenes[sceneIdx(sid)].seconds}" ${lk ? 'data-lk="1"' : ''}><img alt="" src="/api/filmstrip?file=${encodeURIComponent(p.file)}"><div class="win"></div></div><div class="why" id="filmwhy">drag the box to the part of the clip this scene shows</div></div>`;
     if (simple && st === 'picture' && stagesOf(sid).includes('look')) {  // the Look node folds in here in the simple view
       const ls = SC.schema.look || {}, loff = stageOff(sid, 'look');
       h += `<div class="sec"><h3>Look${loff ? ' · switched off' : ''}</h3>`;
@@ -1199,6 +1237,17 @@ function drawInspector() {
     h += askBox(id, st);
   }
   el.innerHTML = h + FOOT;
+  if ($('#film')) filmStrip($('#film'));
+}
+async function filmStrip(f) {  // the clip as ten frames; the box is the part this scene shows; drag it to choose
+  let dur = 0; try { dur = (await (await fetch('/api/clipinfo?file=' + encodeURIComponent(f.dataset.file))).json()).duration || 0; } catch (e) {}
+  if (!dur || !f.isConnected) return; const w = f.querySelector('.win'), len = Math.min(dur, +f.dataset.len);
+  const show = from => { w.style.left = from / dur * 100 + '%'; w.style.width = len / dur * 100 + '%'; $('#filmwhy').textContent = `${from.toFixed(1)} s to ${(from + len).toFixed(1)} s of a ${dur.toFixed(1)} s clip`; };
+  let from = Math.min(+f.dataset.from, Math.max(0, dur - len)); show(from); if (f.dataset.lk) return;
+  f.addEventListener('pointerdown', e => { f.setPointerCapture(e.pointerId); const r = f.getBoundingClientRect(), x0 = e.clientX, f0 = from;
+    const mv = ev => { from = Math.round(Math.max(0, Math.min(dur - len, f0 + (ev.clientX - x0) / r.width * dur)) * 10) / 10; show(from); };
+    const up = () => { f.removeEventListener('pointermove', mv); f.removeEventListener('pointerup', up); if (from !== f0) queue(f.dataset.t, 'from', from); };
+    f.addEventListener('pointermove', mv); f.addEventListener('pointerup', up); });
 }
 
 // ---------------------------------------------------------------- changes
