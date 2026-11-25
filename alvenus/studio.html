@@ -601,7 +601,7 @@ const LABEL = {venus_mark: 'Made with Venus mark', size: 'Size', caption: 'Words
   who: 'Who said it', callout: 'Pointer', note: 'Note', colour: 'Colour', show: 'Show', seconds: 'Length', dark: 'Dark page', background: 'Background',
   transition: 'Transition', amount: 'Amount', bright: 'Brightness', contrast: 'Contrast', saturation: 'Colour', warmth: 'Warmth', type: 'Kind', camera: 'Camera move',
   layers: 'Stack', accent: 'Accent', look: 'Look', aspect: 'Shape', music: 'Music', voiceover: 'Voice', style: 'Style', music_lufs: 'Music loudness', music_duck: 'Music under the voice', sound_effects: 'Sound effects', sfx_volume: 'Sound effects volume', voice_gap: 'Voice clear of music',
-  caption_style: 'Caption style', caption_words: 'Words per caption', caption_placement: 'Caption placement', caption_big: 'Big word', caption_order: 'Big word first', caption_small: 'Small words', caption_small_x: 'Small words ↔', caption_small_y: 'Small words ↕', caption_big_x: 'Big word ↔', caption_big_y: 'Big word ↕', caption_place: 'Caption place', font: 'Font', weight: 'Weight', x: 'Move ↔', y: 'Move ↕'};
+  caption_style: 'Caption style', caption_words: 'Words per caption', caption_placement: 'Caption placement', caption_big: 'Big word', caption_order: 'Big word first', caption_small: 'Small words', caption_small_x: 'Small words ↔', caption_small_y: 'Small words ↕', caption_above_x: 'Words above ↔', caption_above_y: 'Words above ↕', caption_below_x: 'Words below ↔', caption_below_y: 'Words below ↕', caption_big_x: 'Big word ↔', caption_big_y: 'Big word ↕', caption_place: 'Caption place', font: 'Font', weight: 'Weight', x: 'Move ↔', y: 'Move ↕'};
 const PART_LABEL = {words: 'Words', picture: 'Photo', mark: 'Marks', graphic: 'Graphic', in: 'Comes in'};
 const labelOf = q => { if (q.includes('.')) { const [a, b] = q.split('.'); return (PART_LABEL[a] || a) + ' · ' + (LABEL[b] || b).toLowerCase(); }
   return LABEL[q] || (q[0].toUpperCase() + q.slice(1)).replace(/_/g, ' '); };
@@ -1129,7 +1129,9 @@ $('#mvseg').addEventListener('click', e => {
 const LIFT = {};  // scene key -> lifted card (or 'wait' while it is being made)
 let liftHot = null, liftDrag = null;
 const liftOf = () => { const s = S?.scenes[sceneIdx(sel.scene)]; const d = s && LIFT[s.key]; return d && d !== 'wait' ? d : null; };
-const liftKey = p => p === 'small' ? 'caption_small_' : p === 'big' ? 'caption_big_' : '';
+const liftKey = p => ({small: 'caption_small_', above: 'caption_above_', below: 'caption_below_', big: 'caption_big_'})[p] || '';
+const liftName = p => ({big: 'Big word', small: 'Small words', above: 'Words above', below: 'Words below'})[p] || 'Words';
+const liftMembers = (d, p) => p === 'all' ? d.layers.map(l => l.part) : p === 'small' ? ['above', 'below'] : [p];
 async function getLift() {
   const s = S?.scenes[sceneIdx(sel.scene)]; if (!s || LIFT[s.key]) return liftOf();
   const w = node(s.id + '.words')?.params || {}; if (!(w.caption || w.text || w.subtitle || w.who)) return null;
@@ -1139,15 +1141,17 @@ async function getLift() {
     if (S.scenes[sceneIdx(sel.scene)]?.key === s.key) liftShow(); return d; }
   catch (e) { delete LIFT[s.key]; return null; }
 }
-function liftParts(d) {  // which parts can move on their own: in a stack card the small words and the big word
-  return mvPart === 'all' || !d.layers.some(l => l.part === 'small' || l.part === 'big') ? ['all'] : d.layers.map(l => l.part === 'rest' ? 'all' : l.part);
+function liftParts(d) {  // which parts can move on their own: in a stack card the row above, the row below and the big word
+  if (mvPart === 'all' || !d.layers.some(l => l.part === 'big')) return ['all'];
+  return mvPart === 'small' ? ['small', 'big'] : d.layers.map(l => l.part === 'rest' ? 'all' : l.part);
 }
 function liftAt(d, x, y) {  // the part under the pointer (x, y as shares of the frame)
   if (mvPart) return mvPart;
   let best = null, gap = 1e9;
   for (const l of d.layers) { const [a, b, c, e] = l.ink, pad = 0.015;
     if (x < a - pad || x > c + pad || y < b - pad || y > e + pad) continue;
-    const g = Math.hypot(x - (a + c) / 2, (y - (b + e) / 2) * 2); if (g < gap) { gap = g; best = l.part; } }
+    const inside = x >= a && x <= c && y >= b && y <= e, g = inside ? -1 / Math.max(1e-6, (c - a) * (e - b)) : Math.hypot(x - (a + c) / 2, (y - (b + e) / 2) * 2);
+    if (g < gap) { gap = g; best = l.part; } }  // inside a part's letters wins (the smaller part when two overlap), else the nearest
   return best && liftParts(d).includes(best) ? best : best ? 'all' : null;
 }
 function liftShow(off) {  // draw the lifted card: the whole card settled, each part where it is (plus off, while dragging)
@@ -1163,12 +1167,12 @@ function liftBoxes(hot) {  // dashed outlines round every part, the one under th
   const f = $('#frame'); f.querySelectorAll('.lbox').forEach(b => b.remove());
   const d = liftOf(); if (!d?.layers?.length || holdA || allPlaying || liftDrag) return;
   const parts = liftParts(d), groups = {};
-  for (const l of d.layers) { const p = parts.includes(l.part) ? l.part : 'all', g = groups[p] || (groups[p] = [1, 1, 0, 0]);
+  for (const l of d.layers) { const p = parts.includes(l.part) ? l.part : parts.includes('small') && l.part !== 'big' && l.part !== 'rest' ? 'small' : 'all', g = groups[p] || (groups[p] = [1, 1, 0, 0]);
     g[0] = Math.min(g[0], l.ink[0]); g[1] = Math.min(g[1], l.ink[1]); g[2] = Math.max(g[2], l.ink[2]); g[3] = Math.max(g[3], l.ink[3]); }
   for (const [p, [a, b, c, e]] of Object.entries(groups)) {
     const x = document.createElement('div'); x.className = 'lbox' + (p === hot || hot === 'all' ? ' hot' : '');
     Object.assign(x.style, {left: (a * 100 - 1) + '%', top: (b * 100 - 1) + '%', width: ((c - a) * 100 + 2) + '%', height: ((e - b) * 100 + 2) + '%'});
-    if (p === hot) x.dataset.label = p === 'big' ? 'Big word' : p === 'small' ? 'Small words' : 'Words'; f.append(x); }
+    if (p === hot) x.dataset.label = liftName(p); f.append(x); }
 }
 const frameAt = e => { const r = $('#frame').getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r]; };
 $('#frame').addEventListener('pointerenter', () => { if (!holdA && !allPlaying) getLift().then(() => liftBoxes(liftHot)); });
@@ -1188,9 +1192,9 @@ $('#frame').addEventListener('pointerdown', async e => {
   const [x0, y0, r] = frameAt(e), part = liftAt(d, x0, y0); if (!part) return;
   e.preventDefault(); e.stopPropagation();
   const f = $('#frame'); f.setPointerCapture(e.pointerId); f.classList.add('grabbing');
-  const parts = part === 'all' ? d.layers.map(l => l.part) : [part], mine = d.layers.filter(l => parts.includes(l.part)), rest = d.layers.filter(l => !parts.includes(l.part));
+  const parts = liftMembers(d, part), mine = d.layers.filter(l => parts.includes(l.part)), rest = d.layers.filter(l => !parts.includes(l.part));
   const box = mine.reduce((g, l) => [Math.min(g[0], l.ink[0]), Math.min(g[1], l.ink[1]), Math.max(g[2], l.ink[2]), Math.max(g[3], l.ink[3])], [1, 1, 0, 0]);
-  const xs = [0.5, ...rest.flatMap(l => [l.ink[0], (l.ink[0] + l.ink[2]) / 2, l.ink[2]])], ys = [0.5, ...rest.flatMap(l => [l.ink[1], l.ink[3]])];
+  const xs = [0.5, ...rest.flatMap(l => [l.ink[0], (l.ink[0] + l.ink[2]) / 2, l.ink[2]])], ys = [0.5];  // (rows never snap onto each other's edges: touching rows read as one)
   const t = sel.scene + '.words', p = node(t)?.params || {}, k = liftKey(part);
   liftDrag = {parts, dx: 0, dy: 0, d, key: S.scenes[sceneIdx(sel.scene)].key}; liftBoxes(); liftShow(liftDrag);
   const guides = [document.createElement('div'), document.createElement('div')]; guides[0].className = 'lguide v'; guides[1].className = 'lguide h';
@@ -1412,7 +1416,7 @@ function drawInspector() {
     const onlyIn = {subtitle: ['title'], who: ['quote'], big_words: ['title', 'text']};  // words this kind of scene doesn't show
     const cs = node('settings')?.params || {}, capStyle = cs.caption_style || 'pop', capScene = cs.captions !== false && (['clip', 'image'].includes(ty) || p.caption != null);
     const fits = name => {  // only the controls that change something in this scene
-      if (['caption_order', 'caption_small', 'caption_small_x', 'caption_small_y', 'caption_big_x', 'caption_big_y'].includes(name)) return capScene && capStyle === 'stack';
+      if (['caption_order', 'caption_small', 'caption_small_x', 'caption_small_y', 'caption_big_x', 'caption_big_y', 'caption_above_x', 'caption_above_y', 'caption_below_x', 'caption_below_y'].includes(name)) return capScene && capStyle === 'stack';
       if (name === 'caption_big') return capScene && capStyle !== 'pop';
       if (name === 'caption_place') return capScene;
       if (onlyIn[name]) return onlyIn[name].includes(ty);

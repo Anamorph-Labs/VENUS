@@ -163,5 +163,34 @@ class LiftWords(unittest.TestCase):
             self.assertEqual(st.lift(sid), got)  # kept, so the second ask is instant
 
 
+class StackRows(unittest.TestCase):
+    """Stack captions: the rows hug the big word and the row above and the row below move on their own."""
+
+    def rows(self, nudge=None):
+        from types import SimpleNamespace as W
+        from alvenus import stackcaps
+        ws = [W(text=t, start=0.1 + i * 0.2, end=0.3 + i * 0.2, line=0, mark=t == "watch") for i, t in enumerate("But not the watch on the shelf".split())]
+        stackcaps.NUDGE = {0: nudge} if nudge else {}
+        try:
+            ev = stackcaps.stack_events(ws, 1080, 1920, "#FFFFFF")
+        finally:
+            stackcaps.NUDGE = {}
+        import re
+        return {r.split(",")[4]: tuple(float(v) for v in re.search(r"\\pos\(([\d.]+),([\d.]+)\)", r).groups()) for r in ev}
+
+    def test_each_row_moves_alone(self):
+        a = self.rows()
+        self.assertEqual(set(a), {"above", "big", "below"})
+        b = self.rows((0, 0, 0, 0, 0.05, 0, 0, 0))  # only the row above, to the right
+        self.assertGreater(b["above"][0], a["above"][0])
+        self.assertEqual(b["below"], a["below"])
+        self.assertEqual(b["big"], a["big"])
+
+    def test_studio_offers_row_sliders(self):
+        from alvenus.studio import schema
+        for k in ("caption_above_x", "caption_above_y", "caption_below_x", "caption_below_y"):
+            self.assertIn(k, schema()["words"])
+
+
 if __name__ == "__main__":
     unittest.main()

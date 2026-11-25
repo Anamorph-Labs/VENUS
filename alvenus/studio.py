@@ -104,6 +104,10 @@ def schema() -> dict:
                   "caption_small": pick(("auto", "above", "below"), "stack captions: where the small words sit, around the big word", "auto"),
                   "caption_small_x": num(-0.5, 0.5, 0.005, "stack captions: move the small words left (-) or right (+), or drag them in the picture", 0),
                   "caption_small_y": num(-0.5, 0.5, 0.005, "stack captions: move the small words up (-) or down (+)", 0),
+                  "caption_above_x": num(-0.5, 0.5, 0.005, "stack captions: move only the row above the big word left (-) or right (+), or drag it in the picture", 0),
+                  "caption_above_y": num(-0.5, 0.5, 0.005, "stack captions: move only the row above the big word up (-) or down (+)", 0),
+                  "caption_below_x": num(-0.5, 0.5, 0.005, "stack captions: move only the row below the big word left (-) or right (+), or drag it in the picture", 0),
+                  "caption_below_y": num(-0.5, 0.5, 0.005, "stack captions: move only the row below the big word up (-) or down (+)", 0),
                   "caption_big_x": num(-0.5, 0.5, 0.005, "stack captions: move the big word left (-) or right (+), or drag it in the picture", 0),
                   "caption_big_y": num(-0.5, 0.5, 0.005, "stack captions: move the big word up (-) or down (+)", 0),
                   "subtitle": text("small line under a title"), "who": text("who said it"),
@@ -350,7 +354,7 @@ class Studio:
                 p = self.path.parent / p
             if p and p.exists():
                 stamp.append((str(p), p.stat().st_mtime_ns))
-        blob = json.dumps([sc, keep, k, len(sb["scenes"]), stamp, 3], sort_keys=True, default=str)
+        blob = json.dumps([sc, keep, k, len(sb["scenes"]), stamp, 4], sort_keys=True, default=str)
         return hashlib.sha256(blob.encode()).hexdigest()[:14]
 
     # ----------------------------------------------------------- pictures
@@ -438,8 +442,10 @@ class Studio:
         stack = sb.get("caption_style") == "stack" and bool(sc.get("caption"))
         parts: dict[str, list[str]] = {}
         for r in rows:
-            layer, style = r[len("Dialogue:"):].split(",")[0].strip(), r.split(",")[3]
-            part = ("big" if layer == "3" else "small" if layer == "2" else "rest") if stack and style == "Cap" else "rest" if stack else "all"
+            f = r[len("Dialogue:"):].split(",")
+            layer, style, name = f[0].strip(), f[3], f[4]
+            part = (name if name in ("above", "below", "big") else "big" if layer == "3" else "above" if layer == "2" else "rest") \
+                if stack and style == "Cap" else "rest" if stack else "all"
             parts.setdefault(part, []).append(r)
         clean = self.cache / f"clean-{key}.mp4"
         with self._once(clean):
@@ -1098,7 +1104,7 @@ def handler(st: Studio):
                     return self._json(st.lift(q["scene"]))
                 if u.path == "/api/lift.png":
                     name = q.get("name", "")
-                    if not re.fullmatch(r"lift-[0-9a-f]{14}-(bg\.jpg|(small|big|rest|all)\.png)", name) or not (st.cache / name).exists():
+                    if not re.fullmatch(r"lift-[0-9a-f]{14}-(bg\.jpg|(above|below|big|rest|all)\.png)", name) or not (st.cache / name).exists():
                         raise ValueError("no such picture")
                     return self._file(st.cache / name, "image/jpeg" if name.endswith(".jpg") else "image/png")
                 if u.path == "/api/play":

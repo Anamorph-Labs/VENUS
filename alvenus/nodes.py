@@ -31,7 +31,7 @@ KINDS = ("settings", "sound", "style", "scene") + PARTS + ("tool",)
 GRAPHIC_TYPES = {"stat", "chart", "line_chart", "timeline", "list", "compare", "map", "split"}
 PART_KEYS = {
     "in": ("transition",),
-    "words": ("text", "caption", "caption_big", "caption_order", "caption_place", "caption_small", "caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y", "big_words", "subtitle", "who", "year", "tag", "detail", "credit"),
+    "words": ("text", "caption", "caption_big", "caption_order", "caption_place", "caption_small", "caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y", "caption_above_x", "caption_above_y", "caption_below_x", "caption_below_y", "big_words", "subtitle", "who", "year", "tag", "detail", "credit"),
     "picture": ("file", "from", "label", "push", "darken", "frame"),
     "mark": ("callout", "note"),
     "graphic": ("value", "label", "bars", "points", "items", "title", "pins", "route", "image", "left", "right"),
@@ -46,7 +46,7 @@ STAGES = (
     ("look", "picture", ("photo", "darken")),
     ("shape", "picture", ("shape", "shape_colour")),
     ("graphic", "graphic", PART_KEYS["graphic"]),
-    ("words", "words", ("text", "caption", "caption_big", "caption_order", "caption_place", "caption_small", "caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y", "big_words", "subtitle", "who", "size", "speed", "delay", "align", "caps", "font", "weight", "colour", "x", "y")),
+    ("words", "words", ("text", "caption", "caption_big", "caption_order", "caption_place", "caption_small", "caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y", "caption_above_x", "caption_above_y", "caption_below_x", "caption_below_y", "big_words", "subtitle", "who", "size", "speed", "delay", "align", "caps", "font", "weight", "colour", "x", "y")),
     ("marks", "mark", ("callout", "note", "colour", "show")),
 )
 BYPASS = {  # what a scene looks like with a stage off

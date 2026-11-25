@@ -26,10 +26,10 @@ SMALL_FONT, SMALL_FILE = "Inter Display", "InterDisplay-Bold.otf"  # drawn bold 
 WHITE = "&H00F6FAFC&"
 BIG_FIRST: set[int] = set()  # lines (scenes) whose card opens on the big word, the rest flat under it
 SIDE: dict[int, str] = {}  # line -> "above" or "below": every small word on that side of the big word
-NUDGE: dict[int, tuple[float, float, float, float]] = {}  # line -> small row x, y, big word x, y, as shares of the frame
+NUDGE: dict[int, tuple[float, ...]] = {}  # line -> small rows x, y, big word x, y, row above x, y, row below x, y (shares of the frame)
 SMALL_SHARE = 0.30  # small type = this share of the big word's size
 STEP = 1.16  # baseline to baseline of small rows, in small sizes
-GAP = 0.42  # space between a small row and the big word, in small sizes
+GAP = 0.18  # space between a small row and the big word, in small sizes: the rows hug the big word
 
 
 @lru_cache(maxsize=None)
@@ -96,10 +96,16 @@ def layout(texts: list[str], k0: int, k1: int, w: int, h: int, max_w: float, big
     ss = max(ss, 0.058 * min(w, h))
     bm = measure(big_text, bs, BIG_FILE)
 
-    def row_size(idx):  # one row; smaller type before it would ever wrap
+    big_w = bm["r"] - bm["l"]
+    floor = max(ss * 0.75, 0.05 * min(w, h))
+
+    def row_size(idx):  # one row, within the big word's width while it stays easy to read; smaller type before it would ever wrap
         s = ss
         txt = " ".join(texts[i] for i in idx)
-        while s > ss * 0.6 and (lambda m: m["r"] - m["l"])(measure(txt, s, SMALL_FILE)) > max_w:
+        ink = lambda s: (lambda m: m["r"] - m["l"])(measure(txt, s, SMALL_FILE))
+        while s * 0.95 >= floor and ink(s) > big_w:
+            s *= 0.95
+        while s > ss * 0.6 and ink(s) > max_w:
             s *= 0.95
         return s
 
@@ -149,7 +155,8 @@ def stack_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset(
         k0, k1 = _key_range(g)
         texts = [_clean(x.text, k0 <= j < k1) for j, x in enumerate(g)]
         lay = layout(texts, k0, k1, w, h, max_w, g[0].line in BIG_FIRST, SIDE.get(g[0].line))
-        sx, sy, bx, by = NUDGE.get(g[0].line, (0.0, 0.0, 0.0, 0.0))
+        sx, sy, bx, by, upx, upy, dnx, dny = (tuple(NUDGE.get(g[0].line, ())) + (0.0,) * 8)[:8]
+        big_y = next(yb for _, f, _, yb in lay["rows"] if f == BIG_FILE)
         at = _where(g, g_end, lay["w"], lay["h"], w, h)
         if at is None:
             an, ax, ay = 2, w // 2, round(h * (0.7 if h > w else 0.8))
@@ -166,7 +173,8 @@ def stack_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset(
             pen = edge - il  # the pen position that puts the ink edge on the card's edge
             big = file == BIG_FILE
             # the creator moved this row on its own: the small row or the big word, by a share of the frame
-            dx, dy = (bx * w, by * h) if big else (sx * w, sy * h)
+            part = "big" if big else "above" if yb < big_y else "below"
+            dx, dy = (bx * w, by * h) if big else ((sx + upx) * w, (sy + upy) * h) if part == "above" else ((sx + dnx) * w, (sy + dny) * h)
             if dx or dy:  # a moved row still stays inside the frame's safe area
                 edge = min(max(edge + dx, L), R - rw)
                 dy = min(max(dy, T - top), B - lay["h"] - top) if big else dy
@@ -189,7 +197,7 @@ def stack_events(words, w: int, h: int, accent: str, skip: set[int] = frozenset(
                     anim = "\\fscx60\\fscy60\\t(0,170,\\fscx106\\fscy106)\\t(170,260,\\fscx100\\fscy100)\\fad(60,140)"
                     font = f"\\fn{SMALL_FONT}\\b1"
                 if t0 < g_end:
-                    out.append(f"Dialogue: {3 if big else 2},{_t(t0)},{_t(g_end)},Cap,,0,0,0,,"
+                    out.append(f"Dialogue: {3 if big else 2},{_t(t0)},{_t(g_end)},Cap,{part},0,0,0,,"
                                f"{{\\an5\\pos({cx:.1f},{cy:.1f}){font}\\fs{s:.1f}{look}{anim}}}{_esc(txt)}")
                 x += m["adv"]
     return out

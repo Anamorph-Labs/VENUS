@@ -629,7 +629,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         except (TypeError, ValueError):
             return 0.0
     stackcaps.NUDGE = {i: n for i, sc in enumerate(scenes)
-                       if any(n := tuple(_share(sc.get(k)) for k in ("caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y")))}
+                       if any(n := tuple(_share(sc.get(k)) for k in ("caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y",
+                                                                  "caption_above_x", "caption_above_y", "caption_below_x", "caption_below_y")))}
     style_.BRANDED = bool(sb.get("_branded"))
     style_.WORD_LOOK = [(*spans[i], lk) for i, sc in enumerate(scenes)  # (the designed looks lay it on in scene_events)
                         if (lk := style_.word_look(sc)) and not (design and sc["type"] in ("title", "text", "clip", "image"))]
