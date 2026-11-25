@@ -131,13 +131,14 @@ def _even(items: list, n: int) -> list[list]:
 
 
 CAPTION_MODE = "pop"  # "pop" (below), "bracket" or "keyword" (interview looks from the Venus 1 board)
-CAPTION_MODES = ("pop", "classic", "bracket", "keyword")
+CAPTION_MODES = ("pop", "classic", "bracket", "keyword", "stack")
 # The type: Venus's own fonts, unless the brand kit gives the creator's
 # (brand.fonts()). FONT_MAP swaps a Venus font for the creator's everywhere
 # on screen (captions, titles, cards, charts); KIT_FILES says where those
 # font files are, so text is measured and drawn in the font that is shown.
 FONT_FILES = {"Inter ExtraBold": "Inter-ExtraBold.otf", "Inter SemiBold": "Inter-SemiBold.otf",
-              "Instrument Serif": "InstrumentSerif-Italic.ttf", "Inter Display Black": "InterDisplay-Black.otf"}
+              "Instrument Serif": "InstrumentSerif-Italic.ttf", "Inter Display Black": "InterDisplay-Black.otf",
+              "Inter Display ExtraBold": "InterDisplay-ExtraBold.otf", "Inter Display": "InterDisplay-Bold.otf"}
 FONT_MAP: dict[str, str] = {}
 KIT_FILES: dict[str, Path] = {}
 BRANDED = False  # a brand kit is in use: accents come from it, not from a look's own colours
@@ -242,6 +243,10 @@ def caption_events(words, w: int, h: int, accent: str, skip: set[int] = frozense
         return bracket_events(words, w, h, accent, skip)
     if CAPTION_MODE == "keyword":
         return keyword_events(words, w, h, accent, skip)
+    if CAPTION_MODE == "stack":
+        from .stackcaps import stack_events
+
+        return stack_events(words, w, h, accent, skip)
     return pop_events(words, w, h, accent, skip)
 
 

@@ -587,7 +587,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             sfx += [(t0 + 0.3 + draw * k / (n - 1), "tick") for k in range(1, n)]
     from . import graphics, style as style_
 
-    style_.CAPTION_MODE = sb.get("caption_style") if sb.get("caption_style") in ("bracket", "keyword") else "pop"
+    style_.CAPTION_MODE = sb.get("caption_style") if sb.get("caption_style") in ("bracket", "keyword", "stack") else "pop"
     graphics.PANELS = False  # the scene's own background shows behind charts, numbers and quotes
     from . import genre
 
@@ -615,6 +615,18 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     from .placement import parse_place
 
     style_.CARD_WORDS = card_words(sb.get("caption_words"))
+    from . import stackcaps
+
+    stackcaps.BIG_FIRST = {i for i, sc in enumerate(scenes) if sc.get("caption_order") == "big-first"}
+    stackcaps.SIDE = {i: sc["caption_small"] for i, sc in enumerate(scenes) if sc.get("caption_small") in ("above", "below")}
+
+    def _share(v) -> float:
+        try:
+            return max(-0.5, min(0.5, float(v or 0)))
+        except (TypeError, ValueError):
+            return 0.0
+    stackcaps.NUDGE = {i: n for i, sc in enumerate(scenes)
+                       if any(n := tuple(_share(sc.get(k)) for k in ("caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y")))}
     style_.BRANDED = bool(sb.get("_branded"))
     from . import brand
 
@@ -638,6 +650,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         style_.CAPTION_MODE = "pop"
         style_.CARD_WORDS = (2, 6)
         style_.BRANDED = False
+        stackcaps.BIG_FIRST = set()
+        stackcaps.SIDE, stackcaps.NUDGE = {}, {}
         brand.reset_fonts()
         genre.EXTRAS = {}
     base.unlink()

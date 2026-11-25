@@ -53,7 +53,7 @@ def schema() -> dict:
                      "transition": pick(TRANSITIONS, "how scenes change"), "transition_seconds": num(0.1, 1.2, 0.05, "", 0.4),
                      "title_style": pick(TITLE_STYLES), "quote_style": pick(("card", "verse"), "quotes as a card or quietly over the picture"), "label": text("the name printed on the page"),
                      "end_card": text("last words on screen"), "background": pick(BGS), "captions": flag("", True),
-                     "caption_style": pick(("pop", "keyword"), "pop: each word lights up as it is said; keyword: one big word over a small row", "pop"),
+                     "caption_style": pick(("pop", "keyword", "stack"), "pop: each word lights up as it is said; keyword: one big word over a small row; stack: one big bold word, small rows above and below on one edge", "pop"),
                      "caption_words": text("words per caption card, fewest-most (2-6 unless you choose)"),
                      "caption_placement": pick(("auto", "fixed"), "auto: each card sits where the picture leaves room; fixed: always bottom centre", "auto"),
                      "cut_on_beat": flag("", True),
@@ -74,8 +74,14 @@ def schema() -> dict:
         "shape": {"shape": pick(SHAPES, "what sits behind the print"), "shape_colour": colour("its colour", accent=True)},
         "words": {"text": text("words of a title or text scene", True), "caption": text("words beside a picture", True),
                   "caption_big": text("the word set big on this scene's caption card"),
+                  "caption_order": pick(("normal", "big-first"), "stack captions: big-first puts the big word on top and the rest flat under it", "normal"),
                   "caption_place": pick(("auto", "top", "middle", "bottom", "top-left", "top-right", "bottom-left", "bottom-right"),
                                         "where this scene's caption card sits; auto: Venus picks from the picture", "auto"),
+                  "caption_small": pick(("auto", "above", "below"), "stack captions: where the small words sit, around the big word", "auto"),
+                  "caption_small_x": num(-0.5, 0.5, 0.005, "stack captions: move the small words left (-) or right (+), or drag them in the picture", 0),
+                  "caption_small_y": num(-0.5, 0.5, 0.005, "stack captions: move the small words up (-) or down (+)", 0),
+                  "caption_big_x": num(-0.5, 0.5, 0.005, "stack captions: move the big word left (-) or right (+), or drag it in the picture", 0),
+                  "caption_big_y": num(-0.5, 0.5, 0.005, "stack captions: move the big word up (-) or down (+)", 0),
                   "subtitle": text("small line under a title"), "who": text("who said it"),
                   "year": text("archive: the year beside the photo"), "tag": text("archive: one word in the red tag"),
                   "detail": text("archive: a short typed line under the tag"), "credit": text("an opening credit, Role|Name"),
@@ -94,6 +100,7 @@ class Studio:
     def __init__(self, path: Path):
         self.path = path.resolve()
         self.lock = threading.RLock()
+        self._plays: dict[str, threading.Lock] = {}  # one lock per draft file being built
         self.cache = self.path.parent / ".venus-cache" / "studio"
         self.cache.mkdir(parents=True, exist_ok=True)
         self.history: list[str] = []
@@ -274,10 +281,32 @@ class Studio:
             ids = [n["id"] for n in nd.scenes_of(self.doc)]
         k = ids.index(sid)
         out = self.cache / f"play-{self._key(sb, k)}.mp4"
-        if not out.exists():
-            approve(self.path, "you, in Studio")  # pressing play on a scene is the creator's yes to it
-            subprocess.run([sys.executable, "-m", "alvenus", "make", str(self.path), "--scene", sid, "--draft", "--out", str(out)],
-                           check=True, capture_output=True, cwd=str(self.path.parent))
+        with self._once(out):
+            if not out.exists():
+                approve(self.path, "you, in Studio")  # pressing play on a scene is the creator's yes to it
+                subprocess.run([sys.executable, "-m", "alvenus", "make", str(self.path), "--scene", sid, "--draft", "--out", str(out)],
+                               check=True, capture_output=True, cwd=str(self.path.parent))
+        return out
+
+    def _once(self, out: Path) -> threading.Lock:
+        """One lock per draft file: a frame preview and Play (or two clicks) wait for one build
+        instead of building the same draft at once and deleting each other's working files."""
+        with self.lock:
+            return self._plays.setdefault(out.name, threading.Lock())
+
+    def draft(self) -> Path:
+        """The whole video as a quick draft, to play it from start to end with a timeline."""
+        with self.lock:
+            sb = self.storyboard()
+        keys = [self._key(sb, k) for k in range(len(sb["scenes"]))]
+        rest = {k: v for k, v in sb.items() if k != "scenes"}
+        tag = hashlib.sha256(json.dumps([keys, rest], sort_keys=True, default=str).encode()).hexdigest()[:14]
+        out = self.cache / f"all-{tag}.mp4"
+        with self._once(out):
+            if not out.exists():
+                approve(self.path, "you, in Studio")  # playing the whole video is the creator's yes to what is on screen
+                subprocess.run([sys.executable, "-m", "alvenus", "make", str(self.path), "--draft", "--no-mark", "--out", str(out)],
+                               check=True, capture_output=True, cwd=str(self.path.parent))
         return out
 
     def story_check(self) -> dict:
@@ -615,6 +644,8 @@ def handler(st: Studio):
                     return self._file(st.preview(q["scene"], float(q.get("at", 0.6))), "image/jpeg")
                 if u.path == "/api/play":
                     return self._file(st.play(q["scene"]), "video/mp4")
+                if u.path == "/api/draft":
+                    return self._file(st.draft(), "video/mp4")
                 if u.path == "/api/video":
                     v = st.path.with_name(st.render.get("video") or "")
                     if st.render.get("video") and v.exists():

@@ -374,7 +374,7 @@ def cmd_cut(a: argparse.Namespace) -> None:
     vids = [s for s in sources if has_video(s)]
     fps = frame_rate(vids[0]) if vids else 30.0
     finish_notes: list[str] = []
-    pop = a.captions and a.caption_style in ("pop", "bracket", "keyword")
+    pop = a.captions and a.caption_style in ("pop", "bracket", "keyword", "stack")
     from . import style as style_
 
     style_.CAPTION_MODE = a.caption_style if pop else "pop"
@@ -1591,7 +1591,7 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--title", help="opening title, shown over the first seconds")
     c.add_argument("--end-card", help="text on a closing card after the last line (e.g. a call to action)")
     c.add_argument("--look", default="natural", choices=sorted(LOOKS), help="colour grade for the whole cut, B-roll included")
-    c.add_argument("--caption-style", default="pop", choices=["pop", "classic", "bracket", "keyword"], help="pop: short phrases, each word lights up as it is said; classic: one plain line; bracket: one word at a time, small mono [word] at chest height (interviews); keyword: each phrase small with its key word big in gold italic serif above (podcasts)")
+    c.add_argument("--caption-style", default="pop", choices=["pop", "classic", "bracket", "keyword", "stack"], help="pop: short phrases, each word lights up as it is said; classic: one plain line; bracket: one word at a time, small mono [word] at chest height (interviews); keyword: each phrase small with its key word big in gold italic serif above (podcasts); stack: one big bold word with the rest of the card in a small row above and below, all on one edge (short-form reels)")
     c.add_argument("--accent", help="accent colour for captions, title bar and end card, as #RRGGBB (default: the brand kit's accent)")
     c.add_argument("--transition", default="cut", choices=list(TRANSITIONS), help="how a new scene (after a blank line in the script) comes in")
     c.add_argument("--title-style", default="track", choices=list(TITLE_STYLES), help="how the opening title and end card animate in")

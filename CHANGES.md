@@ -18,6 +18,9 @@ so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 - Studio: tall videos get their own full-height picture beside the node graph, square ones a bigger picture, a line to drag it bigger or smaller, and Big view (double-click the picture; Esc closes).
 - Studio: a description waiting for your AI says plainly whether your AI is connected, and if not, gives you a message to paste in your AI chat. Venus also does more simple asks itself ("at the top", "at the bottom", "much longer", "bold").
 - Studio: the Tips card fits any window and closes with ×, Esc or a click outside; a caption's place shows "auto" when Venus picks it.
+- A new caption look, "stack": one big word with the rest of the line in small bold type above or below it, all on one edge (`caption_style: stack`, `caption_big` to choose the big word).
+- Studio: move the small words and the big word of a caption on their own: drag them in the picture ("Move small words" / "Move big word") or set them in the Words node. They always stay inside the frame.
+- Studio: a timeline of the whole video under the picture. Press play (or Space) to watch it all with the current scene lit up; click anywhere on it to jump there.
 
 ## 0.9.0 (24 Nov 2026)
 - Trailers: credit words that slam in huge over old newsprint or red paint, settle small and are wiped off by a brush stroke, and a date card over red smoke, with booms, risers and a deep braam (`make --template trailer`).

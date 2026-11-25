@@ -38,6 +38,7 @@ SLOTS_WIDE = {
 SLOTS_TALL = {
     "bottom": (2, 0.5, 0.78), "middle": (5, 0.5, 0.52), "top": (8, 0.5, 0.14),
     "bottom-left": (1, 0.08, 0.78), "top-left": (7, 0.08, 0.14),
+    "bottom-right": (3, 0.88, 0.78), "top-right": (9, 0.88, 0.14),  # right edge stops short of the app's buttons
 }
 NAMES = sorted(set(SLOTS_WIDE) | set(SLOTS_TALL))
 

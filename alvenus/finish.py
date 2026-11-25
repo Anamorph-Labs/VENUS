@@ -219,7 +219,7 @@ def finish(
         ass = out.with_suffix(".look.ass")
         from . import style as style_
 
-        if words and style_.CAPTION_MODE in ("pop", "keyword") and caption_places is not False:
+        if words and style_.CAPTION_MODE in ("pop", "keyword", "stack") and caption_places is not False:
             from .placement import Planner
 
             # each caption card goes where the picture under it leaves room (placement.py)
