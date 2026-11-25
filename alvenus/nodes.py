@@ -46,7 +46,7 @@ STAGES = (
     ("look", "picture", ("photo", "darken")),
     ("shape", "picture", ("shape", "shape_colour")),
     ("graphic", "graphic", PART_KEYS["graphic"]),
-    ("words", "words", ("text", "caption", "caption_big", "caption_order", "caption_place", "caption_small", "caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y", "big_words", "subtitle", "who", "size", "speed", "delay", "align", "caps")),
+    ("words", "words", ("text", "caption", "caption_big", "caption_order", "caption_place", "caption_small", "caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y", "big_words", "subtitle", "who", "size", "speed", "delay", "align", "caps", "font", "weight", "colour", "x", "y")),
     ("marks", "mark", ("callout", "note", "colour", "show")),
 )
 BYPASS = {  # what a scene looks like with a stage off

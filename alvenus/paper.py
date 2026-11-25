@@ -46,6 +46,11 @@ CONTROLS = {
     "words_delay": "seconds after the scene starts before the first word (0 to 5; default 0.25)",
     "words_align": "left, centre or right",
     "words_caps": "true or false: words in capitals",
+    "words_font": "the type for this scene's words: sans, serif, serif-italic, tall, typewriter or hand",
+    "words_weight": "how heavy the words are: regular, bold or heavy",
+    "words_colour": "colour of this scene's words: #RRGGBB (the accent colour stays on the big word)",
+    "words_x": "move this scene's words left (-) or right (+), as a share of the width (-0.5 to 0.5)",
+    "words_y": "move this scene's words up (-) or down (+), as a share of the height (-0.5 to 0.5)",
     "picture_size": "size of the print, 1 = the design's own (0.5 to 1.4)",
     "picture_shape": "what sits behind the print: circle, block, blob or none",
     "picture_shape_colour": "colour of that shape: #RRGGBB, or accent",
@@ -61,11 +66,19 @@ PHOTOS = ("grey", "colour", "warm")
 def control_problem(key: str, v) -> str | None:
     """Why a control's value can't be used (None when it can)."""
     num = {"words_size": (0.4, 2.5), "words_speed": (0.05, 1.5), "words_delay": (0.0, 5.0),
-           "picture_size": (0.5, 1.4), "picture_angle": (-12.0, 12.0)}
+           "picture_size": (0.5, 1.4), "picture_angle": (-12.0, 12.0), "words_x": (-0.5, 0.5), "words_y": (-0.5, 0.5)}
     if key in num:
         lo, hi = num[key]
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not lo <= v <= hi:
             return f"{key} must be a number from {lo:g} to {hi:g}"
+    elif key in ("words_font", "words_weight"):
+        from .style import WORD_FONTS, WORD_WEIGHTS
+
+        ok = WORD_FONTS if key == "words_font" else WORD_WEIGHTS
+        if v not in ok:
+            return f"{key} must be one of {', '.join(ok)}"
+    elif key == "words_colour" and not (isinstance(v, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", v)):
+        return "words_colour must be #RRGGBB"
     elif key == "words_align" and v not in ("left", "centre", "center", "right"):
         return "words_align must be left, centre or right"
     elif key in ("words_caps", "mark_show") and not isinstance(v, bool):
@@ -816,7 +829,8 @@ def _t(x: float) -> str:
 
 def word_events(text: str, big: set[str], t0: float, t1: float, w: int, h: int, design: str, accent: str,
                 box: tuple[int, int, int, int], dark: bool, align: str = "left", caps: bool = False, layer: int = 20,
-                size: float = 1.0, speed: float | None = None, delay: float = 0.25) -> tuple[list[str], list[float]]:
+                size: float = 1.0, speed: float | None = None, delay: float = 0.25,
+                face: tuple[str, str] | None = None) -> tuple[list[str], list[float]]:
     """Words set into `box` (x, y, width, height), each arriving on its own
     beat: it fades up out of a blur and settles. Mixed type on one baseline.
     Returns the events and the time each word lands."""
@@ -833,6 +847,8 @@ def word_events(text: str, big: set[str], t0: float, t1: float, w: int, h: int, 
         "light": (("Inter", "SemiBold"), 0.6),
         "mark": (("Inter Display", "Black") if design == "paper" else ("Inter", "ExtraBold"), 1.0),
     }
+    if face:  # the creator's own type for these words: measured in it, so the spacing stays true
+        faces = {r: (face if r in ("plain", "mark", "big") else f, z) for r, (f, z) in faces.items()}
     ink = (240, 240, 240) if dark else INK
     grey = (150, 150, 150) if dark else (110, 110, 110)
     words = parse(text, big)
@@ -1009,6 +1025,20 @@ def mark_events(design: str, kind: str, px: float, py: float, label: str, t0: fl
     return ev
 
 
+def _face(sc: dict) -> tuple[str, str] | None:
+    """The face a scene's word look measures its words in (None = the design's own)."""
+    from .style import word_look
+
+    lk = word_look(sc)
+    font, weight = lk.get("font"), lk.get("weight")
+    if font and font != "sans":
+        return {"serif": ("Libre Baskerville", "Regular"), "serif-italic": ("Instrument Serif", "Italic"), "tall": ("Big Shoulders", "Bold"),
+                "typewriter": ("DM Mono", "Regular"), "hand": ("Nothing You Could Do", "Regular")}[font]
+    if font or weight:
+        return {"regular": ("Inter", "SemiBold"), "bold": ("Inter", "ExtraBold"), "heavy": ("Inter Display", "Black")}[weight or "bold"]
+    return None
+
+
 def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: int,
                  only: str | None = None) -> tuple[list[str], list[float]]:
     """Everything drawn over one designed scene, and the times its beats land
@@ -1049,7 +1079,7 @@ def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: 
         caps = sc.get("words_caps", design == "paper")
         e, lands = word_events(words, big, t0, t1, w, h, design, accent, box, dark, align=align, caps=bool(caps),
                                size=float(sc.get("words_size", 1.0)), speed=sc.get("words_speed"),
-                               delay=float(sc.get("words_delay", 0.25)))
+                               delay=float(sc.get("words_delay", 0.25)), face=_face(sc))
         ev += e
         beats += lands
     wev, ev = ev, []
@@ -1098,6 +1128,9 @@ def scene_events(sc: dict, k: int, t0: float, t1: float, w: int, h: int, total: 
                 ev.append(f"Dialogue: 22,{_t(ta + 0.2)},{_t(t1)},Card,,0,0,0,,{{\\an{7 if side > 0 else 9}\\pos({nx:.0f},{ay + u * 0.02:.0f})"
                           f"\\fnNothing You Could Do\\b0\\fs{s}\\bord0\\shad0\\1c{red}\\alpha&HFF&\\t(0,250,\\alpha&H00&)\\fad(0,200)}}{_esc(sc['note'])}")
             beats.append(ta)
+    from .style import restyle, word_look
+
+    wev = restyle(wev, word_look(sc), w, h, accent)  # the creator's own font, colour and place for these words
     wev = ass_tools(wev, tools_on(sc, "words"), u, accent)
     ev = ass_tools(ev, tools_on(sc, "marks"), u, accent)
     return ({"words": wev, "marks": ev}.get(only, wev + ev) if only else wev + ev), beats

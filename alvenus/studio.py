@@ -58,7 +58,7 @@ def schema() -> dict:
     from .cut import TRANSITIONS
     from .paper import DESIGNS, PHOTOS, SHAPES
     from .presets import PRESETS
-    from .style import TITLE_STYLES
+    from .style import TITLE_STYLES, WORD_FONTS, WORD_WEIGHTS
 
     num = lambda lo, hi, step, why="", default=None: {"type": "number", "min": lo, "max": hi, "step": step, "why": why, "default": default}
     pick = lambda opts, why="", default=None, labels=None: {"type": "select", "options": list(opts), "why": why, "default": default,
@@ -111,7 +111,14 @@ def schema() -> dict:
                   "big_words": {"type": "list", "why": "the huge words"},
                   "size": num(0.4, 2.5, 0.05, "size of the words", 1), "speed": num(0.05, 1.5, 0.01, "seconds between words", None),
                   "delay": num(0, 5, 0.05, "wait before the first word", 0.25), "align": pick(("left", "centre", "right")),
-                  "caps": flag("capitals")},
+                  "caps": flag("capitals"),
+                  "font": pick(WORD_FONTS, "the type for this scene's words", None,
+                               {"sans": "Clean sans", "serif": "Book serif", "serif-italic": "Serif italic", "tall": "Tall and narrow",
+                                "typewriter": "Typewriter", "hand": "Handwritten"}),
+                  "weight": pick(WORD_WEIGHTS, "how heavy the words are"),
+                  "colour": {"type": "colour", "accent": False, "swatches": True, "why": "colour of the words; the big word keeps the accent colour"},
+                  "x": num(-0.5, 0.5, 0.005, "move the words left (-) or right (+), or use Move words and drag them in the picture", 0),
+                  "y": num(-0.5, 0.5, 0.005, "move the words up (-) or down (+)", 0)},
         "marks": {"callout": {"type": "callout", "why": "a loop and a label pointing at one spot"},
                   "note": text("a handwritten note by the arrow"), "colour": colour("colour of the marks"),
                   "show": flag("show the automatic label or arrow", True)},
@@ -245,7 +252,23 @@ class Studio:
                     "byAI": [k for k, t in self.by_ai.items() if now - t < 600], "changed": changed,
                     "built": last.get("built"), "canUndo": bool(self.history), "canRedo": bool(self.future),
                     "render": self.render_state(), "asks": [n["id"] for n in nd.asks(doc)], "problems": nd.check(doc),
-                    "aiSeen": nd.ai_seen(self.path), "path": str(self.path.resolve())}
+                    "aiSeen": nd.ai_seen(self.path), "path": str(self.path.resolve()), "palette": self.palette(sb)}
+
+    def palette(self, sb: dict) -> list:
+        """The colours offered for words: the brand kit's when there is one, else plain white
+        and black, and always the video's accent."""
+        from . import brand
+
+        try:
+            kit = brand.load(sb.get("brand"), self.path.parent) if sb.get("brand") is not False else None
+        except Exception:
+            kit = None
+        cols = [[k.replace("_", " ").capitalize(), v.upper()] for k, v in (kit or {}).get("colours", {}).items()] \
+            or [["White", "#FFFFFF"], ["Black", "#000000"]]
+        acc = brand.hex_of(str(sb.get("accent") or "")) if sb.get("accent") else None
+        if acc and acc.upper() not in [c[1] for c in cols]:
+            cols.append(["Accent", acc.upper()])
+        return cols[:10]
 
     def _key(self, sb: dict, k: int) -> str:
         sc = sb["scenes"][k]

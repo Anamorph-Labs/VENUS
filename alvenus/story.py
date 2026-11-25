@@ -628,6 +628,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     stackcaps.NUDGE = {i: n for i, sc in enumerate(scenes)
                        if any(n := tuple(_share(sc.get(k)) for k in ("caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y")))}
     style_.BRANDED = bool(sb.get("_branded"))
+    style_.WORD_LOOK = [(*spans[i], lk) for i, sc in enumerate(scenes)  # (the designed looks lay it on in scene_events)
+                        if (lk := style_.word_look(sc)) and not (design and sc["type"] in ("title", "text", "clip", "image"))]
     from . import brand
 
     notes += brand.font_setup(sb.get("fonts"))
@@ -650,6 +652,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         style_.CAPTION_MODE = "pop"
         style_.CARD_WORDS = (2, 6)
         style_.BRANDED = False
+        style_.WORD_LOOK = []
         stackcaps.BIG_FIRST = set()
         stackcaps.SIDE, stackcaps.NUDGE = {}, {}
         brand.reset_fonts()

@@ -275,6 +275,7 @@ aside .what{color:var(--q);font-size:13px;margin:8px 0 16px}
 .row .rng{display:flex;gap:10px;align-items:center}
 .row .rng input[type=number]{width:64px;height:28px;font-size:12px;padding:0 8px;text-align:center}
 .row .col{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--mut)}
+.row .col .sws{display:flex;gap:5px;flex-wrap:wrap}.row .col .sw{width:22px;height:22px;min-width:0;padding:0;border-radius:50%;border:1px solid var(--hair2)}.row .col .sw.on{outline:2px solid var(--ink);outline-offset:1px}
 .row .col input[type=color]{width:42px;height:28px;border:1px solid var(--hair2);border-radius:8px;background:none;padding:2px}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chips button{height:auto;padding:5px 12px;font-size:12.5px;font-weight:400;color:var(--mut)}
@@ -331,6 +332,12 @@ padding:18px 20px;box-shadow:var(--pop);display:none;max-height:calc(100vh - 90p
 .row.drop,.clip.drop,.screen.drop .frame{outline:2px dashed var(--blue);outline-offset:3px}
 .dropveil{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;pointer-events:none;background:rgba(23,24,27,.12)}
 .dropveil.on{display:flex}.dropveil span{background:var(--panel);border:1px solid var(--hair2);border-radius:999px;padding:10px 18px;font-size:14px;box-shadow:var(--pop)}
+.clist{overflow:auto;max-height:calc(100vh - 230px);display:flex;flex-direction:column;gap:10px;padding:2px}
+.crow{border:1px solid var(--hair2);border-radius:14px;background:var(--panel);padding:10px 12px;display:grid;grid-template-columns:120px 1fr;gap:6px 12px}
+.crow .cw{font-size:12px;color:var(--mut)}.crow .cw b{display:block;color:var(--ink);font-weight:600;font-size:13px}.crow .cw button{margin-top:6px;font-size:11px;padding:3px 8px}
+.crow textarea{width:100%;min-height:44px;height:auto;resize:vertical}
+.crow .bw{display:flex;flex-wrap:wrap;gap:4px;grid-column:2}.crow .bw button{font-size:11px;padding:2px 7px;border-radius:999px;min-width:0}.crow .bw button.on{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+@media (max-width:700px){.crow{grid-template-columns:1fr}.crow .bw{grid-column:1}}
 .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;overflow:auto;max-height:calc(100vh - 240px);padding:2px}
 .mcard{border:1px solid var(--hair2);border-radius:14px;background:var(--panel);padding:6px;display:flex;flex-direction:column;gap:6px}
 .mcard .mt{height:86px;border-radius:9px;background:var(--frame);overflow:hidden;display:grid;place-items:center;color:#E4E1DB;font-size:12px}
@@ -469,6 +476,7 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <button id="dirs" title="the same story three ways: your look, the opposite energy, tighter">Three directions</button>
 <button id="vset">Video settings</button>
 <button id="media" title="photos, clips and sound in this project">Media</button>
+<button id="capsbtn" title="every scene's words in one list, to read through and fix">Captions list</button>
 <button id="sound">Sound</button><hr>
 <button id="theme" title="light or dark">Theme <small id="themename">Day</small></button>
 </div></header>
@@ -481,7 +489,7 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <div class="vh"><h2 id="vtitle"></h2><span class="meta" id="vmeta"></span></div>
 <div class="vrow"><button id="play"><svg viewBox="0 0 16 16" width="12" height="12" style="width:12px;height:12px"><path d="M4 3l9 5-9 5z" fill="currentColor" stroke="none"/></svg>Play scene</button>
 <button id="holdA" title="keep this frame, then change something and compare before (A) and now">Compare</button>
-<span class="mseg" id="mvseg" style="display:none" title="drag in the picture to move only these words"><span data-mv="small">Move small words</span><span data-mv="big">Move big word</span></span>
+<span class="mseg" id="mvseg" style="display:none" title="drag in the picture to move only these words"><span data-mv="all">Move words</span><span data-mv="small">Move small words</span><span data-mv="big">Move big word</span></span>
 <button id="big" title="see the picture over the whole window (or double-click the picture; Esc closes)"><svg viewBox="0 0 16 16" width="12" height="12" style="width:12px;height:12px"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Big view</button>
 <span class="mseg" id="abseg" style="display:none" title="A is the frame you held; Now is how it looks now. Drag across the picture to wipe between them."><span data-ab="a">A</span><span data-ab="now" class="on">Now</span></span>
 <input type="range" id="wipe" min="0" max="100" value="0" style="display:none" aria-label="before and after wipe"><span id="wipelab" style="display:none"></span></div>
@@ -524,6 +532,9 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <div class="dirbox mediabox" id="mediabox" role="dialog" aria-label="media"><div class="dirhead"><div><span class="lab">Media</span><h3>Photos, clips and sound</h3></div><button class="xb" id="mediaclose" title="close" aria-label="close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
 <div class="mhead"><p class="small" style="margin:0">Everything in this project's folder. Drop files anywhere on Studio to add them: on a scene to use them there.</p><span class="sp"></span><button class="primary" id="mediaadd">Add files</button></div>
 <div class="mgrid" id="mgrid"></div></div>
+<div class="dirbox mediabox capsbox" id="capsbox" role="dialog" aria-label="captions list"><div class="dirhead"><div><span class="lab">Captions list</span><h3>Every scene's words</h3></div><button class="xb" id="capsclose" title="close" aria-label="close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+<p class="small" style="margin:0 0 10px">Read the whole video's words top to bottom and fix them here. Click a word to make it the big word on that scene's caption.</p>
+<div class="clist" id="clist"></div></div>
 <div class="dropveil" id="dropveil"><span>Drop on a scene or the picture to use it there, or anywhere to add it to Media</span></div>
 <input type="file" id="filepick" multiple hidden>
 <div class="toast" id="toast"></div><div class="wtip" id="wtip"></div>
@@ -550,7 +561,7 @@ const LABEL = {venus_mark: 'Made with Venus mark', size: 'Size', caption: 'Words
   who: 'Who said it', callout: 'Pointer', note: 'Note', colour: 'Colour', show: 'Show', seconds: 'Length', dark: 'Dark page', background: 'Background',
   transition: 'Transition', amount: 'Amount', bright: 'Brightness', contrast: 'Contrast', saturation: 'Colour', warmth: 'Warmth', type: 'Kind', camera: 'Camera move',
   layers: 'Stack', accent: 'Accent', look: 'Look', aspect: 'Shape', music: 'Music', voiceover: 'Voice', style: 'Style', music_lufs: 'Music loudness', music_duck: 'Music under the voice', sound_effects: 'Sound effects', sfx_volume: 'Sound effects volume', voice_gap: 'Voice clear of music',
-  caption_style: 'Caption style', caption_words: 'Words per caption', caption_placement: 'Caption placement', caption_big: 'Big word', caption_order: 'Big word first', caption_small: 'Small words', caption_small_x: 'Small words ↔', caption_small_y: 'Small words ↕', caption_big_x: 'Big word ↔', caption_big_y: 'Big word ↕', caption_place: 'Caption place'};
+  caption_style: 'Caption style', caption_words: 'Words per caption', caption_placement: 'Caption placement', caption_big: 'Big word', caption_order: 'Big word first', caption_small: 'Small words', caption_small_x: 'Small words ↔', caption_small_y: 'Small words ↕', caption_big_x: 'Big word ↔', caption_big_y: 'Big word ↕', caption_place: 'Caption place', font: 'Font', weight: 'Weight', x: 'Move ↔', y: 'Move ↕'};
 const PART_LABEL = {words: 'Words', picture: 'Photo', mark: 'Marks', graphic: 'Graphic', in: 'Comes in'};
 const labelOf = q => { if (q.includes('.')) { const [a, b] = q.split('.'); return (PART_LABEL[a] || a) + ' · ' + (LABEL[b] || b).toLowerCase(); }
   return LABEL[q] || (q[0].toUpperCase() + q.slice(1)).replace(/_/g, ' '); };
@@ -887,6 +898,22 @@ function setMedia(target, p, path, kind) {  // a photo or clip into a scene (its
   toast(`${path.split('/').pop()} is in ${sceneName(sid).toLowerCase()} now. Undo brings the old one back.`);
 }
 let shelfFor = null;
+function drawCaps() {
+  const cs = node('settings')?.params || {}, on = cs.captions !== false;
+  let t = 0; const rows = [];
+  S.scenes.forEach((s, i) => {
+    const w = node(s.id + '.words')?.params || {}, t0 = t; t += s.seconds;
+    const k = w.caption != null || ['clip', 'image'].includes(s.type) ? 'caption' : w.text != null || ['title', 'text', 'quote'].includes(s.type) ? 'text' : null;
+    if (!k) return;
+    const v = w[k] || '', big = String(w.caption_big || '').toLowerCase(), lk = node(s.id + '.words')?.locked || node(s.id)?.locked;
+    const chips = k === 'caption' && v.trim() ? `<div class="bw">${v.split(/\s+/).filter(Boolean).map(x => { const c = x.replace(/[^\w'’-]/g, '');
+      return c ? `<button ${lk ? 'disabled' : ''} class="${c.toLowerCase() === big ? 'on' : ''}" data-bigw='${esc(JSON.stringify([s.id, c.toLowerCase() === big ? null : c]))}' title="${c.toLowerCase() === big ? 'the big word: click to clear' : 'make this the big word'}">${esc(c)}</button>` : ''; }).join('')}</div>` : '';
+    rows.push(`<div class="crow"><div class="cw"><b>Scene ${i + 1}</b>${t0.toFixed(1)} to ${t.toFixed(1)} s · ${k === 'caption' ? (on ? 'caption' : 'caption (captions off)') : 'on-screen words'}<br><button data-goscene="${esc(s.id)}">Show</button></div>
+      <textarea rows="2" ${lk ? 'disabled' : ''} data-t="${esc(s.id + '.words')}" data-p="${k}" data-kind="str" placeholder="no words yet">${esc(v)}</textarea>${chips}</div>`);
+  });
+  $('#clist').innerHTML = rows.join('') || '<p class="small">No scene has words yet.</p>';
+}
+function openCaps() { drawCaps(); $('#capsbox').classList.add('on'); $('#moremenu').classList.remove('on'); }
 async function openMedia(forField) {
   shelfFor = forField || null; $('#mediabox').classList.add('on'); $('#moremenu').classList.remove('on');
   $('#mgrid').innerHTML = '<p class="small">Looking…</p>';
@@ -1003,20 +1030,21 @@ $('#vid').addEventListener('timeupdate', () => {
 })();
 // ---------------------------------------------------------------- moving one caption row by hand (stack captions)
 function moveSeg() {
-  const w = node(sel.scene + '.words')?.params || {}, show = node('settings')?.params?.caption_style === 'stack' && !!(w.caption || w.text);
-  $('#mvseg').style.display = show ? '' : 'none'; if (!show) mvPart = null;
+  const w = node(sel.scene + '.words')?.params || {}, has = !!(w.caption || w.text || w.subtitle || w.who), stack = node('settings')?.params?.caption_style === 'stack' && !!w.caption;
+  $('#mvseg').style.display = has ? '' : 'none'; if (!has || (!stack && mvPart !== 'all')) mvPart = has && mvPart === 'all' ? 'all' : null;
+  $('#mvseg').querySelectorAll('[data-mv="small"],[data-mv="big"]').forEach(x => x.style.display = stack ? '' : 'none');
   $('#mvseg').querySelectorAll('[data-mv]').forEach(x => x.classList.toggle('on', x.dataset.mv === mvPart));
   $('#frame').classList.toggle('moving', !!mvPart);
 }
 $('#mvseg').addEventListener('click', e => {
   const m = e.target.closest('[data-mv]')?.dataset.mv; if (!m) return; mvPart = mvPart === m ? null : m; moveSeg();
-  if (mvPart) toast('Drag in the picture to move the ' + (m === 'big' ? 'big word' : 'small words') + ' on their own. Click the button again when done.');
+  if (mvPart) toast(m === 'all' ? 'Drag in the picture to move this scene\'s words. Click Move words again when done.' : 'Drag in the picture to move the ' + (m === 'big' ? 'big word' : 'small words') + ' on their own. Click the button again when done.');
 });
 $('#frame').addEventListener('pointerdown', e => {
   if (!mvPart || holdA) return; e.preventDefault(); e.stopPropagation();
   const f = $('#frame'), r = f.getBoundingClientRect(); f.setPointerCapture(e.pointerId);
   const x0 = e.clientX - r.left, y0 = e.clientY - r.top, g = document.createElement('span'), ln = document.createElement('div');
-  g.className = 'mvghost'; g.textContent = mvPart === 'big' ? 'Big word' : 'Small words'; ln.className = 'mvline'; f.append(ln, g);
+  g.className = 'mvghost'; g.textContent = mvPart === 'all' ? 'Words' : mvPart === 'big' ? 'Big word' : 'Small words'; ln.className = 'mvline'; f.append(ln, g);
   const mv = ev => { const x = ev.clientX - r.left, y = ev.clientY - r.top, dx = x - x0, dy = y - y0;
     g.style.left = x + 'px'; g.style.top = y + 'px'; ln.style.left = x0 + 'px'; ln.style.top = y0 + 'px';
     ln.style.width = Math.hypot(dx, dy) + 'px'; ln.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`; };
@@ -1024,9 +1052,9 @@ $('#frame').addEventListener('pointerdown', e => {
     f.removeEventListener('pointermove', mv); f.removeEventListener('pointerup', up); g.remove(); ln.remove();
     const dx = (ev.clientX - r.left - x0) / r.width, dy = (ev.clientY - r.top - y0) / r.height;
     if (Math.abs(dx) + Math.abs(dy) < 0.004) return;
-    const t = sel.scene + '.words', p = node(t)?.params || {}, k = mvPart === 'big' ? 'caption_big' : 'caption_small';
+    const t = sel.scene + '.words', p = node(t)?.params || {}, k = mvPart === 'all' ? '' : mvPart === 'big' ? 'caption_big_' : 'caption_small_';
     const cl = v => Math.round(Math.max(-0.5, Math.min(0.5, v)) * 1000) / 1000;
-    queue(t, k + '_x', cl((+p[k + '_x'] || 0) + dx)); queue(t, k + '_y', cl((+p[k + '_y'] || 0) + dy));
+    queue(t, k + 'x', cl((+p[k + 'x'] || 0) + dx)); queue(t, k + 'y', cl((+p[k + 'y'] || 0) + dy));
   };
   mv(e); f.addEventListener('pointermove', mv); f.addEventListener('pointerup', up);
 }, true);
@@ -1106,7 +1134,7 @@ function control(target, name, spec, value, locked, inherited) {
   } else if (spec.type === 'colour') {
     const hex = /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#888888';
     input = `<div class="col"><input type="color" ${dis} id="${id}" value="${hex}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">
-      <span>${esc(value || 'design default')}</span>${spec.accent ? `<button ${dis} data-set="${esc(target)}" data-p="${esc(name)}" data-v='"accent"'>use accent</button>` : ''}</div>`;
+      <span>${esc(value || 'design default')}</span>${spec.swatches ? `<span class="sws">${(S.palette || []).map(([n, c]) => `<button ${dis} class="sw ${String(value).toUpperCase() === c ? 'on' : ''}" style="background:${c}" title="${esc(n)} ${c}" aria-label="${esc(n)}" data-set="${esc(target)}" data-p="${esc(name)}" data-v='"${c}"'></button>`).join('')}</span>` : ''}${spec.accent ? `<button ${dis} data-set="${esc(target)}" data-p="${esc(name)}" data-v='"accent"'>use accent</button>` : ''}</div>`;
   } else if (spec.type === 'media') {
     input = `<div class="mfile" data-mt="${esc(target)}" data-mp="${esc(name)}" data-mk="${spec.media}"><input type="text" ${dis} id="${id}" value="${esc(value ?? '')}" placeholder="${spec.media === 'audio' ? 'no sound file' : 'no photo or clip'}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">
       <button ${dis} data-browse="1">Browse</button><button ${dis} data-shelf="1" title="pick from this project's media">Media</button></div>`;
@@ -1291,6 +1319,7 @@ function apply(state, mine) {
   if (!mine && before && before.version !== S.version && S.byAI.length) toast('Your AI changed: ' + S.byAI.slice(0, 4).map(friendly).join(', '), 'ai');
   const keepFocus = document.activeElement && $('#insp').contains(document.activeElement) && mine;
   fitFrame(); drawStrip(); drawCanvas(); if (!keepFocus) drawInspector();
+  if ($('#capsbox').classList.contains('on') && !(document.activeElement?.tagName === 'TEXTAREA' && $('#capsbox').contains(document.activeElement))) drawCaps();
   const cur = before && before.scenes.find(s => s.id === sel.scene), now = S.scenes.find(s => s.id === sel.scene);
   if (!cur || !now || cur.key !== now.key || !$('#pv').src) setPreview();
 }
@@ -1372,6 +1401,8 @@ document.addEventListener('click', async e => {
     if (d.shelf) return openMedia({target: m.mt, p: m.mp, kind: m.mk});
     const [f] = await pickFiles(m.mk === 'audio' ? 'audio/*' : 'image/*,video/*', false); if (!f) return;
     const path = await uploadFile(f); if (path) setMedia(m.mt, m.mp, path, kindOf(f.name)); return; }
+  if (d.bigw) { const [sid, wd] = JSON.parse(d.bigw); queue(sid + '.words', 'caption_big', wd); return; }
+  if (d.goscene) { $('#capsbox').classList.remove('on'); select(d.goscene); return; }
   if (d.use) { const m = JSON.parse(d.use); setMedia(m.target, m.p, m.path, m.kind); $('#mediabox').classList.remove('on'); return; }
   if (d.tcopy) return dupTool(d.tcopy);
   if (d.trm) return rmTool(d.trm);
@@ -1403,6 +1434,8 @@ document.addEventListener('click', async e => {
     case 'playall': { const v = $('#vid'); if (allPlaying && v.src) { v.paused ? v.play() : v.pause(); return; } return playAll(headOfSel() / allTotal); }
     case 'aicopy': return copyForAI();
     case 'media': return openMedia();
+    case 'capsbtn': return openCaps();
+    case 'capsclose': return $('#capsbox').classList.remove('on');
     case 'mediaclose': return $('#mediabox').classList.remove('on');
     case 'mediaadd': { const fs = await pickFiles(''); for (const f of fs) await uploadFile(f); return openMedia(); }
     case 'holdA': holdA = $('#pv').src; $('#pa').src = holdA; $('#pa').style.display = ''; $('#abseg').style.display = ''; $('#frame').classList.add('cmp'); setWipe(0);
@@ -1446,6 +1479,7 @@ document.addEventListener('keydown', e => {
   if ((e.target.dataset?.gdesc || e.target.id === 'gask') && e.key === 'Enter') { describe(sel.scene, e.target.value); e.target.value = ''; return; }
   if (e.target.id === 'dtext' && e.key === 'Enter') { $('#dgo').click(); return; }
   if (e.key === 'Escape' && closeBig()) return;
+  if (e.key === 'Escape' && $('#capsbox').classList.contains('on')) { $('#capsbox').classList.remove('on'); return; }
   if (e.key === 'Escape' && $('#mediabox').classList.contains('on')) { $('#mediabox').classList.remove('on'); return; }
   if (e.key === 'Escape') { $('#moremenu').classList.remove('on'); if ($('#tips').style.display !== 'none') closeTips(); }
   if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
@@ -1680,7 +1714,7 @@ function dirCards(list) {
     <div class="why">${x.seconds} s · ${esc(x.why)}</div><button data-tag="${esc(x.tag)}" class="${x.tag === 'A' ? '' : 'primary'}">${x.tag === 'A' ? 'Keep this one' : 'Use ' + esc(x.tag)}</button></div>`).join('');
 }
 $('#dirclose').addEventListener('click', () => $('#dirbox').classList.remove('on'));
-$('#scrim').addEventListener('click', () => { $('#dirbox').classList.remove('on'); $('#storybox').classList.remove('on'); $('#mediabox').classList.remove('on'); });
+$('#scrim').addEventListener('click', () => { $('#capsbox').classList.remove('on'); $('#dirbox').classList.remove('on'); $('#storybox').classList.remove('on'); $('#mediabox').classList.remove('on'); });
 $('#dirbtns').addEventListener('click', async e => {
   const b = e.target.closest('button[data-tag]'); if (!b) return;
   const r = await op('/api/direction_pick', {tag: b.dataset.tag}, `Direction ${b.dataset.tag} is in. Undo brings back what you had.`);

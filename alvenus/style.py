@@ -6,6 +6,7 @@ every computer."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 FONTS = Path(__file__).parent / "fonts"
@@ -51,6 +52,129 @@ def _t(t: float) -> str:
 def _esc(s: str) -> str:
     return s.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
 
+
+
+# A scene's own word look, set by the creator in Studio (or by their AI):
+# font, weight, colour and where the words sit. It is laid over whatever
+# the look drew, so it works the same for captions, moving type, titles and
+# the designed looks. The accent colour stays the accent (it marks the big word).
+WORD_FONTS = ("sans", "serif", "serif-italic", "tall", "typewriter", "hand")
+WORD_WEIGHTS = ("regular", "bold", "heavy")
+_SANS = {"regular": "Inter SemiBold", "bold": "Inter ExtraBold", "heavy": "Inter Display Black"}
+_ONE = {"serif": "Libre Baskerville", "serif-italic": "Instrument Serif", "tall": "Big Shoulders",
+        "typewriter": "DM Mono", "hand": "Nothing You Could Do"}
+_INTER = ("Inter Display Black", "Inter Display ExtraBold", "Inter Display", "Inter ExtraBold", "Inter SemiBold")
+WORD_LOOK: list = []  # [(t0, t1, look)] while a cut is being finished
+
+
+def word_look(sc: dict) -> dict:
+    """The word look a scene asks for ({} = the design's own)."""
+    out = {}
+    if sc.get("words_font") in WORD_FONTS:
+        out["font"] = sc["words_font"]
+    if sc.get("words_weight") in WORD_WEIGHTS:
+        out["weight"] = sc["words_weight"]
+    c = sc.get("words_colour")
+    if isinstance(c, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", c):
+        out["colour"] = c
+    for k in ("x", "y"):
+        try:
+            v = max(-0.5, min(0.5, float(sc.get("words_" + k) or 0)))
+        except (TypeError, ValueError):
+            v = 0.0
+        if v:
+            out[k] = v
+    return out
+
+
+def _family(look: dict, current: str) -> str:
+    font, weight = look.get("font"), look.get("weight")
+    if font and font != "sans":
+        return _ONE[font]
+    if font == "sans" or current in _INTER:
+        return _SANS[weight or "bold"] if (font == "sans" or weight) else current
+    return current
+
+
+def restyle(rows: list[str], look: dict, w: int, h: int, accent: str | None = None) -> list[str]:
+    """Lay a scene's word look over ready-made ASS rows."""
+    if not look:
+        return rows
+    dx, dy = look.get("x", 0.0) * w, look.get("y", 0.0) * h
+    keep = ass_colour(accent)[-6:].upper() if accent and re.fullmatch(r"#?[0-9A-Fa-f]{6}", accent) else None
+    col = ass_colour(look["colour"]) + "&" if look.get("colour") else None
+    out = []
+    for r in rows:
+        if not r.startswith("Dialogue:"):
+            out.append(r)
+            continue
+        f = r.split(",", 9)
+        if len(f) < 10:
+            out.append(r)
+            continue
+        text = f[9]
+        if dx or dy:
+            sh = lambda m, xs: ",".join(f"{float(v) + (dx if i in xs else dy):.0f}" for i, v in enumerate(m.split(",")))
+            text = re.sub(r"\\pos\(([-\d.]+,[-\d.]+)\)", lambda m: f"\\pos({sh(m.group(1), (0,))})", text)
+            text = re.sub(r"\\org\(([-\d.]+,[-\d.]+)\)", lambda m: f"\\org({sh(m.group(1), (0,))})", text)
+            text = re.sub(r"\\move\(([-\d.]+,[-\d.]+,[-\d.]+,[-\d.]+)((?:,[-\d.]+){0,2})\)",
+                          lambda m: f"\\move({sh(m.group(1), (0, 2))}{m.group(2)})", text)
+            text = re.sub(r"\\(i?clip)\(([-\d.]+,[-\d.]+,[-\d.]+,[-\d.]+)\)",
+                          lambda m: f"\\{m.group(1)}({sh(m.group(2), (0, 2))})", text)
+            if "\\pos(" not in text and "\\move(" not in text:  # placed by the style's margins
+                an = re.search(r"\\an(\d)", text)
+                top = (int(an.group(1)) >= 7) if an else f[3].strip() == "Title"
+                try:
+                    f[5], f[6] = str(max(0, int(f[5]) + round(dx))), str(max(0, int(f[6]) - round(dx)))
+                    f[7] = str(max(0, int(f[7]) + (round(dy) if top else -round(dy))))
+                except ValueError:
+                    pass
+        if "\\p1" not in text and "\\p2" not in text and "\\p4" not in text:  # words, not drawn shapes
+            pre = ""
+            if look.get("font") or look.get("weight"):
+                cur = re.search(r"\\fn([^\\}]+)", text)
+                style_font = {"Cap": "Inter ExtraBold", "CapBox": "Inter ExtraBold", "Title": "Inter Display Black"}.get(f[3].strip(), "")
+                text = re.sub(r"\\fn([^\\}]+)", lambda m: "\\fn" + _family(look, m.group(1)), text)
+                fam = _family(look, cur.group(1) if cur else style_font)
+                if fam:
+                    pre += "\\fn" + fam
+                if look.get("weight") and look.get("font") not in (None, "sans") or (look.get("weight") and fam not in _INTER):
+                    b = "\\b0" if look["weight"] == "regular" else "\\b1"
+                    text = re.sub(r"\\b\d", lambda m: b, text)
+                    pre += b
+            if col:
+                text = re.sub(r"\\(1?c)&H([0-9A-Fa-f]{6,8})&",
+                              lambda m: m.group(0) if keep and m.group(2)[-6:].upper() == keep else f"\\{m.group(1)}{col}", text)
+                pre += "\\1c" + col
+            if pre:
+                text = ("{" + pre + text[1:]) if text.startswith("{") else "{" + pre + "}" + text
+        f[9] = text
+        out.append(",".join(f))
+    return out
+
+
+def restyle_timed(rows: list[str], w: int, h: int, accent: str | None = None) -> list[str]:
+    """WORD_LOOK applied to the rows that start inside each scene (see restyle)."""
+    if not WORD_LOOK:
+        return rows
+    out = []
+    for r in rows:
+        if r.startswith("Dialogue:"):
+            f = r.split(",", 3)
+            a, b = _secs(f[1]), _secs(f[2])
+            hit = next((lk for t0, t1, lk in WORD_LOOK if t0 - 0.05 <= a < t1 and b <= t1 + 1.0), None)
+            if hit:
+                r = restyle([r], hit, w, h, accent)[0]
+        out.append(r)
+    return out
+
+
+def _secs(t: str) -> float:
+    try:
+        hh, mm, ss = t.strip().split(":")
+        return int(hh) * 3600 + int(mm) * 60 + float(ss)
+    except ValueError:
+        return -1.0
 
 # Caption cards: short, following the voice. A card holds CARD_WORDS[0] to
 # CARD_WORDS[1] words (2 to 6 unless the creator picks otherwise), breaks at
@@ -461,13 +585,15 @@ def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | 
     ] + graphics.styles(w, h) + [
         "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ]
+    mine = []  # the scenes' own words: each scene's word look goes over these
     if words:
-        rows += caption_events(words, w, h, accent, skip={c[3] for c in cards} | set(skip))
+        mine += caption_events(words, w, h, accent, skip={c[3] for c in cards} | set(skip))
     for lt, start in lower_thirds:
         rows += graphics.lower_third_events(lt, start, w, h, accent)
     for ws, start, end, _ in cards:
-        rows += graphics.card_events(ws, start, end, w, h, accent)
-    rows += list(extra_rows)
+        mine += graphics.card_events(ws, start, end, w, h, accent)
+    mine += list(extra_rows)
+    rows += restyle_timed(mine, w, h, accent)
     from . import genre
 
     if extras:
