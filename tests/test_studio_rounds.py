@@ -141,5 +141,27 @@ class Media(unittest.TestCase):
                 st._inside("../outside.jpg")
 
 
+class LiftWords(unittest.TestCase):
+    """Moving words on the picture: the words come off the picture as their own layers."""
+
+    def test_words_lift_off_the_picture(self):
+        from alvenus.studio import Studio
+        with tempfile.TemporaryDirectory() as d:
+            st = Studio(project(Path(d)))
+            sid = [s["id"] for s in st.state()["scenes"]][1]
+            got = st.lift(sid)
+            self.assertTrue(got["layers"], got)
+            lay = got["layers"][0]
+            self.assertEqual(lay["part"], "all")
+            x0, y0, x1, y1 = lay["ink"]
+            self.assertTrue(0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1)
+            png = st.cache / lay["url"].split("name=")[1]
+            from PIL import Image
+            im = Image.open(png)
+            self.assertEqual(im.mode, "RGBA")
+            self.assertEqual(im.getpixel((0, 0))[3], 0)  # see-through where there are no words
+            self.assertEqual(st.lift(sid), got)  # kept, so the second ask is instant
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -252,6 +252,14 @@ border-radius:24px;box-shadow:var(--pop);padding:18px 22px 16px}
 .tline .tt{font-size:12px;color:var(--q);font-variant-numeric:tabular-nums;white-space:nowrap;flex:none}
 /* moving one caption row by hand */
 .frame.moving{cursor:move}
+.frame.grab{cursor:grab}.frame.grabbing{cursor:grabbing}
+.lift{position:absolute;inset:0;z-index:3;pointer-events:none;display:none}.lift.on{display:block}
+.lift img{position:absolute;left:0;top:0;width:100%;height:100%;will-change:transform}
+.lbox{position:absolute;z-index:4;pointer-events:none;border:1px dashed rgba(255,255,255,.6);border-radius:5px;box-shadow:0 0 0 1px rgba(23,24,27,.25)}
+.lbox.hot{border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(23,24,27,.45),0 0 0 4px rgba(43,74,120,.35)}
+.lbox[data-label]::after{content:attr(data-label);position:absolute;left:-1px;bottom:100%;margin-bottom:4px;padding:2px 7px;border-radius:999px;background:#2B4A78;color:#fff;font-size:11px;white-space:nowrap}
+.lguide{position:absolute;z-index:5;pointer-events:none;background:#fff;box-shadow:0 0 0 1px rgba(43,74,120,.8)}
+.lguide.v{top:0;bottom:0;width:1px}.lguide.h{left:0;right:0;height:1px}
 .mvghost{position:absolute;z-index:3;pointer-events:none;padding:3px 9px;border-radius:999px;background:var(--blue);color:#fff;font-size:12px;white-space:nowrap;transform:translate(-50%,-50%)}
 .mvline{position:absolute;z-index:3;pointer-events:none;border-top:1.5px dashed var(--blue);transform-origin:0 0}
 .clip.ai{border:1.5px solid var(--lb)}
@@ -494,7 +502,7 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <button id="theme" title="light or dark">Theme <small id="themename">Day</small></button>
 </div></header>
 <div class="left">
-<section class="viewer"><div class="screen" id="screen"><div class="frame" id="frame"><img id="pv" alt="preview of the selected scene"><img class="a" id="pa" alt="" style="display:none"><div class="wipe" id="wl" style="display:none"></div>
+<section class="viewer"><div class="screen" id="screen"><div class="frame" id="frame"><img id="pv" alt="preview of the selected scene"><img class="a" id="pa" alt="" style="display:none"><div class="wipe" id="wl" style="display:none"></div><div class="lift" id="lift"></div>
 <div class="busy" id="busy"><span class="phase" id="phase"></span><span id="busytext">Drawing the moment</span></div></div>
 <video id="vid" controls playsinline style="display:none"></video></div>
 <div class="vsplit" id="vsplit" title="drag to make the picture bigger or smaller (double-click: back to the size for this shape)"></div>
@@ -1107,29 +1115,116 @@ function moveSeg() {
   $('#mvseg').querySelectorAll('[data-mv="small"],[data-mv="big"]').forEach(x => x.style.display = stack ? '' : 'none');
   $('#mvseg').querySelectorAll('[data-mv]').forEach(x => x.classList.toggle('on', x.dataset.mv === mvPart));
   $('#frame').classList.toggle('moving', !!mvPart);
+  if (mvPart) getLift().then(() => { liftShow(); liftBoxes(liftHot); }); else { liftShow(); liftBoxes(null); }
 }
 $('#mvseg').addEventListener('click', e => {
   const m = e.target.closest('[data-mv]')?.dataset.mv; if (!m) return; mvPart = mvPart === m ? null : m; moveSeg();
-  if (mvPart) toast(m === 'all' ? 'Drag in the picture to move this scene\'s words. Click Move words again when done.' : 'Drag in the picture to move the ' + (m === 'big' ? 'big word' : 'small words') + ' on their own. Click the button again when done.');
+  if (mvPart) toast('The whole card shows now. Drag ' + (m === 'all' ? 'the words' : m === 'big' ? 'the big word' : 'the small words') + ' in the picture. (You can also grab any words in the picture without a button.)');
 });
-$('#frame').addEventListener('pointerdown', e => {
-  if (!mvPart || holdA) return; e.preventDefault(); e.stopPropagation();
-  const f = $('#frame'), r = f.getBoundingClientRect(); f.setPointerCapture(e.pointerId);
-  const x0 = e.clientX - r.left, y0 = e.clientY - r.top, g = document.createElement('span'), ln = document.createElement('div');
-  g.className = 'mvghost'; g.textContent = mvPart === 'all' ? 'Words' : mvPart === 'big' ? 'Big word' : 'Small words'; ln.className = 'mvline'; f.append(ln, g);
-  const mv = ev => { const x = ev.clientX - r.left, y = ev.clientY - r.top, dx = x - x0, dy = y - y0;
-    g.style.left = x + 'px'; g.style.top = y + 'px'; ln.style.left = x0 + 'px'; ln.style.top = y0 + 'px';
-    ln.style.width = Math.hypot(dx, dy) + 'px'; ln.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`; };
-  const up = ev => {
-    f.removeEventListener('pointermove', mv); f.removeEventListener('pointerup', up); g.remove(); ln.remove();
-    const dx = (ev.clientX - r.left - x0) / r.width, dy = (ev.clientY - r.top - y0) / r.height;
-    if (Math.abs(dx) + Math.abs(dy) < 0.004) return;
-    const t = sel.scene + '.words', p = node(t)?.params || {}, k = mvPart === 'all' ? '' : mvPart === 'big' ? 'caption_big_' : 'caption_small_';
-    const cl = v => Math.round(Math.max(-0.5, Math.min(0.5, v)) * 1000) / 1000;
-    queue(t, k + 'x', cl((+p[k + 'x'] || 0) + dx)); queue(t, k + 'y', cl((+p[k + 'y'] || 0) + dy));
+// ---------------------------------------------------------------- moving words straight on the picture
+// Venus lifts the scene's words off the picture (/api/lift): the picture without them, and each part of the
+// card (small words, big word) as its own see-through layer, all at the moment every word is in. Pointing
+// at the words outlines them; dragging moves that part live, with guides when it lines up with the other
+// part or the middle; letting go saves the move and Venus draws it properly.
+const LIFT = {};  // scene key -> lifted card (or 'wait' while it is being made)
+let liftHot = null, liftDrag = null;
+const liftOf = () => { const s = S?.scenes[sceneIdx(sel.scene)]; const d = s && LIFT[s.key]; return d && d !== 'wait' ? d : null; };
+const liftKey = p => p === 'small' ? 'caption_small_' : p === 'big' ? 'caption_big_' : '';
+async function getLift() {
+  const s = S?.scenes[sceneIdx(sel.scene)]; if (!s || LIFT[s.key]) return liftOf();
+  const w = node(s.id + '.words')?.params || {}; if (!(w.caption || w.text || w.subtitle || w.who)) return null;
+  LIFT[s.key] = 'wait';
+  try { const d = await api(`/api/lift?scene=${encodeURIComponent(s.id)}`); LIFT[s.key] = d;
+    if (d.layers?.length) [d.bg, ...d.layers.map(l => l.url)].forEach(u => { const i = new Image(); i.src = u; });  // ready before the first drag
+    if (S.scenes[sceneIdx(sel.scene)]?.key === s.key) liftShow(); return d; }
+  catch (e) { delete LIFT[s.key]; return null; }
+}
+function liftParts(d) {  // which parts can move on their own: in a stack card the small words and the big word
+  return mvPart === 'all' || !d.layers.some(l => l.part === 'small' || l.part === 'big') ? ['all'] : d.layers.map(l => l.part === 'rest' ? 'all' : l.part);
+}
+function liftAt(d, x, y) {  // the part under the pointer (x, y as shares of the frame)
+  if (mvPart) return mvPart;
+  let best = null, gap = 1e9;
+  for (const l of d.layers) { const [a, b, c, e] = l.ink, pad = 0.015;
+    if (x < a - pad || x > c + pad || y < b - pad || y > e + pad) continue;
+    const g = Math.hypot(x - (a + c) / 2, (y - (b + e) / 2) * 2); if (g < gap) { gap = g; best = l.part; } }
+  return best && liftParts(d).includes(best) ? best : best ? 'all' : null;
+}
+function liftShow(off) {  // draw the lifted card: the whole card settled, each part where it is (plus off, while dragging)
+  off = off || liftHold; const L = $('#lift'), d = off?.d || liftOf(), on = !!d?.layers?.length && !holdA && !allPlaying && (!!mvPart || !!liftDrag || !!off);
+  L.classList.toggle('on', on); if (!d?.layers?.length) { L.innerHTML = ''; return; }
+  if (L.dataset.bg !== d.bg) { L.dataset.bg = d.bg; L.innerHTML = `<img class="lbg" src="${d.bg}" alt="">` + d.layers.map(l => `<img data-part="${l.part}" src="${l.url}" alt="">`).join(''); }
+  if (!on) return;
+  const f = $('#frame'), W = f.clientWidth, H = f.clientHeight;
+  L.querySelectorAll('img[data-part]').forEach(i => { const o = off && off.parts.includes(i.dataset.part) ? off : null;
+    i.style.transform = o ? `translate(${o.dx * W}px,${o.dy * H}px)` : ''; });
+}
+function liftBoxes(hot) {  // dashed outlines round every part, the one under the pointer solid
+  const f = $('#frame'); f.querySelectorAll('.lbox').forEach(b => b.remove());
+  const d = liftOf(); if (!d?.layers?.length || holdA || allPlaying || liftDrag) return;
+  const parts = liftParts(d), groups = {};
+  for (const l of d.layers) { const p = parts.includes(l.part) ? l.part : 'all', g = groups[p] || (groups[p] = [1, 1, 0, 0]);
+    g[0] = Math.min(g[0], l.ink[0]); g[1] = Math.min(g[1], l.ink[1]); g[2] = Math.max(g[2], l.ink[2]); g[3] = Math.max(g[3], l.ink[3]); }
+  for (const [p, [a, b, c, e]] of Object.entries(groups)) {
+    const x = document.createElement('div'); x.className = 'lbox' + (p === hot || hot === 'all' ? ' hot' : '');
+    Object.assign(x.style, {left: (a * 100 - 1) + '%', top: (b * 100 - 1) + '%', width: ((c - a) * 100 + 2) + '%', height: ((e - b) * 100 + 2) + '%'});
+    if (p === hot) x.dataset.label = p === 'big' ? 'Big word' : p === 'small' ? 'Small words' : 'Words'; f.append(x); }
+}
+const frameAt = e => { const r = $('#frame').getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r]; };
+$('#frame').addEventListener('pointerenter', () => { if (!holdA && !allPlaying) getLift().then(() => liftBoxes(liftHot)); });
+$('#frame').addEventListener('pointermove', e => {
+  if (liftDrag || holdA) return; const d = liftOf(); if (!d) return;
+  const [x, y] = frameAt(e), p = liftAt(d, x, y);
+  $('#frame').classList.toggle('grab', !!p); if (p !== liftHot || !$('#frame .lbox')) { liftHot = p; liftBoxes(p); }
+});
+$('#frame').addEventListener('pointerleave', () => { if (liftDrag) return; liftHot = null; $('#frame').classList.remove('grab'); $('#frame').querySelectorAll('.lbox').forEach(b => b.remove()); });
+$('#frame').addEventListener('pointerdown', async e => {
+  if (holdA || allPlaying || e.button) return;
+  let d = liftOf();
+  const k0 = S.scenes[sceneIdx(sel.scene)]?.key;
+  if (!d && mvPart) { toast('Getting the words ready to move…'); d = await getLift(); }
+  else if (!d && LIFT[k0] === 'wait') { toast('Getting the words ready to move. Try again in a moment.'); return; }
+  if (!d?.layers?.length) return;
+  const [x0, y0, r] = frameAt(e), part = liftAt(d, x0, y0); if (!part) return;
+  e.preventDefault(); e.stopPropagation();
+  const f = $('#frame'); f.setPointerCapture(e.pointerId); f.classList.add('grabbing');
+  const parts = part === 'all' ? d.layers.map(l => l.part) : [part], mine = d.layers.filter(l => parts.includes(l.part)), rest = d.layers.filter(l => !parts.includes(l.part));
+  const box = mine.reduce((g, l) => [Math.min(g[0], l.ink[0]), Math.min(g[1], l.ink[1]), Math.max(g[2], l.ink[2]), Math.max(g[3], l.ink[3])], [1, 1, 0, 0]);
+  const xs = [0.5, ...rest.flatMap(l => [l.ink[0], (l.ink[0] + l.ink[2]) / 2, l.ink[2]])], ys = [0.5, ...rest.flatMap(l => [l.ink[1], l.ink[3]])];
+  const t = sel.scene + '.words', p = node(t)?.params || {}, k = liftKey(part);
+  liftDrag = {parts, dx: 0, dy: 0, d, key: S.scenes[sceneIdx(sel.scene)].key}; liftBoxes(); liftShow(liftDrag);
+  const guides = [document.createElement('div'), document.createElement('div')]; guides[0].className = 'lguide v'; guides[1].className = 'lguide h';
+  guides.forEach(g => { g.style.display = 'none'; f.append(g); });
+  const snap = (edges, lines, px) => { let best = null; for (const a of edges) for (const b of lines) { const g = b - a; if (Math.abs(g) * px < 7 && (!best || Math.abs(g) < Math.abs(best[0]))) best = [g, b]; } return best; };
+  const cl = v => Math.round(Math.max(-0.5, Math.min(0.5, v)) * 1000) / 1000;
+  const mv = ev => {
+    let dx = (ev.clientX - r.left) / r.width - x0, dy = (ev.clientY - r.top) / r.height - y0;
+    const sx = ev.altKey ? null : snap([box[0] + dx, (box[0] + box[2]) / 2 + dx, box[2] + dx], xs, r.width);
+    const sy = ev.altKey ? null : snap([box[1] + dy, (box[1] + box[3]) / 2 + dy, box[3] + dy], ys, r.height);
+    if (sx) dx += sx[0]; if (sy) dy += sy[0];
+    guides[0].style.display = sx ? '' : 'none'; if (sx) guides[0].style.left = sx[1] * 100 + '%';
+    guides[1].style.display = sy ? '' : 'none'; if (sy) guides[1].style.top = sy[1] * 100 + '%';
+    liftDrag.dx = dx; liftDrag.dy = dy; liftShow(liftDrag);
+    for (const [q, v] of [['x', cl((+p[k + 'x'] || 0) + dx)], ['y', cl((+p[k + 'y'] || 0) + dy)]])  // the sliders follow
+      document.querySelectorAll(`[data-t="${t}"][data-p="${k + q}"]`).forEach(i => { if (i !== document.activeElement) i.value = v; });
   };
-  mv(e); f.addEventListener('pointermove', mv); f.addEventListener('pointerup', up);
+  const up = () => {
+    f.removeEventListener('pointermove', mv); f.removeEventListener('pointerup', up); f.removeEventListener('pointercancel', up);
+    guides.forEach(g => g.remove()); f.classList.remove('grabbing');
+    const {dx, dy} = liftDrag;
+    if (Math.abs(dx) + Math.abs(dy) < 0.004) { liftDrag = null; liftShow(); liftBoxes(liftHot); return; }
+    liftHold = {...liftDrag}; liftDrag = null; liftShow(liftHold);  // the moved card stays on screen until Venus has drawn it
+    queue(t, k + 'x', cl((+p[k + 'x'] || 0) + dx)); queue(t, k + 'y', cl((+p[k + 'y'] || 0) + dy));
+    if (sel.node !== t && el(t)) { sel.node = t; drawCanvas(); drawInspector(); }
+  };
+  f.addEventListener('pointermove', mv); f.addEventListener('pointerup', up); f.addEventListener('pointercancel', up);
 }, true);
+let liftHold = null;
+$('#pv').addEventListener('load', () => {  // Venus has drawn the moved words: show the real picture again
+  if (!liftHold || S.scenes[sceneIdx(sel.scene)]?.key === liftHold.key) return;
+  const done = () => { liftHold = null; liftShow(); liftBoxes(liftHot); };
+  if (mvPart) getLift().then(done); else done();
+});
 function viewerHead() {
   const i = sceneIdx(sel.scene); if (i < 0) return;
   const s = S.scenes[i], tr = i ? (node(s.id + '.in')?.params?.transition || S.transition) : null;
@@ -1144,9 +1239,10 @@ function setPreview(force) {
   if (!sel.scene) return;
   viewerHead();
   const s = S.scenes[sceneIdx(sel.scene)], at = $('#scrub').value, tok = ++pvToken;
+  $('#frame').querySelectorAll('.lbox').forEach(b => b.remove()); liftShow(); if (mvPart) moveSeg();
   const url = `/api/preview?scene=${encodeURIComponent(s.id)}&at=${at}&k=${s.key}`;
   const img = new Image(); busy(true, 'Drawing the moment');
-  img.onload = () => { if (tok !== pvToken) return; $('#pv').src = url; busy(false); };
+  img.onload = () => { if (tok !== pvToken) return; $('#pv').src = url; busy(false); setTimeout(() => { if (tok === pvToken) getLift(); }, 400); };
   img.onerror = async () => { if (tok !== pvToken) return; busy(false);
     try { await api(url); } catch (e) { toast('Preview: ' + e.message, 'bad'); } };
   img.src = url;

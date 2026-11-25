@@ -593,7 +593,13 @@ def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | 
     for ws, start, end, _ in cards:
         mine += graphics.card_events(ws, start, end, w, h, accent)
     mine += list(extra_rows)
-    rows += restyle_timed(mine, w, h, accent)
+    mine = restyle_timed(mine, w, h, accent)
+    import os
+
+    if mine and os.environ.get("VENUS_CAPS_OUT"):  # Studio's word mover: the scene's own words on their own, to lift off the picture
+        Path(os.environ["VENUS_CAPS_OUT"]).write_text(_fonts_mapped("\n".join(rows + mine) + "\n"), encoding="utf-8")
+    if not os.environ.get("VENUS_NO_CAPS"):  # (and the picture without them, to lift them off)
+        rows += mine
     from . import genre
 
     if extras:
@@ -602,10 +608,13 @@ def write_ass(path: Path, w: int, h: int, accent: str, words=None, title: str | 
         rows += title_events(title, w, h, accent, 0.1, min(3.0, max(1.5, cut_len - 0.5)), centre=False, kind=title_style)
     if end_card:
         rows += title_events(end_card, w, h, accent, cut_len + 0.15, cut_len + card_len, centre=True, kind=title_style)
-    text = "\n".join(rows) + "\n"
+    path.write_text(_fonts_mapped("\n".join(rows) + "\n"), encoding="utf-8")
+
+
+def _fonts_mapped(text: str) -> str:
     for ours, theirs in FONT_MAP.items():  # the creator's fonts, everywhere on screen
         text = text.replace(f",{ours},", f",{theirs},").replace(f"\\fn{ours}\\", f"\\fn{theirs}\\").replace(f"\\fn{ours}}}", f"\\fn{theirs}}}")
-    path.write_text(text, encoding="utf-8")
+    return text
 
 
 def fonts_dir() -> Path:

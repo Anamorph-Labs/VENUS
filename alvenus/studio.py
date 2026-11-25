@@ -400,8 +400,69 @@ class Studio:
         with self._once(out):
             if not out.exists():
                 approve(self.path, "you, in Studio")  # pressing play on a scene is the creator's yes to it
-                subprocess.run([sys.executable, "-m", "alvenus", "make", str(self.path), "--scene", sid, "--draft", "--out", str(out)],
-                               check=True, capture_output=True, cwd=str(self.path.parent))
+                self._make(sid, out, VENUS_CAPS_OUT=str(out.with_suffix(".caps.ass")))
+        return out
+
+    def _make(self, sid: str, out: Path, **env: str) -> None:
+        subprocess.run([sys.executable, "-m", "alvenus", "make", str(self.path), "--scene", sid, "--draft", "--out", str(out)],
+                       check=True, capture_output=True, cwd=str(self.path.parent), env={**os.environ, **env})
+
+    def lift(self, sid: str) -> dict:
+        """The scene's words lifted off the picture, for moving them by hand in the
+        viewer: the picture without its words, and each part of the card (the
+        small words, the big word, the rest) as a see-through layer, all at the
+        moment every word is in. Boxes are shares of the frame."""
+        with self.lock:
+            sb = self.storyboard()
+            ids = [n["id"] for n in nd.scenes_of(self.doc)]
+        if sid not in ids:
+            raise ValueError(f"no scene {sid}")
+        k = ids.index(sid)
+        sc, key = sb["scenes"][k], self._key(sb, k)
+        meta = self.cache / f"lift-{key}.json"
+        if meta.exists():
+            return json.loads(meta.read_text(encoding="utf-8"))
+        clip = self.play(sid)
+        caps = clip.with_suffix(".caps.ass")
+        if not caps.exists():  # a draft made before Studio kept the words apart: make it once more
+            with self._once(clip):
+                self._make(sid, clip, VENUS_CAPS_OUT=str(caps))
+        d = float(sc.get("seconds", 3.0))
+        rows = [r for r in (caps.read_text(encoding="utf-8").splitlines() if caps.exists() else []) if r.startswith("Dialogue:")]
+        if not rows:
+            return {"layers": []}
+        sec = lambda s: (lambda h, m, x: int(h) * 3600 + int(m) * 60 + float(x))(*s.split(":"))
+        times = [(sec(r.split(",")[1]), sec(r.split(",")[2])) for r in rows]
+        t = max(0.05, min(max(a for a, _ in times) + 0.45, min(b for _, b in times) - 0.05, d - 0.05))
+        head = [r for r in caps.read_text(encoding="utf-8").splitlines() if not r.startswith("Dialogue:")]
+        stack = sb.get("caption_style") == "stack" and bool(sc.get("caption"))
+        parts: dict[str, list[str]] = {}
+        for r in rows:
+            layer, style = r[len("Dialogue:"):].split(",")[0].strip(), r.split(",")[3]
+            part = ("big" if layer == "3" else "small" if layer == "2" else "rest") if stack and style == "Cap" else "rest" if stack else "all"
+            parts.setdefault(part, []).append(r)
+        clean = self.cache / f"clean-{key}.mp4"
+        with self._once(clean):
+            if not clean.exists():
+                self._make(sid, clean, VENUS_NO_CAPS="1")
+        w, h = PREVIEW_SIZES.get(sb.get("aspect", "16:9"), (960, 540))
+        bg = self.cache / f"lift-{key}-bg.jpg"
+        subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-ss", f"{t:.2f}", "-i", str(clean), "-frames:v", "1",
+                        "-vf", f"scale={w}:{h}", "-q:v", "3", str(bg)], check=True, capture_output=True)
+        from . import brand, style as style_
+
+        with self.lock:  # the creator's own fonts, as in the video
+            brand.font_setup(sb.get("fonts"))
+            fonts = style_.fonts_dir()
+            brand.reset_fonts()
+        layers = []
+        for part, mine in parts.items():
+            png = self.cache / f"lift-{key}-{part}.png"
+            box, ink = _layer(head + mine, t, w, h, fonts, png)
+            if box:
+                layers.append({"part": part, "url": f"/api/lift.png?name={png.name}", "box": box, "ink": ink or box})
+        out = {"layers": layers, "bg": f"/api/lift.png?name={bg.name}", "at": round(t / d, 3), "size": [w, h]}
+        meta.write_text(json.dumps(out), encoding="utf-8")
         return out
 
     def _once(self, out: Path) -> threading.Lock:
@@ -823,6 +884,40 @@ def restart(args: list[str]) -> None:
 _PORT = [8765]
 
 
+def _layer(ass: list[str], t: float, w: int, h: int, fonts: Path, out: Path):
+    """Draw caption rows alone at time t as a see-through picture. libass writes no
+    see-through, so the rows are drawn over black and over white, and the
+    difference gives how solid each pixel is. Returns (box, ink): the shares of
+    the frame the layer covers (soft edge included) and its solid letters."""
+    import tempfile
+
+    import numpy as np
+    from PIL import Image
+
+    with tempfile.TemporaryDirectory() as d:
+        a = Path(d) / "l.ass"
+        a.write_text("\n".join(ass) + "\n", encoding="utf-8")
+        pics = []
+        for c in ("black", "white"):
+            p = Path(d) / f"{c}.png"
+            esc = lambda x: str(x).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
+            flt = f"subtitles='{esc(a)}':fontsdir='{esc(fonts)}'"
+            subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i", f"color=c={c}:s={w}x{h}:r=25:d={t + 0.2:.2f}",
+                            "-vf", flt, "-ss", f"{t:.2f}", "-frames:v", "1", "-pix_fmt", "rgb24", str(p)], check=True, capture_output=True)
+            pics.append(np.asarray(Image.open(p).convert("RGB")).astype(np.float32))
+    b, wh = pics
+    al = np.clip(255 - (wh - b).mean(axis=2), 0, 255)
+    rgb = np.clip(b * 255 / np.maximum(al[..., None], 1), 0, 255) * (al[..., None] > 0)
+    Image.fromarray(np.dstack([rgb, al]).astype(np.uint8), "RGBA").save(out)
+
+    def share(mask):
+        ys, xs = np.nonzero(mask)
+        if not len(xs):
+            return None
+        return [round(xs.min() / w, 4), round(ys.min() / h, 4), round((xs.max() + 1) / w, 4), round((ys.max() + 1) / h, 4)]
+    return share(al > 8), share(al > 170)
+
+
 def placeholder(sc: dict, n: int, w: int, h: int, out: Path) -> None:
     """A beat the AI has not written yet: its name and its job, on ivory, so the creator sees the shape of the video."""
     from PIL import Image, ImageDraw
@@ -999,6 +1094,13 @@ def handler(st: Studio):
                                        "toolOn": {k: list(v) for k, v in TOOL_ON.items()}, "layers": list(LAYERS)})
                 if u.path == "/api/preview":
                     return self._file(st.preview(q["scene"], float(q.get("at", 0.6))), "image/jpeg")
+                if u.path == "/api/lift":
+                    return self._json(st.lift(q["scene"]))
+                if u.path == "/api/lift.png":
+                    name = q.get("name", "")
+                    if not re.fullmatch(r"lift-[0-9a-f]{14}-(bg\.jpg|(small|big|rest|all)\.png)", name) or not (st.cache / name).exists():
+                        raise ValueError("no such picture")
+                    return self._file(st.cache / name, "image/jpeg" if name.endswith(".jpg") else "image/png")
                 if u.path == "/api/play":
                     return self._file(st.play(q["scene"]), "video/mp4")
                 if u.path == "/api/draft":
