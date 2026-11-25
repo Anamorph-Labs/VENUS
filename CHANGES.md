@@ -13,16 +13,10 @@ so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 - New checks: the same shot used twice close together, a picture that may not show what is said over it (`alvenus fit`), and captions that aren't clean (alone words, uneven rows, outside the safe area).
 - What you approved stays as it was: a fix changes only what you asked for, and Venus lists every other change to an approved part.
 - How-to videos: a camera that follows the cursor and typing on screen recordings, steps that slide on, a clear label for another way to do a step, and checks for mock-ups and for skipping the viewer's real path.
-- Studio: edit each caption card (its words, its big word, where it sits), and set how clear the voice stays over the music.
 - A clip that ends before its scene does now holds its last frame instead of cutting the video short.
-- Studio: tall videos get their own full-height picture beside the node graph, square ones a bigger picture, a line to drag it bigger or smaller, and Big view (double-click the picture; Esc closes).
-- Studio: a description waiting for your AI says plainly whether your AI is connected, and if not, gives you a message to paste in your AI chat. Venus also does more simple asks itself ("at the top", "at the bottom", "much longer", "bold").
-- Studio: the Tips card fits any window and closes with ×, Esc or a click outside; a caption's place shows "auto" when Venus picks it.
-- Studio: grab the words straight in the picture and drag them: they follow your hand with the whole card showing, and snap with a guide line when they line up.
+- Start by talking to your AI: open it in the Venus folder and tell it the video you want. Venus's visual editor (Studio) is resting in preview for now.
 - Stack captions: the small rows hug the big word and stay within its width, and the row above and the row below can each be moved on their own.
 - A new caption look, "stack": one big word with the rest of the line in small bold type above or below it, all on one edge (`caption_style: stack`, `caption_big` to choose the big word).
-- Studio: move the small words and the big word of a caption on their own: drag them in the picture ("Move small words" / "Move big word") or set them in the Words node. They always stay inside the frame.
-- Studio: a timeline of the whole video under the picture. Press play (or Space) to watch it all with the current scene lit up; click anywhere on it to jump there.
 
 ## 0.9.0 (24 Nov 2026)
 - Trailers: credit words that slam in huge over old newsprint or red paint, settle small and are wiped off by a brush stroke, and a date card over red smoke, with booms, risers and a deep braam (`make --template trailer`).

@@ -54,4 +54,4 @@ if (-not $NoModels) {
 
 Write-Host "`n== Check"
 & $Venus doctor
-Write-Host "`nDone. Start with:  alvenus studio    (describe your video, read the storyboard, press Render)"
+Write-Host "`nDone. Open your AI (Claude Code, Codex...) in the Venus folder and tell it: Make a video about ..."

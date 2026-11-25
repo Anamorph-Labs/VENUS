@@ -84,4 +84,4 @@ fi
 say "Check"
 "$HOME_DIR/bin/alvenus" doctor || true
 echo
-echo "Done. Start with:  alvenus studio    (describe your video, read the storyboard, press Render)"
+echo "Done. Open your AI (Claude Code, Codex...) in the Venus folder and tell it: Make a video about ..."

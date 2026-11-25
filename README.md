@@ -10,11 +10,11 @@
 <p align="center"><a href="https://anamorphlabs.com/venus/">Read the announcement</a></p>
 
 <p align="center">
-Describe a video, or hand it your footage. Venus lays out the story, your own AI writes it,<br>
-you read the storyboard, and nothing is made until you press Render.
+Tell your own AI the video you want, or hand it your footage. Venus lays out the story, your AI writes it,<br>
+you read the storyboard, and nothing is made until you say yes.
 </p>
 
-- **From an idea.** Type one sentence in Studio. Venus lays it out by a story recipe (a hook, the steps, a turn, the payoff), your AI writes each scene while you watch, and Venus draws the pictures itself: no footage, no stock sites, no AI image credits.
+- **From an idea.** Tell your AI one sentence. Venus lays it out by a story recipe (a hook, the steps, a turn, the payoff), your AI writes each scene, and Venus draws the pictures itself: no footage, no stock sites, no AI image credits.
 - **From your footage.** Give it your script and your takes: it hears every take, picks the best one per line and cuts the video, with captions and a timeline for Premiere or Resolve.
 - **From your clips and a song.** Every cut on the beat, the strongest moment on the drop, or the fast "creative edit" look with cut-outs and light.
 - **It checks the story, not only the pixels.** Does the hook make you stay, one idea per scene, a turn in the middle, an ending that lands, every number with its source. Then three directions to pick from at a glance.
@@ -25,13 +25,9 @@ Free and private: everything runs on your computer. No account, no API keys, no 
 
 1. Get the code: `git clone https://github.com/Anamorph-Labs/Venus && cd Venus` (or **Code > Download ZIP** above).
 2. Run the installer: `bash install.sh` on macOS or Linux, `powershell -ExecutionPolicy Bypass -File install.ps1` on Windows. It checks Python 3.10+, adds FFmpeg if it is missing, keeps Venus in its own folder and downloads the free models once.
-3. Start Studio: `alvenus studio`, then describe your video. Tell your AI *"Venus has a new idea for you"* and it takes it from there ([AGENTS.md](AGENTS.md) is its guide, and [CRAFT.md](CRAFT.md) teaches it to read a cut like an editor).
+3. Open your AI (Claude Code, Codex or any coding AI) in the Venus folder and tell it the video you want: *"Make a 30-second explainer about why we dream"*, or *"Cut my takes in ~/Desktop/shoot with this script"*. It takes it from there ([AGENTS.md](AGENTS.md) is its guide, and [CRAFT.md](CRAFT.md) teaches it to read a cut like an editor). It shows you the storyboard first and makes nothing until you say yes.
 
-Venus checks for new versions by itself: Studio shows a note with an Update button, and `alvenus update` installs one with a backup that comes back on its own if anything goes wrong. What changed: [CHANGES.md](CHANGES.md).
-
-| Describe your video | Read the story before anything is made | Three directions, one click |
-|---|---|---|
-| ![Studio's describe box](docs/studio-describe.jpg) | ![The story check before Render](docs/studio-story-check.jpg) | ![Three directions](docs/studio-directions.jpg) |
+Your AI checks for new versions at the start of each session, and `alvenus update` installs one with a backup that comes back on its own if anything goes wrong. What changed: [CHANGES.md](CHANGES.md).
 
 Venus is started by Anamorph Labs and grows with the people who use it: see
 [How ideas become Venus features](CONTRIBUTING.md). Ideas are welcome from anyone
@@ -241,18 +237,6 @@ your AI can say exactly what to change (`alvenus nodes set FILE scene3.words.siz
 lock the parts you like so nothing touches them, share settings between scenes
 with style nodes, and rebuild only what changed. `alvenus nodes view FILE` draws
 the node map as a page, with a frame of every scene.
-
-`alvenus studio video.nodes.json` opens **Venus** (by Anamorph Labs) in your browser: a node
-editor laid out like a compositing app, with a live frame of the scene and its
-node graph: the paper along the bottom, each layer (shape, picture, words, marks)
-dropping into a Merge from its own branch, and tool nodes (blur, glow, grade,
-vignette) you add with a right-click and drag onto any wire. Drag a branch onto
-another Merge to restack (words behind the print), pan, zoom, and a map in the
-corner. Sliders and colours for each node, switch-off to compare,
-a before/after wipe, undo, and one button to render. Describe what you want in
-any node's box; Venus does the simple asks at once and keeps every description
-on the node for your own AI, whose changes show up in Studio as it makes them.
-Nothing leaves your computer.
 
 More explainer graphics for talking-head cuts: `--map "3=city.png|0.3,0.6 Old port;
 0.7,0.4 Market"`, `--timeline "2=1990 First stall, 2024 500 stalls|How it grew"`,

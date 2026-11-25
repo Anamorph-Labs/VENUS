@@ -72,8 +72,7 @@ a second (and quietly says so when it is offline):
   in the answer: tell them nothing changed). Their videos and node files are never touched.
 - They regret it later → `alvenus update --rollback`.
 
-Studio shows the same note in its header with an Update button, so a creator
-working there needs nothing from you.
+(Studio, which is in preview, shows the same note in its header with an Update button.)
 
 Then run `alvenus taste --json` once: what this creator usually leaves as it is
 (`quiet`), the advice they usually take (`takes`) and what they like (`likes`:
@@ -620,8 +619,8 @@ say yes.** The path is always brief, storyboard, check, the creator's yes, make:
 `make` refuses a storyboard that is not approved, or that changed after it was
 approved (the approval is a fingerprint of its content, in sb.approved.json).
 A change after approval means showing it and approving again: say what changed
-in one line, then approve on their yes. In Venus Studio, the creator pressing
-Render or a scene's play button is their approval of what is on screen.
+in one line, then approve on their yes. (In Studio, which is in preview, the creator
+pressing Render or a scene's play button is their approval of what is on screen.)
 
 **The brief.** Fill every field of brief.json from what they said; ask only what
 you cannot tell (usually the one point and the length). `point` is the ONE thing
@@ -825,6 +824,10 @@ a glance: hook, one idea per scene, the turn, the ending.
 
 ### Ideas typed in Studio (`alvenus ideas`)
 
+> **Studio is in preview and not offered to creators yet.** Work with them through the
+> conversation and the commands. Don't open Studio or suggest it unless the creator asks
+> for it by name.
+
 The creator can also start in Studio: `alvenus studio` with no file opens a
 welcome page with a **Describe your video** box (and kind, length, shape and
 look to pick). Venus writes the brief, lays the video out by the story recipe
@@ -885,6 +888,10 @@ touches, and nothing else moves.
    it to the creator so they can point at a node ("scene4.words feels slow").
 
 ### The Venus editor: the creator edits, you help (`alvenus studio`)
+
+> **Studio is in preview and not offered to creators yet.** Work with them through the
+> conversation and the commands. Don't open Studio or suggest it unless the creator asks
+> for it by name.
 
 `alvenus studio FILE.nodes.json` opens a node editor in the creator's browser, on
 their computer: a viewer with a live frame of the selected scene, the scenes

@@ -1518,9 +1518,11 @@ def cmd_doctor(a: argparse.Namespace) -> None:
     raise SystemExit(0 if ok else 1)
 
 
-START = """Venus: a free video agent on your own computer.
+START = """Venus: a free video agent on your own computer, driven by your own AI.
 
-  alvenus studio                 open Studio: describe your video, read the storyboard, press Render
+  Open your AI (Claude Code, Codex...) in the Venus folder and tell it: "Make a video about ..."
+  It reads AGENTS.md, shows you the storyboard, and makes nothing until you say yes.
+
   alvenus cut --script S --takes CLIPS --out cut.mp4     your script + your takes -> the best cut
   alvenus make --template explainer idea.json            a starter storyboard to fill in
   alvenus doctor                 check that everything is ready
@@ -1987,6 +1989,9 @@ def main(argv: list[str] | None = None) -> None:
     d = sub.add_parser("doctor", help="check that FFmpeg, Python packages and models are ready")
     d.set_defaults(func=cmd_doctor)
 
+    preview = {"studio", "ideas"}  # Studio is in preview: it works, but isn't offered to creators yet
+    sub._choices_actions[:] = [x for x in sub._choices_actions if x.dest not in preview]
+    sub.metavar = "{" + ",".join(k for k in sub.choices if k not in preview) + "}"
     if not args:
         print(START)
         return
