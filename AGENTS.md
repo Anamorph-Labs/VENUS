@@ -516,6 +516,17 @@ suits calm, long-form or documentary pieces.
   what it joins. In the `keyword` style there is one big word and at most one
   small row; the small row gets smaller before it would ever wrap. The creator
   can choose other limits (`--caption-words 3-5`, `"caption_words": "3-5"`).
+- **In time with the voice** (`make` with a `"voiceover"`). Each caption word
+  appears when it is said, and cards break where the voice pauses. Venus listens
+  to the voice under each scene and lays the words on its syllables (about a
+  tenth of a second on a clean voice; less sure when loud music is mixed in).
+  When you have word times from any transcriber, give them for exact timing:
+  `"voice_words": "words.json"` (a list of `[start, end, word]`, seconds into
+  the voiceover) and `"voice_words_at": 14.2` (where the voiceover's 0 sits in
+  the video). Caption words are matched to the spoken words in order, so a
+  caption may drop or add a word. One scene by hand: `"caption_times": [0.2,
+  0.6, ...]` (one start per word, seconds from the scene's start).
+  `"caption_sync": false` spreads the words evenly as before.
 - **Each card sits where the picture leaves room.** Venus reads the frame under
   every card and puts the words where it is calm (little detail, no skin tone),
   so they don't cover a face or the subject. Within a shot the card stays put; it

@@ -31,12 +31,12 @@ KINDS = ("settings", "sound", "style", "scene") + PARTS + ("tool",)
 GRAPHIC_TYPES = {"stat", "chart", "line_chart", "timeline", "list", "compare", "map", "split"}
 PART_KEYS = {
     "in": ("transition",),
-    "words": ("text", "caption", "caption_big", "caption_order", "caption_place", "caption_small", "caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y", "caption_above_x", "caption_above_y", "caption_below_x", "caption_below_y", "big_words", "subtitle", "who", "year", "tag", "detail", "credit"),
+    "words": ("text", "caption", "caption_big", "caption_order", "caption_place", "caption_small", "caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y", "caption_above_x", "caption_above_y", "caption_below_x", "caption_below_y", "caption_times", "big_words", "subtitle", "who", "year", "tag", "detail", "credit"),
     "picture": ("file", "from", "label", "push", "darken", "frame"),
     "mark": ("callout", "note"),
     "graphic": ("value", "label", "bars", "points", "items", "title", "pins", "route", "image", "left", "right"),
 }
-SOUND_KEYS = ("music", "music_lufs", "music_duck", "voice_gap", "voiceover", "sound_effects", "sfx_volume")
+SOUND_KEYS = ("music", "music_lufs", "music_duck", "voice_gap", "voiceover", "voice_words", "voice_words_at", "caption_sync", "sound_effects", "sfx_volume")
 # The stages of a scene as a node editor shows them (stage, part it lives in,
 # its params), in the order the picture is made. Each stage can be switched
 # off ("off": ["shape"] on the part) to compare with and without it.
@@ -605,7 +605,7 @@ def absolute_files(doc: dict, base: Path) -> None:
 
     for n in doc["nodes"]:
         p = n.get("params") or {}
-        for k in ("file", "image", "music", "voiceover"):
+        for k in ("file", "image", "music", "voiceover", "voice_words"):
             if p.get(k):
                 p[k] = fix(p[k])
         for side in ("left", "right"):

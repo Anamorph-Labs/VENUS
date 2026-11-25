@@ -4,6 +4,7 @@ Each release, newest first, in plain words. `alvenus update --check` reads this 
 so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 
 ## Coming in the next release
+- Captions in time with the voice: in a video with a voiceover, each caption word appears when it is said (exactly, when you give word times with `"voice_words"`).
 - A clean mix, measured on every line: the voice always sits at least 10 dB over the music, and Venus says how close the closest line came (`--voice-gap`, 0 to switch it off).
 - Sound effects: fewer and varied. Never two stacked together, a sound used again is slightly retuned, and quiet ones are lifted until they're heard.
 - A song shorter than the video now repeats on a bar line with a short blend, instead of jumping back to its start.

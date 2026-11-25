@@ -77,6 +77,11 @@ def load(path: Path, data: dict | None = None) -> dict:
             sb[key] = str((base / sb[key]).resolve()) if not Path(sb[key]).is_absolute() else sb[key]
             if not Path(sb[key]).exists():
                 problems.append(f"{key}: {sb[key]} not found")
+    if isinstance(sb.get("voice_words"), str):  # word times for the captions, as a file beside the storyboard
+        vw = sb["voice_words"] if Path(sb["voice_words"]).is_absolute() else str((base / sb["voice_words"]).resolve())
+        sb["voice_words"] = vw
+        if not Path(vw).exists():
+            problems.append(f"voice_words: {vw} not found")
     from . import pictures
 
     def drawn(spec: str, i: int, where: str) -> str | None:
@@ -501,6 +506,14 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                 designed += ev
             beats += b
     sb["_beats"] = beats
+    voiced: dict = {}
+    if sb.get("captions", True) and (sb.get("voiceover") or sb.get("voice_words") or any(s.get("caption_times") for s in scenes)):
+        from .paper import plain as _plain
+        from .voicecaps import timed
+
+        caps = [(i, sc["caption"] if design else _plain(str(sc["caption"])), *spans[i]) for i, sc in enumerate(scenes)
+                if sc.get("caption") and not (design and sc["type"] in ("title", "text", "clip", "image"))]
+        voiced, sb["_caption_sync"] = timed(caps, sb, scenes)
     for i, sc in enumerate(scenes):
         t0, t1 = spans[i]
         kind = sc["type"]
@@ -515,8 +528,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             sc = {**sc, **{k: plain(str(sc[k])) for k in ("text", "caption") if sc.get(k)}}
         if sc.get("caption") and sb.get("captions", True):
             short = t1 - t0 < 2.0  # a short scene: every word lands early, then the card holds still until the cut
-            cw = spread(sc["caption"], i, t0, t1, 0.4 if short else 0.75)
-            if short and cw:
+            cw = voiced.get(i) or spread(sc["caption"], i, t0, t1, 0.4 if short else 0.75)
+            if short and cw and i not in voiced:
                 cw[-1].end = max(cw[-1].end, t1 - 0.02)
             big = {x.lower() for x in str(sc.get("caption_big") or "").split()}
             for x in cw:  # the word the creator chose to be big (Studio's caption card)
