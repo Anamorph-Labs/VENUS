@@ -124,6 +124,7 @@ function waitForEditor() {  // Studio restarts on the new video; reload once it 
 }
 $('#start').onclick = async () => {
   $('#err').style.display = 'none';
+  if ($('#idea').value.trim().length < 8) { $('#err').textContent = 'Say a little more: what is the video about, and who is it for?'; $('#err').style.display = 'block'; $('#idea').focus(); return; }
   try {
     $('#start').disabled = true; $('#wait').style.display = 'flex';
     await post('/api/idea', {text: $('#idea').value, kind: $('#kind').value, seconds: $('#seconds').value, aspect: $('#aspect').value, look: $('#look').value});
@@ -134,7 +135,7 @@ $('#idea').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKe
 (async () => {
   const h = await (await fetch('/api/home')).json();
   $('#kind').innerHTML += h.kinds.map(([k, n, about]) => `<option value="${k}" title="${esc(about)}">${esc(n[0].toUpperCase() + n.slice(1))}</option>`).join('');
-  $('#look').innerHTML += h.looks.map(([k, about]) => `<option value="${k}" title="${esc(about)}">${esc(k)}</option>`).join('');
+  $('#look').innerHTML += h.looks.map(([k, about, name]) => `<option value="${k}" title="${esc(about)}">${esc(name || k)}</option>`).join('');
   if (h.projects.length) {
     $('#ph').style.display = '';
     $('#projects').innerHTML = h.projects.map(p => `<button class="proj" data-p="${esc(p.path)}"><span class="th"><svg viewBox="0 0 12 12"><path d="M3 2l7 4-7 4z"/></svg></span><span class="tx"><b>${esc(pretty(p.name))}</b><span>${esc(p.at)}</span></span><svg class="ar" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></svg></button>`).join('');

@@ -70,7 +70,7 @@ header .sp{flex:1}
 .moremenu small{color:var(--q);font-size:12px}
 .moremenu hr{border:0;border-top:1px solid var(--hair);margin:5px 6px}
 /* left column */
-.left{display:grid;grid-template-rows:var(--vh,292px) minmax(240px,1fr) 38px 118px;min-width:0;min-height:0;border-right:1px solid var(--hair)}
+.left{--sh:118px;--gmin:240px;display:grid;grid-template-rows:var(--vh,292px) minmax(var(--gmin),1fr) 38px var(--sh);min-width:0;min-height:0;border-right:1px solid var(--hair)}
 /* viewer */
 .viewer{position:relative;display:flex;gap:22px;padding:16px 20px;align-items:stretch;border-bottom:1px solid var(--hair);min-height:0;min-width:0}
 /* the line under the viewer: drag it to make the picture bigger or smaller */
@@ -78,7 +78,7 @@ header .sp{flex:1}
 .vsplit::after{content:"";position:absolute;left:50%;top:3px;width:44px;height:4px;margin-left:-22px;border-radius:2px;background:var(--hair2);opacity:0;transition:opacity .15s}
 .vsplit:hover::after,.vsplit.on::after{opacity:1}
 /* tall videos: the picture gets its own column, full height, beside the controls and the node graph, so neither is squeezed */
-.left.tallv{grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto minmax(240px,1fr) 38px 118px}
+.left.tallv{grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto minmax(var(--gmin),1fr) 38px var(--sh)}
 .left.tallv .viewer{display:contents}
 .left.tallv .screen{grid-column:1;grid-row:1/3;padding:16px 20px;border-right:1px solid var(--hair);align-items:flex-start}
 .left.tallv .vside{grid-column:2;grid-row:1;padding:16px 20px;border-bottom:1px solid var(--hair)}
@@ -259,7 +259,7 @@ aside h2 .lkd{font:600 10px "Hanken Grotesk",sans-serif;text-transform:uppercase
 aside .what{color:var(--q);font-size:13px;margin:8px 0 16px}
 .row{margin:0 0 14px}
 .row label{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:7px;font:600 11px/1 "Hanken Grotesk",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--q)}
-.row label .rs{height:auto;background:none;border:0;padding:0;color:var(--q);font:400 11px "Hanken Grotesk",sans-serif;letter-spacing:0;text-transform:none;text-decoration:underline}
+.row label .rs{height:auto;background:none;border:0;padding:4px 6px;margin:-4px -6px;color:var(--q);font:400 11px "Hanken Grotesk",sans-serif;letter-spacing:0;text-transform:none;text-decoration:underline}
 .row .why{color:var(--q);font-size:11.5px;margin-top:5px}
 .row input[type=text],.row select,.row input[type=number],aside input[type=text]{width:100%;height:34px;background:var(--input);border:1px solid var(--hair2);border-radius:999px;padding:0 12px;font-size:13px}
 .row textarea,.row .words{width:100%;background:var(--field);border:1px solid var(--hair2);border-radius:14px;padding:9px 12px;min-height:56px;resize:vertical}
@@ -418,7 +418,15 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 .tips li::before{content:counter(t);position:absolute;left:0;top:-1px;width:22px;height:22px;border-radius:50%;border:1px solid var(--hair2);font:400 13px/21px Newsreader,Georgia,serif;text-align:center;color:var(--ink)}
 @media (max-width:1240px){.viewer .vh .meta{display:none}}
 @media (max-width:1100px){header .logo.full{display:none!important}header .logo.word.lt{display:block}:root[data-theme="dark"] header .logo.word.lt{display:none}:root[data-theme="dark"] header .logo.word.dk{display:block}header .meta{display:none}}
-@media (max-width:900px){.app{grid-template-columns:1fr;grid-template-rows:52px minmax(0,1fr) 40vh}aside{grid-column:1;border-top:1px solid var(--hair)}.viewer{flex-direction:column}}
+/* a short window: a smaller strip and graph floor, so every row still fits */
+@media (max-height:800px){.left{--sh:96px;--gmin:200px}.clip .th{height:36px}.strip{padding:9px 16px}}
+/* a narrow window: one column that scrolls, the panel under the picture and graph */
+@media (max-width:900px){body{overflow:auto}.app{height:auto;min-height:100vh;grid-template-columns:1fr;grid-template-rows:52px auto auto}
+  header{position:sticky;top:0;z-index:30;background:var(--ground)}
+  .left,.left.tallv{border-right:0;grid-template-rows:auto 420px 38px var(--sh)}
+  .left.tallv{grid-template-columns:auto minmax(0,1fr)}
+  aside{grid-column:1;border-top:1px solid var(--hair);overflow:visible}.vsplit{display:none}
+  .viewer{flex-direction:column}.moremenu{position:fixed;top:48px}}
 </style></head><body>
 <div class="app" id="app">
 <header id="top"><div class="brand"><img class="logo full lt" src="/fonts/venus-lockup-light.svg" alt="Venus, by Anamorph Labs"><img class="logo full dk" src="/fonts/venus-lockup-dark.svg" alt="Venus, by Anamorph Labs"><img class="logo word lt" src="/fonts/venus-logo-light.svg" alt="Venus"><img class="logo word dk" src="/fonts/venus-logo-dark.svg" alt="Venus"></div>
@@ -447,7 +455,7 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <div class="vside"><div class="vh"><span class="lab">Viewer</span></div>
 <div class="vh"><h2 id="vtitle"></h2><span class="meta" id="vmeta"></span></div>
 <div class="vrow"><button id="play"><svg viewBox="0 0 16 16" width="12" height="12" style="width:12px;height:12px"><path d="M4 3l9 5-9 5z" fill="currentColor" stroke="none"/></svg>Play scene</button>
-<button id="holdA" title="keep this frame as A, to compare with your next changes">Hold as A</button>
+<button id="holdA" title="keep this frame, then change something and compare before (A) and now">Compare</button>
 <span class="mseg" id="mvseg" style="display:none" title="drag in the picture to move only these words"><span data-mv="small">Move small words</span><span data-mv="big">Move big word</span></span>
 <button id="big" title="see the picture over the whole window (or double-click the picture; Esc closes)"><svg viewBox="0 0 16 16" width="12" height="12" style="width:12px;height:12px"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Big view</button>
 <span class="mseg" id="abseg" style="display:none" title="A is the frame you held; Now is how it looks now. Drag across the picture to wipe between them."><span data-ab="a">A</span><span data-ab="now" class="on">Now</span></span>
@@ -464,7 +472,6 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <button id="tipsbtn" title="how this works">Tips</button>
 <button id="addn" title="add a tool node (or right-click the canvas or a wire)">+ Node</button><button id="tidy" title="put every node back in its place">Tidy</button><button id="fit" title="fit the graph (F)">Fit</button><span class="zoom" id="zoom">100%</span></div>
 <div id="world"><svg id="wires"></svg><div id="nodes"></div></div>
-<div class="cv-ask"><input id="gask" placeholder="Describe a change to this scene, for example “words behind the picture”" aria-label="describe a change to this scene"><button class="primary" id="gaskgo">Change</button></div>
 <canvas id="mini" width="256" height="144" title="map of the graph: click to go there"></canvas>
 <div class="tips" id="tips" style="display:none" role="dialog" aria-label="Tips"><button class="tx" id="tipsx" title="close (Esc)" aria-label="close tips">×</button><div class="tbody"><img class="mark lt" src="/fonts/venus-logo-light.svg" alt="Venus"><img class="mark dk" src="/fonts/venus-logo-dark.svg" alt="Venus"><h4>How the <em>scene</em> is built</h4><ol>
 <li><b>Each box is one part of the scene</b>: the paper, the photo, the words. Click one to change it on the right. Drag a box to move it.</li>
@@ -664,7 +671,7 @@ function nodeCard(k, sid) {
 const toolNode = k => node(k.slice(5));
 function summary(p, empty = 'As designed') {
   const e = Object.entries(p);
-  return e.length ? e.slice(0, 2).map(([k, v]) => `<span>${esc(labelOf(k))} <b>${esc(short(plain(v)))}</b></span>`).join('') + (e.length > 2 ? `<span>+${e.length - 2} more</span>` : '') : `<span>${esc(empty)}</span>`;
+  return e.length ? e.slice(0, 2).map(([k, v]) => `<span>${esc(labelOf(k))} <b>${esc(v === true ? 'on' : v === false ? 'off' : short(plain(v)))}</b></span>`).join('') + (e.length > 2 ? `<span>+${e.length - 2} more</span>` : '') : `<span>${esc(empty)}</span>`;
 }
 function askLine(n, st, idle) {
   const mine = n?.ask && !((st && n.ask.stage && n.ask.stage !== st) || (st && !n.ask.stage && st !== stagesOf(sel.scene).find(x => partOf(x) === n.kind)));
@@ -785,8 +792,8 @@ function bounds() {
 function fit() {
   // room between the toolbar (46 px) and the describe box (64 px)
   // and clear of the map in the top right corner: keep its width free, or its height, whichever leaves the graph bigger
-  const c = $('#canvas').getBoundingClientRect(), b = bounds(), bw = b.x1 - b.x0, bh = b.y1 - b.y0, bottom = 66;
-  const zz = (W, H) => Math.max(0.3, Math.min(1, W / bw, H / bh));
+  const c = $('#canvas').getBoundingClientRect(), b = bounds(), bw = b.x1 - b.x0, bh = b.y1 - b.y0, bottom = 16;
+  const zz = (W, H) => Math.max(0.75, Math.min(1, W / bw, H / bh));
   const side = {top: 56, W: c.width - 32 - 148, H: c.height - 56 - bottom}, below = {top: 56 + 84, W: c.width - 32, H: c.height - 56 - 84 - bottom};
   const o = zz(side.W, side.H) >= zz(below.W, below.H) ? side : below, z = zz(o.W, o.H), top = o.top, W = o.W, H = o.H;
   view[sel.scene] = {z, x: 16 + Math.max(0, (W - bw * z) / 2) - b.x0 * z, y: top + Math.max(0, (H - bh * z) / 2) - b.y0 * z};
@@ -814,12 +821,16 @@ function drawMini() {
   cv._map = {k, ox, oy};
 }
 const LOCK_SVG = '<svg viewBox="0 0 10 10"><rect x="2" y="4.5" width="6" height="4.5" rx="1"/><path d="M3.5 4.5V3a1.5 1.5 0 0 1 3 0v1.5"/></svg>';
+function firstWords(s) {  // the scene's own words, so a moment is easy to find in a long reel
+  const w = node(s.id + '.words')?.params || {}, t = plain(w.caption || w.text || '');
+  return typeof t === 'string' ? t.replace(/\s+/g, ' ').trim() : '';
+}
 function drawStrip() {
   $('#strip').innerHTML = S.scenes.map((s, i) => {
     const inn = node(s.id + '.in')?.params?.transition || S.transition;
     return `<div class="clip ${s.unwritten ? 'todo' : ''} ${s.id === sel.scene ? 'sel' : ''} ${S.byAI.some(x => x === s.id || x.startsWith(s.id + '.')) ? 'ai' : ''}" draggable="true" data-scene="${esc(s.id)}" title="${esc(s.label + (i ? ' · comes in with ' + inn : ''))}">
       <div class="th"><img loading="lazy" alt="" src="/api/preview?scene=${encodeURIComponent(s.id)}&at=0.75&k=${s.key}">${s.unwritten ? `<span class="tw">To write</span>` : ''}${node(s.id).locked ? `<span class="tag">${LOCK_SVG} Locked</span>` : ''}</div>
-      <p class="t"><b>${i + 1}</b><span>${esc(s.unwritten ? (s.beat || 'Beat') : typeName(s.type))} · ${s.seconds} s</span></p></div>`;
+      <p class="t"><b>${i + 1}</b><span>${esc(s.unwritten ? (s.beat || 'Beat') : firstWords(s) || typeName(s.type))} · ${s.seconds} s</span></p></div>`;
   }).join('') + `<button class="addsc" id="addsc" title="add a scene: a copy of the selected one, to change. ${S.scenes.length} scenes · drag one to reorder">+</button>`;
   drawTimeline(); moveSeg();
 }
@@ -932,19 +943,23 @@ function setPreview(force) {
 }
 // how tall the viewer row is: the size that suits the video's shape, unless the creator dragged the line
 function shapeKey() { const [a, b] = (S?.aspect || '16:9').split(':').map(Number); return a / b >= 1.3 ? 'wide' : a / b > 0.9 ? 'square' : 'tall'; }
+const narrow = () => innerWidth <= 900;
+const leftVar = (k, d) => parseFloat(getComputedStyle($('.left')).getPropertyValue(k)) || d;
 function viewerRow(px) {
   const left = $('.left'); if (!left) return; left.classList.toggle('tallv', shapeKey() === 'tall'); if (shapeKey() === 'tall') return;
-  const room = left.getBoundingClientRect().height - 118 - 38 - 240;
+  if (narrow()) { left.style.setProperty('--vh', 'auto'); return; }
+  const room = left.getBoundingClientRect().height - leftVar('--sh', 118) - 38 - leftVar('--gmin', 240);
   let h = px; const easy = room - 60;  // by default keep the node graph a little roomier than its smallest
   if (h == null) { try { h = +localStorage.getItem('venus-vh-' + shapeKey()) || null; } catch (e) { h = null; } }
-  if (h == null) h = {wide: 292, square: Math.max(292, easy * 0.75)}[shapeKey()];
+  if (h == null) h = {wide: Math.min(292, Math.max(200, easy)), square: Math.max(292, easy * 0.75)}[shapeKey()];
   h = Math.round(Math.max(200, Math.min(h, room))); left.style.setProperty('--vh', h + 'px'); return h;
 }
 function fitFrame(keepRow) {
   // the frame sits on the left of the viewer at the largest size the row allows, at the video's own shape
   if (!S) return; if (keepRow !== true) viewerRow(); const [a, b] = S.aspect.split(':').map(Number);
   const tall = $('.left').classList.contains('tallv'), L = $('.left').getBoundingClientRect(), v = tall ? null : $('.viewer').getBoundingClientRect();
-  const H = tall ? L.height - 118 - 38 - 32 : v.height - 32, Wmax = tall ? Math.max(160, L.width * 0.4) : Math.max(160, v.width * 0.46);
+  let H = tall ? L.height - leftVar('--sh', 118) - 38 - 32 : v.height - 32, Wmax = tall ? Math.max(160, L.width * 0.4) : Math.max(160, v.width * 0.46);
+  if (narrow()) { Wmax = tall ? Math.min(300, L.width * 0.45) : Math.min(640, L.width - 40); H = tall ? Wmax * b / a : Wmax * b / a; }
   const k = Math.min(Wmax / a, H / b); $('#frame').style.width = Math.round(a * k) + 'px'; $('#frame').style.height = Math.round(b * k) + 'px';
   $('#vid').style.maxWidth = Math.round(Wmax) + 'px'; $('#vid').style.maxHeight = H + 'px';
 }
@@ -960,14 +975,15 @@ function control(target, name, spec, value, locked, inherited) {
   const id = 'c-' + target.replace(/\W/g, '_') + '-' + name.replace(/\W/g, '_');
   const reset = value !== undefined && value !== null ? `<button class="rs" data-reset="${esc(target)}" data-p="${esc(name)}">reset</button>` : '';
   const dis = locked ? 'disabled' : '';
-  const why = spec.why ? `<div class="why">${esc(spec.why)}</div>` : '';
+  const why = spec.why && spec.why.toLowerCase() !== labelOf(name).toLowerCase() ? `<div class="why">${esc(spec.why)}</div>` : '';
+  const optName = o => spec.labels?.[o] || cap(String(o));
   let input = '';
   const v = value ?? spec.default;
   if (spec.type === 'number') {
     input = `<div class="rng"><input type="range" ${dis} id="${id}" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${v ?? spec.min}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="num">
       <input type="number" ${dis} min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${v ?? ''}" placeholder="auto" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="num" aria-label="${esc(name)}"></div>`;
   } else if (spec.type === 'select' && spec.options.length <= 4) {
-    input = `<div class="chips">${spec.options.map(o => `<button ${dis} class="${o === v ? 'on' : ''}" ${o === value ? `data-reset="${esc(target)}" data-p="${esc(name)}"` : `data-set="${esc(target)}" data-p="${esc(name)}" data-v="${esc(JSON.stringify(o))}"`}>${esc(cap(String(o)))}</button>`).join('')}</div>`;
+    input = `<div class="chips">${spec.options.map(o => `<button ${dis} class="${o === v ? 'on' : ''}" ${o === value ? `data-reset="${esc(target)}" data-p="${esc(name)}"` : `data-set="${esc(target)}" data-p="${esc(name)}" data-v="${esc(JSON.stringify(o))}"`}>${esc(optName(o))}</button>`).join('')}</div>`;
   } else if (spec.type === 'bool') {
     const on = v === true;
     return `<div class="row"><div class="inline"><label>${esc(labelOf(name))} ${reset}</label><button ${dis} class="tog ${on ? 'on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(labelOf(name))}" data-set="${esc(target)}" data-p="${esc(name)}" data-v="${!on}"></button></div>${why}</div>`;
@@ -975,7 +991,7 @@ function control(target, name, spec, value, locked, inherited) {
     // a list with its own default (such as "auto") shows that default when nothing is set; the reset link clears a choice
     const own = spec.default != null && spec.options.includes(spec.default);
     const blank = own ? '' : `<option value="">${value == null ? '(design default)' : '(reset)'}</option>`;
-    input = `<select ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">${blank}${spec.options.map(o => `<option ${o === (own ? v : value) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+    input = `<select ${dis} id="${id}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">${blank}${spec.options.map(o => `<option value="${esc(o)}" ${o === (own ? v : value) ? 'selected' : ''}>${esc(optName(o))}</option>`).join('')}</select>`;
   } else if (spec.type === 'colour') {
     const hex = /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#888888';
     input = `<div class="col"><input type="color" ${dis} id="${id}" value="${hex}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">
@@ -1048,7 +1064,7 @@ function drawInspector() {
     h += toolButtons(G?.dz ? 'background' : 'output') + askBox(sid);
   } else if (k.startsWith('merge:')) {
     const l = k.slice(6), i = G.order.indexOf(l);
-    h += `<h2><span class="t">What sits on top</span></h2><div class="what">Here the ${LAYER_NAME[l].toLowerCase()} goes on top of what is already there. Change the order with the arrows${simple ? '' : ', or drag the dot under a branch onto another stack'}.</div>`;
+    h += `<h2><span class="t">What sits on top</span></h2><div class="what">Here the ${LAYER_NAME[l].toLowerCase()} ${/s$/.test(LAYER_NAME[l]) ? 'go' : 'goes'} on top of what is already there. Change the order with the arrows${simple ? '' : ', or drag the dot under a branch onto another stack'}.</div>`;
     h += `<div class="sec"><h3>The stack, top first</h3><div class="stk">${G.order.map((x, j) => `<div class="sr ${x === l ? 'me' : ''}"><i style="background:${LAYER_COL[x]}"></i><span>${LAYER_NAME[x]}</span>${j === G.order.length - 1 ? '<small>on top</small>' : ''}
       <button data-lay="${x}" data-dir="1" ${j === G.order.length - 1 || !G.dz ? 'disabled' : ''} title="higher" aria-label="higher"><svg viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg></button><button data-lay="${x}" data-dir="-1" ${j === 0 || !G.dz ? 'disabled' : ''} title="lower" aria-label="lower"><svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button></div>`).reverse().join('')}
       <div class="sr base"><i style="background:var(--taupe)"></i><span>Paper</span><small>underneath</small></div></div>
@@ -1071,9 +1087,9 @@ function drawInspector() {
       h += `<div class="sec"><h3>How it comes in</h3>` + paramsOf('in').filter(q => SC.schema.in?.[q]).map(q => control(sid + '.in', q, SC.schema.in[q], ip[q], ilk)).join('') + '</div>';
     }
     const styles = S.doc.nodes.filter(x => x.kind === 'style');
-    h += `<div class="sec"><h3>Shared styles</h3>${styles.map(s => { const on = (n.use || []).includes(s.id), k = S.doc.nodes.filter(x => (x.use || []).includes(s.id)).length;
-      return `<div class="swr"><span>${esc(s.id)}<small>${k} scene${k === 1 ? '' : 's'}</small></span><button class="tog ${on ? 'on' : ''}" data-wirebtn="${esc(s.id)}" data-on="${on ? 1 : 0}" title="${on ? 'this scene follows it: click to unwire' : 'make this scene follow it'}" aria-label="use ${esc(s.id)}"></button></div>`; }).join('') || '<div class="why">None yet. A style is a look several scenes can share.</div>'}
-      <div class="mkst"><input type="text" id="newstyle" placeholder="New style name"><button id="mkstyle">Create</button></div></div>`;
+    h += `<div class="sec"><h3>Shared looks</h3>${styles.map(s => { const on = (n.use || []).includes(s.id), k = S.doc.nodes.filter(x => (x.use || []).includes(s.id)).length;
+      return `<div class="swr"><span>${esc(s.id)}<small>${k} scene${k === 1 ? '' : 's'}</small></span><button class="tog ${on ? 'on' : ''}" data-wirebtn="${esc(s.id)}" data-on="${on ? 1 : 0}" title="${on ? 'this scene uses this look: click to stop' : 'use this look on this scene'}" aria-label="use ${esc(s.id)}"></button></div>`; }).join('') || '<div class="why">None yet. Name a look here to reuse this scene\'s settings on other scenes.</div>'}
+      <div class="mkst"><input type="text" id="newstyle" placeholder="Name this look, e.g. Night"><button id="mkstyle">Create</button></div></div>`;
     h += `<div class="sec"><h3>Scene</h3><div class="btns">      <button id="ml" ${i === 0 ? 'disabled' : ''}><svg viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></svg>Earlier</button><button id="mr" ${i === S.scenes.length - 1 ? 'disabled' : ''}>Later<svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></button>
       <button id="cp">Copy</button><button id="rm">Remove</button></div></div>` + askBox(sid);
   } else {
@@ -1083,7 +1099,16 @@ function drawInspector() {
     const spec = SC.schema[st] || {}, p = n?.params || {};
     const styled = S.scenes[sceneIdx(sid)].styled || {};
     const ty = node(sid).params.type, notHere = {text: ['clip', 'image'], caption: ['title', 'text', 'quote']};  // words this kind of scene doesn't show
-    for (const name of paramsOf(st)) if (spec[name] && !(p[name] == null && (notHere[name] || []).includes(ty))) {
+    const onlyIn = {subtitle: ['title'], who: ['quote'], big_words: ['title', 'text']};  // words this kind of scene doesn't show
+    const cs = node('settings')?.params || {}, capStyle = cs.caption_style || 'pop', capScene = cs.captions !== false && (['clip', 'image'].includes(ty) || p.caption != null);
+    const fits = name => {  // only the controls that change something in this scene
+      if (['caption_order', 'caption_small', 'caption_small_x', 'caption_small_y', 'caption_big_x', 'caption_big_y'].includes(name)) return capScene && capStyle === 'stack';
+      if (name === 'caption_big') return capScene && capStyle !== 'pop';
+      if (name === 'caption_place') return capScene;
+      if (onlyIn[name]) return onlyIn[name].includes(ty);
+      return !(notHere[name] || []).includes(ty);
+    };
+    for (const name of paramsOf(st)) if (spec[name] && (p[name] != null || fits(name))) {
       const key = SC.partKeys[part]?.includes(name) ? name : part + '_' + name, inh = styled[key];
       h += control(id, name, spec[name], p[name], lk, inh && p[name] == null ? inh : null);
     }
@@ -1131,7 +1156,7 @@ function apply(state, mine) {
   const gone = k => k && ((k.startsWith('tool:') && !node(k.slice(5))) || (k.startsWith('style:') && !(node(sel.scene)?.use || []).includes(k.slice(6))));
   if (gone(sel.node)) sel.node = 'out';
   const base = S.file.replace(/\.nodes\.json$|\.json$/, '').replace(/[-_]+/g, ' ').trim();
-  $('#file').textContent = cap(base); $('#file').title = S.file + (S.design ? ' · ' + S.design : '');
+  $('#file').textContent = node('settings')?.params?.title || cap(base); $('#file').title = S.file + (S.design ? ' · ' + S.design : '');
   $('#undo').disabled = !S.canUndo; $('#redo').disabled = !S.canRedo;
   const ai = S.byAI.length; $('#aichip').style.display = $('#aivr').style.display = ai ? '' : 'none';
   $('#aitext').textContent = `${ai} changed by your AI`;
@@ -1179,7 +1204,8 @@ async function refresh(force) {
       if (was === 'running' && st.render.state === 'done') toast('Your video is ready. Press Watch it.'); }
   } catch (e) { $('#status').textContent = 'Studio is not running'; }
 }
-function select(scene, nodeKey) { stopAll(); if (watching) { watching = false; $('.viewer').classList.remove('watching'); $('#watch').lastChild.textContent = 'Watch it'; } sel.scene = scene; sel.node = nodeKey || sel.node || 'out'; drawStrip(); drawCanvas(); drawInspector(); setPreview(); }
+function select(scene, nodeKey) { stopAll(); if (watching) { watching = false; $('.viewer').classList.remove('watching'); $('#watch').lastChild.textContent = 'Watch it'; } sel.scene = scene; sel.node = nodeKey || (/^(settings|sound|style:|tool:)/.test(sel.node || '') ? 'out' : sel.node) || 'out'; drawStrip(); drawCanvas();
+  if (sel.node !== 'out' && !el(sel.node)) sel.node = 'out'; drawInspector(); setPreview(); }
 
 // ---------------------------------------------------------------- events
 document.addEventListener('input', e => {
@@ -1231,7 +1257,6 @@ document.addEventListener('click', async e => {
     case 'theme': { const r = document.documentElement, n = r.dataset.theme === 'dark' ? 'light' : 'dark'; r.dataset.theme = n; try { localStorage.setItem('venus-theme2', n); } catch (er) {} themeName(); return drawCanvas(); }
     case 'more': return $('#moremenu').classList.toggle('on');
     case 'rstop': return op('/api/render_stop', {}, 'Stopping the render');
-    case 'gaskgo': { const g = $('#gask'); describe(sel.scene, g.value); g.value = ''; return; }
     case 'addsc': return op('/api/copy', {scene: sel.scene}, 'Added a copy of this scene after it: change it, or describe what it should be');
     case 'render': return render(false);
     case 'watch':
@@ -1247,7 +1272,7 @@ document.addEventListener('click', async e => {
     case 'playall': { const v = $('#vid'); if (allPlaying && v.src) { v.paused ? v.play() : v.pause(); return; } return playAll(headOfSel() / allTotal); }
     case 'aicopy': return copyForAI();
     case 'holdA': holdA = $('#pv').src; $('#pa').src = holdA; $('#pa').style.display = ''; $('#abseg').style.display = ''; $('#frame').classList.add('cmp'); setWipe(0);
-      return toast('Held as A. Change something, then switch between A and Now, or drag across the picture.');
+      return toast('Kept this frame as A. Change something, then switch between A and Now, or drag across the picture.');
     case 'lk': return op('/api/lock', {node: sel.scene, on: !node(sel.scene).locked});
     case 'lkp': return op('/api/lock', {node: d.node, on: !node(d.node).locked});
     case 'ml': return op('/api/move', {scene: sel.scene, before: S.scenes[i - 1].id});

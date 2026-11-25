@@ -32,6 +32,21 @@ from .approval import approve
 PREVIEW_SIZES = {"16:9": (960, 540), "9:16": (540, 960), "1:1": (720, 720), "4:5": (720, 900)}
 
 
+LOOK_NAMES = {  # plain names for the style packs, as people see them
+    "reels-punchy": "Punchy reel", "cinematic-doc": "Cinematic documentary", "explainer": "Explainer",
+    "podcast-clip": "Podcast clip", "calm-story": "Calm story", "editorial": "Editorial", "dreamy": "Dreamy",
+    "hype": "Hype", "mono-editorial": "Black-and-white editorial", "vox-paper": "Paper collage",
+    "talk-studio": "Talking head, dark studio", "talk-paper": "Talking head, paper", "documentary": "Documentary",
+    "archive-doc": "Archive documentary", "sepia-film": "Sepia film", "travel-reel": "Travel reel",
+    "creative-edit": "Creative edit", "trailer": "Trailer", "video-essay": "Video essay",
+    "interview-wall": "Interview wall", "podcast-gold": "Podcast, gold", "data-explainer": "Data explainer",
+    "wide-band": "Wide band (cinema bars)"}
+
+
+def look_name(k: str) -> str:
+    return LOOK_NAMES.get(k) or k.replace("-", " ").capitalize()
+
+
 def schema() -> dict:
     """The controls the inspector draws for each kind of node."""
     from .backgrounds import KINDS as BGS
@@ -42,36 +57,40 @@ def schema() -> dict:
     from .style import TITLE_STYLES
 
     num = lambda lo, hi, step, why="", default=None: {"type": "number", "min": lo, "max": hi, "step": step, "why": why, "default": default}
-    pick = lambda opts, why="", default=None: {"type": "select", "options": list(opts), "why": why, "default": default}
+    pick = lambda opts, why="", default=None, labels=None: {"type": "select", "options": list(opts), "why": why, "default": default,
+                                                           **({"labels": labels} if labels else {})}
     text = lambda why="", long=False: {"type": "text", "long": long, "why": why}
     flag = lambda why="", default=None: {"type": "bool", "why": why, "default": default}
     colour = lambda why="", accent=False: {"type": "colour", "accent": accent, "why": why}
     trans = [t for t in TRANSITIONS if t != "cut"]
     return {
-        "settings": {"style": pick(PRESETS, "a style pack: look, colour, transitions"), "design": pick(DESIGNS, "the designed look"),
+        "settings": {"style": pick(PRESETS, "a style pack: look, colour, transitions", None, {k: look_name(k) for k in PRESETS}),
+                     "design": pick(DESIGNS, "the designed look", None, {"mono": "Black and white", "paper": "Paper collage"}),
                      "aspect": pick(("16:9", "9:16", "1:1", "4:5"), "shape of the video"), "accent": colour("the one accent colour"),
                      "transition": pick(TRANSITIONS, "how scenes change"), "transition_seconds": num(0.1, 1.2, 0.05, "", 0.4),
-                     "title_style": pick(TITLE_STYLES), "quote_style": pick(("card", "verse"), "quotes as a card or quietly over the picture"), "label": text("the name printed on the page"),
-                     "end_card": text("last words on screen"), "background": pick(BGS), "captions": flag("", True),
+                     "title_style": pick(TITLE_STYLES), "quote_style": pick(("card", "verse"), "quotes as a card or quietly over the picture"), "label": text("a small name printed on every page, like a channel name"),
+                     "end_card": text("the last words on screen"), "background": pick(BGS, "behind scenes without footage"), "captions": flag("", True),
                      "caption_style": pick(("pop", "keyword", "stack"), "pop: each word lights up as it is said; keyword: one big word over a small row; stack: one big bold word, small rows above and below on one edge", "pop"),
                      "caption_words": text("words per caption card, fewest-most (2-6 unless you choose)"),
                      "caption_placement": pick(("auto", "fixed"), "auto: each card sits where the picture leaves room; fixed: always bottom centre", "auto"),
                      "cut_on_beat": flag("", True),
                      "venus_mark": flag("a small \"Made with Venus\" mark in the corner for the last 2 seconds", True)},
-        "sound": {"music": text("music file"), "music_lufs": num(-30, -8, 1, "music loudness", -16), "voiceover": text("voice file"),
+        "sound": {"music": {"type": "media", "media": "audio", "why": "a song or music track: Browse, or drop the file here"},
+                  "music_lufs": num(-30, -8, 1, "how loud the music is overall (-16 suits phones)", -16),
+                  "voiceover": {"type": "media", "media": "audio", "why": "your recorded voice: Browse, or drop the file here"},
                   "music_duck": num(0, 24, 1, "how far the music dips under the voice, in dB", 12),
                   "voice_gap": num(0, 20, 1, "the voice always sits at least this far over the music, measured on every line (0 = off)", 10),
                   "sound_effects": flag("whooshes and pops", True),
                   "sfx_volume": num(-12, 12, 1, "sound effects louder (+) or softer (-), in dB", 0)},
-        "scene": {"seconds": num(0.8, 15, 0.1, "how long the scene lasts", 3), "dark": flag("a dark page", False),
+        "scene": {"seconds": num(0.8, 15, 0.1, "how long the scene lasts", 3), "dark": flag("dark paper instead of light for this scene", False),
                   "background": pick(BGS, "behind a scene without footage")},
         "in": {"transition": pick(trans, "how this scene comes in")},
-        "picture": {"file": text("photo or clip"), "from": num(0, 600, 0.1, "start of the clip, in seconds", 0),
-                    "size": num(0.5, 1.4, 0.01, "size of the print", 1), "angle": num(-12, 12, 0.5, "tilt of a still print", 0),
-                    "push": num(-0.2, 0.2, 0.01, "slow zoom (normal scenes)", 0), "label": text("figure caption under the print"),
+        "picture": {"file": {"type": "media", "media": "picture", "why": "Browse, drop a photo or clip here, or pick one from Media"}, "from": num(0, 600, 0.1, "start of the clip, in seconds", 0),
+                    "size": num(0.5, 1.4, 0.01, "how big the photo sits on the page", 1), "angle": num(-12, 12, 0.5, "turn a still photo left (-) or right (+)", 0),
+                    "push": num(-0.2, 0.2, 0.01, "a slow zoom in (+) or out (-) while the scene plays", 0), "label": text("a small caption under the photo"),
                     "frame": pick(FRAMES, "clouds or ink round the picture")},
         "look": {"photo": pick(PHOTOS, "how the photo is printed"), "darken": num(0, 0.6, 0.01, "darken the picture", 0)},
-        "shape": {"shape": pick(SHAPES, "what sits behind the print"), "shape_colour": colour("its colour", accent=True)},
+        "shape": {"shape": pick(SHAPES, "what sits behind the print"), "shape_colour": colour("the colour of the shape behind the photo", accent=True)},
         "words": {"text": text("words of a title or text scene", True), "caption": text("words beside a picture", True),
                   "caption_big": text("the word set big on this scene's caption card"),
                   "caption_order": pick(("normal", "big-first"), "stack captions: big-first puts the big word on top and the rest flat under it", "normal"),
@@ -539,7 +558,7 @@ def home_handler(folder: Path):
 
                 return self._json({"home": True, "folder": str(folder), "projects": projects(),
                                    "kinds": [[k, br.NAMES[k], br.RECIPES[k]["about"]] for k in br.KINDS],
-                                   "looks": [[k, v.get("about", "")] for k, v in PRESETS.items() if not v.get("talk")]})
+                                   "looks": [[k, v.get("about", ""), look_name(k)] for k, v in PRESETS.items() if not v.get("talk")]})
             if u.path == "/api/state":
                 return self._json({"home": True})
             self._json({"error": "not found"}, 404)
