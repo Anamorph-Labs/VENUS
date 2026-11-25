@@ -29,6 +29,10 @@ from urllib.parse import parse_qs, urlparse
 from . import nodes as nd
 from .approval import approve
 
+MEDIA_KIND = {**{e: "picture" for e in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".heic")},
+              **{e: "clip" for e in (".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi")},
+              **{e: "audio" for e in (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".aif", ".aiff")}}
+MEDIA_MAX = 8 << 30  # one file brought in from Studio: 8 GB at most
 PREVIEW_SIZES = {"16:9": (960, 540), "9:16": (540, 960), "1:1": (720, 720), "4:5": (720, 900)}
 
 
@@ -327,6 +331,103 @@ class Studio:
                 subprocess.run([sys.executable, "-m", "alvenus", "make", str(self.path), "--draft", "--no-mark", "--out", str(out)],
                                check=True, capture_output=True, cwd=str(self.path.parent))
         return out
+
+    # ----------------------------------------------------------- media
+    def _inside(self, rel: str) -> Path:
+        """A path the page asked about, only ever inside this project's folder."""
+        root = self.path.parent.resolve()
+        p = (root / rel).resolve()
+        if p != root and root not in p.parents:
+            raise ValueError("that file is outside this project")
+        return p
+
+    def media(self) -> list[dict]:
+        """Photos, clips and sound in the project folder, and where each is used."""
+        root = self.path.parent.resolve()
+        with self.lock:
+            doc = copy.deepcopy(self.doc)
+        used: dict[str, list[str]] = {}
+        for n in doc.get("nodes", []):
+            for k, v in (n.get("params") or {}).items():
+                if k in ("file", "music", "voiceover") and isinstance(v, str) and v:
+                    where = {"music": "music", "voiceover": "voice"}.get(k) or n["id"].split(".")[0]
+                    try:
+                        key = str(self._inside(v).relative_to(root))
+                    except ValueError:
+                        key = v
+                    used.setdefault(key, []).append(where)
+        stem = self.path.name.split(".")[0]
+        out, seen = [], 0
+        for p in sorted(root.rglob("*")):
+            rel = p.relative_to(root)
+            if any(x.startswith(".") for x in rel.parts) or len(rel.parts) > 4 or not p.is_file():
+                continue
+            kind = MEDIA_KIND.get(p.suffix.lower())
+            if not kind or p.name.startswith(stem + ".") or p.name.startswith(stem + "-v"):  # the video's own renders stay out
+                continue
+            seen += 1
+            if seen > 500:
+                break
+            out.append({"path": str(rel), "name": p.name, "kind": kind, "size": p.stat().st_size,
+                        "used": used.get(str(rel), []), "t": p.stat().st_mtime})
+        out.sort(key=lambda m: (not m["used"], -m["t"]))
+        return out
+
+    def upload(self, name: str, src, length: int) -> str:
+        """A file the creator dropped or picked: copied into the project's media folder. Returns its path in the project."""
+        import re
+
+        if length <= 0 or length > MEDIA_MAX:
+            raise ValueError("that file is empty or too big to bring in (8 GB at most)")
+        stem, dot, ext = Path(name).name.rpartition(".")
+        if not dot or "." + ext.lower() not in MEDIA_KIND:
+            raise ValueError("Venus takes photos, clips and sound files (for example jpg, png, mp4, mov, mp3, wav)")
+        stem = re.sub(r"[^\w\-]+", "-", stem).strip("-")[:60] or "file"
+        folder = self.path.parent / "media"
+        folder.mkdir(exist_ok=True)
+        dest, k = folder / f"{stem}.{ext.lower()}", 2
+        if dest.exists() and dest.stat().st_size == length:  # the same file brought in again: keep the one already here
+            left = length
+            while left > 0:
+                chunk = src.read(min(left, 1 << 20))
+                if not chunk:
+                    break
+                left -= len(chunk)
+            return str(dest.relative_to(self.path.parent))
+        while dest.exists():
+            dest, k = folder / f"{stem}-{k}.{ext.lower()}", k + 1
+        part = dest.with_name(dest.name + ".part")
+        left = length
+        with part.open("wb") as fh:
+            while left > 0:
+                chunk = src.read(min(left, 1 << 20))
+                if not chunk:
+                    break
+                fh.write(chunk)
+                left -= len(chunk)
+        if left:
+            part.unlink(missing_ok=True)
+            raise ValueError("the file did not arrive whole; try again")
+        part.rename(dest)
+        return str(dest.relative_to(self.path.parent))
+
+    def thumb(self, rel: str) -> tuple[Path, str]:
+        """A small picture of a media file: the photo itself, or one frame of a clip."""
+        p = self._inside(rel)
+        kind = MEDIA_KIND.get(p.suffix.lower())
+        if not p.is_file() or kind not in ("picture", "clip"):
+            raise ValueError("no picture for that file")
+        if kind == "picture" and p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+            return p, {".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}.get(p.suffix.lower(), "image/jpeg")
+        tag = hashlib.sha256(f"{p}:{p.stat().st_mtime_ns}".encode()).hexdigest()[:14]
+        out = self.cache / f"thumb-{tag}.jpg"
+        if not out.exists():
+            subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", *(["-ss", "1"] if kind == "clip" else []), "-i", str(p),
+                            "-frames:v", "1", "-vf", "scale=320:-2", "-q:v", "4", str(out)], check=True, capture_output=True)
+            if not out.exists():  # a clip shorter than a second: its first frame
+                subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(p), "-frames:v", "1", "-vf", "scale=320:-2",
+                                str(out)], check=True, capture_output=True)
+        return out, "image/jpeg"
 
     def story_check(self) -> dict:
         """The story check on what is on screen, for the creator to read before Render."""
@@ -665,6 +766,11 @@ def handler(st: Studio):
                     return self._file(st.play(q["scene"]), "video/mp4")
                 if u.path == "/api/draft":
                     return self._file(st.draft(), "video/mp4")
+                if u.path == "/api/media":
+                    return self._json({"media": st.media()})
+                if u.path == "/api/thumb":
+                    f, kind = st.thumb(q["file"])
+                    return self._file(f, kind)
                 if u.path == "/api/video":
                     v = st.path.with_name(st.render.get("video") or "")
                     if st.render.get("video") and v.exists():
@@ -678,6 +784,13 @@ def handler(st: Studio):
         def do_POST(self):
             u = urlparse(self.path)
             n = int(self.headers.get("Content-Length") or 0)
+            if u.path == "/api/upload":  # a dropped or picked file arrives as the raw body, its name in a header
+                from urllib.parse import unquote
+
+                try:
+                    return self._json({"path": st.upload(unquote(self.headers.get("X-Name") or "file"), self.rfile, n)})
+                except ValueError as e:
+                    return self._json({"error": str(e)}, 400)
             body = json.loads(self.rfile.read(n) or b"{}")
             try:
                 op = u.path.rsplit("/", 1)[-1]

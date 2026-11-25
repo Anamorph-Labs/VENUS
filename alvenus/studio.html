@@ -315,10 +315,23 @@ padding:18px 20px;box-shadow:var(--pop);display:none;max-height:calc(100vh - 90p
 .dirbox .dirhead{display:flex;align-items:center;justify-content:space-between}
 .dirbox h3{font:400 22px/1.2 Newsreader,Georgia,serif;margin:0}
 .dirbox img{width:100%;border-radius:12px;margin:8px 0 12px;display:none}
+/* media: a file box with Browse, the media shelf, and the drop veil */
+.mfile{display:flex;gap:6px;align-items:center}.mfile input{flex:1;min-width:0}.mfile button{flex:0 0 auto}
+.row.drop,.clip.drop,.screen.drop .frame{outline:2px dashed var(--blue);outline-offset:3px}
+.dropveil{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;pointer-events:none;background:rgba(23,24,27,.12)}
+.dropveil.on{display:flex}.dropveil span{background:var(--panel);border:1px solid var(--hair2);border-radius:999px;padding:10px 18px;font-size:14px;box-shadow:var(--pop)}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;overflow:auto;max-height:calc(100vh - 240px);padding:2px}
+.mcard{border:1px solid var(--hair2);border-radius:14px;background:var(--panel);padding:6px;display:flex;flex-direction:column;gap:6px}
+.mcard .mt{height:86px;border-radius:9px;background:var(--frame);overflow:hidden;display:grid;place-items:center;color:#E4E1DB;font-size:12px}
+.mcard .mt img{width:100%;height:100%;object-fit:cover;display:block}
+.mcard .mn{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mcard .mu{font-size:11px;color:var(--q);min-height:14px}
+.mcard .mb{display:flex;flex-wrap:wrap;gap:4px}.mcard .mb button{height:26px;font-size:12px;padding:0 9px}
+.mhead{display:flex;align-items:center;gap:10px;margin:0 0 12px}.mhead .sp{flex:1}
 /* pop-ups, one family: a centred sheet over a soft scrim; caps label, Newsreader title, hairline list, pills */
 .scrim{position:fixed;inset:0;z-index:40;background:rgba(23,24,27,.22);backdrop-filter:blur(2px);display:none}
 :root[data-theme="dark"] .scrim{background:rgba(0,0,0,.5)}
-body:has(.updbox.on) .scrim,body:has(.dirbox.on) .scrim{display:block}
+body:has(.updbox.on) .scrim,body:has(.dirbox.on) .scrim,body:has(.mediabox.on) .scrim{display:block}
 .updbox{top:50%;left:50%;right:auto;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 32px));border-radius:24px;padding:24px 28px 22px;max-height:calc(100vh - 48px);overflow:auto}
 .updbox>.lab,.dirbox .lab{display:block;margin-bottom:10px}
 .updbox h3{font-size:26px;line-height:1.15;margin:0 0 4px}
@@ -444,6 +457,7 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <button id="newv" title="describe a new video">New video</button>
 <button id="dirs" title="the same story three ways: your look, the opposite energy, tighter">Three directions</button>
 <button id="vset">Video settings</button>
+<button id="media" title="photos, clips and sound in this project">Media</button>
 <button id="sound">Sound</button><hr>
 <button id="theme" title="light or dark">Theme <small id="themename">Day</small></button>
 </div></header>
@@ -496,6 +510,11 @@ aside select{width:100%;height:34px;background-color:var(--input);border:1px sol
 <p class="small" id="dirsmall">Venus lays the same story out three ways and draws a few frames of each. Nothing is made into a video.</p>
 <img id="dirimg" alt="frames of the three directions">
 <div class="dopts" id="dirbtns"></div></div>
+<div class="dirbox mediabox" id="mediabox" role="dialog" aria-label="media"><div class="dirhead"><div><span class="lab">Media</span><h3>Photos, clips and sound</h3></div><button class="xb" id="mediaclose" title="close" aria-label="close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+<div class="mhead"><p class="small" style="margin:0">Everything in this project's folder. Drop files anywhere on Studio to add them: on a scene to use them there.</p><span class="sp"></span><button class="primary" id="mediaadd">Add files</button></div>
+<div class="mgrid" id="mgrid"></div></div>
+<div class="dropveil" id="dropveil"><span>Drop on a scene or the picture to use it there, or anywhere to add it to Media</span></div>
+<input type="file" id="filepick" multiple hidden>
 <div class="toast" id="toast"></div><div class="wtip" id="wtip"></div>
 <script>
 const $ = s => document.querySelector(s);
@@ -834,6 +853,61 @@ function drawStrip() {
   }).join('') + `<button class="addsc" id="addsc" title="add a scene: a copy of the selected one, to change. ${S.scenes.length} scenes · drag one to reorder">+</button>`;
   drawTimeline(); moveSeg();
 }
+// ---------------------------------------------------------------- media: bring in photos, clips and sound
+const EXT = {picture: /\.(jpe?g|png|webp|gif|bmp|tiff?|heic)$/i, clip: /\.(mp4|mov|m4v|webm|mkv|avi)$/i, audio: /\.(mp3|wav|m4a|aac|flac|ogg|aiff?)$/i};
+const kindOf = n => Object.keys(EXT).find(k => EXT[k].test(n)) || null;
+function pickFiles(accept, many = true) {
+  return new Promise(res => { const i = $('#filepick'); i.accept = accept; i.multiple = many; i.value = '';
+    i.onchange = () => res([...i.files]); i.click(); });
+}
+async function uploadFile(f) {
+  if (!kindOf(f.name)) { toast(`${f.name}: Venus takes photos, clips and sound files`, 'bad'); return null; }
+  busy(true, `Adding ${f.name}`);
+  try {
+    const r = await fetch('/api/upload', {method: 'POST', headers: {'X-Name': encodeURIComponent(f.name)}, body: f});
+    const j = await r.json(); if (!r.ok) throw new Error(j.error); return j.path;
+  } catch (e) { toast(`${f.name}: ${e.message}`, 'bad'); return null; } finally { busy(false); }
+}
+function setMedia(target, p, path, kind) {  // a photo or clip into a scene (its kind follows the file), or sound into Sound
+  if (target === 'sound') { queue('sound', p, path); toast(`${path.split('/').pop()} is now the ${p === 'music' ? 'music' : 'voice'}. Undo brings the old one back.`); return; }
+  const sid = target.split('.')[0], ty = node(sid)?.params?.type;
+  queue(target, p, path);
+  if (ty === 'image' && kind === 'clip') queue(sid, 'type', 'clip'); else if (ty === 'clip' && kind === 'picture') queue(sid, 'type', 'image');
+  toast(`${path.split('/').pop()} is in ${sceneName(sid).toLowerCase()} now. Undo brings the old one back.`);
+}
+let shelfFor = null;
+async function openMedia(forField) {
+  shelfFor = forField || null; $('#mediabox').classList.add('on'); $('#moremenu').classList.remove('on');
+  $('#mgrid').innerHTML = '<p class="small">Looking…</p>';
+  let list = []; try { list = (await (await fetch('/api/media')).json()).media || []; } catch (e) {}
+  if (shelfFor) list = list.filter(m => (shelfFor.kind === 'audio') === (m.kind === 'audio'));
+  const i = sceneIdx(sel.scene) + 1, mb = n => (n / 1048576 < 1 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1) + ' MB');
+  const use = (m, target, p, label) => `<button data-use='${esc(JSON.stringify({target, p, path: m.path, kind: m.kind}))}'>${label}</button>`;
+  $('#mgrid').innerHTML = list.map(m => `<div class="mcard" title="${esc(m.path)}"><div class="mt">${m.kind === 'audio' ? '♪ sound' : `<img loading="lazy" alt="" src="/api/thumb?file=${encodeURIComponent(m.path)}">`}</div>
+    <div class="mn">${esc(m.name)}</div><div class="mu">${m.used.length ? 'used: ' + m.used.map(u => /^scene\d+$/.test(u) ? sceneName(u).toLowerCase() : u).join(', ') : mb(m.size)}</div>
+    <div class="mb">${shelfFor ? use(m, shelfFor.target, shelfFor.p, 'Use') : m.kind === 'audio' ? use(m, 'sound', 'music', 'Use as music') + use(m, 'sound', 'voiceover', 'Use as voice') : use(m, sel.scene + '.picture', 'file', 'Use in scene ' + i)}</div></div>`).join('')
+    || '<p class="small">Nothing here yet. Press Add files, or drop photos, clips or sound anywhere on Studio.</p>';
+}
+(() => {  // drag files in from the desktop: onto a scene card, the picture, a file box, or anywhere
+  let depth = 0; const veil = $('#dropveil'), hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+  const spot = e => e.target.closest?.('.mfile')?.closest('.row') || e.target.closest?.('.clip[data-scene]') || e.target.closest?.('.screen');
+  addEventListener('dragenter', e => { if (!hasFiles(e)) return; depth++; veil.classList.add('on'); });
+  addEventListener('dragleave', e => { if (!hasFiles(e)) return; if (--depth <= 0) { depth = 0; veil.classList.remove('on'); } });
+  addEventListener('dragover', e => { if (!hasFiles(e)) return; e.preventDefault(); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); spot(e)?.classList.add('drop'); });
+  addEventListener('drop', async e => {
+    if (!hasFiles(e)) return; e.preventDefault(); depth = 0; veil.classList.remove('on');
+    const at = spot(e); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop'));
+    const files = [...e.dataTransfer.files]; if (!files.length) return;
+    const paths = []; for (const f of files) { const p = await uploadFile(f); if (p) paths.push([p, kindOf(f.name)]); }
+    if (!paths.length) return; const [path, kind] = paths[0];
+    const box = at?.querySelector?.('.mfile')?.dataset;
+    if (box) { if ((box.mk === 'audio') !== (kind === 'audio')) return toast('That box takes ' + (box.mk === 'audio' ? 'a sound file' : 'a photo or clip'), 'bad'); return setMedia(box.mt, box.mp, path, kind); }
+    const sid = at?.dataset?.scene || (at?.classList.contains('screen') ? sel.scene : null);
+    if (sid && kind !== 'audio') { if (sid !== sel.scene) select(sid); return setMedia(sid + '.picture', 'file', path, kind); }
+    if (at && kind === 'audio') return setMedia('sound', 'music', path, kind);
+    toast(paths.length === 1 ? `Added ${path.split('/').pop()} to Media` : `Added ${paths.length} files to Media`); openMedia();
+  });
+})();
 // ---------------------------------------------------------------- the whole video, as one timeline
 let allPlaying = false, allTotal = 1, allScene = -1, mvPart = null;
 const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -996,6 +1070,9 @@ function control(target, name, spec, value, locked, inherited) {
     const hex = /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#888888';
     input = `<div class="col"><input type="color" ${dis} id="${id}" value="${hex}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">
       <span>${esc(value || 'design default')}</span>${spec.accent ? `<button ${dis} data-set="${esc(target)}" data-p="${esc(name)}" data-v='"accent"'>use accent</button>` : ''}</div>`;
+  } else if (spec.type === 'media') {
+    input = `<div class="mfile" data-mt="${esc(target)}" data-mp="${esc(name)}" data-mk="${spec.media}"><input type="text" ${dis} id="${id}" value="${esc(value ?? '')}" placeholder="${spec.media === 'audio' ? 'no sound file' : 'no photo or clip'}" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="str">
+      <button ${dis} data-browse="1">Browse</button><button ${dis} data-shelf="1" title="pick from this project's media">Media</button></div>`;
   } else if (spec.type === 'list') {
     input = `<input type="text" ${dis} id="${id}" value="${esc((value || []).join(', '))}" placeholder="word, another word" data-t="${esc(target)}" data-p="${esc(name)}" data-kind="list">`;
   } else if (spec.type === 'callout') {
@@ -1242,6 +1319,11 @@ document.addEventListener('click', async e => {
   if (d.unuse) return op('/api/use', {style: d.unuse, scene: sel.scene, on: false});
   if (d.wirebtn) { t.blur(); await op('/api/use', {style: d.wirebtn, scene: sel.scene, on: d.on !== '1'}); return drawInspector(); }
   if (d.tpw) { e.stopPropagation(); return op('/api/tool_toggle', {node: d.tpw, on: !!node(d.tpw).off}); }
+  if (d.browse || d.shelf) { const m = t.closest('.mfile').dataset;
+    if (d.shelf) return openMedia({target: m.mt, p: m.mp, kind: m.mk});
+    const [f] = await pickFiles(m.mk === 'audio' ? 'audio/*' : 'image/*,video/*', false); if (!f) return;
+    const path = await uploadFile(f); if (path) setMedia(m.mt, m.mp, path, kindOf(f.name)); return; }
+  if (d.use) { const m = JSON.parse(d.use); setMedia(m.target, m.p, m.path, m.kind); $('#mediabox').classList.remove('on'); return; }
   if (d.tcopy) return dupTool(d.tcopy);
   if (d.trm) return rmTool(d.trm);
   if (d.add) return addTool(d.add, d.on, d.before);
@@ -1271,6 +1353,9 @@ document.addEventListener('click', async e => {
     case 'big': return openBig();
     case 'playall': { const v = $('#vid'); if (allPlaying && v.src) { v.paused ? v.play() : v.pause(); return; } return playAll(headOfSel() / allTotal); }
     case 'aicopy': return copyForAI();
+    case 'media': return openMedia();
+    case 'mediaclose': return $('#mediabox').classList.remove('on');
+    case 'mediaadd': { const fs = await pickFiles(''); for (const f of fs) await uploadFile(f); return openMedia(); }
     case 'holdA': holdA = $('#pv').src; $('#pa').src = holdA; $('#pa').style.display = ''; $('#abseg').style.display = ''; $('#frame').classList.add('cmp'); setWipe(0);
       return toast('Kept this frame as A. Change something, then switch between A and Now, or drag across the picture.');
     case 'lk': return op('/api/lock', {node: sel.scene, on: !node(sel.scene).locked});
@@ -1312,6 +1397,7 @@ document.addEventListener('keydown', e => {
   if ((e.target.dataset?.gdesc || e.target.id === 'gask') && e.key === 'Enter') { describe(sel.scene, e.target.value); e.target.value = ''; return; }
   if (e.target.id === 'dtext' && e.key === 'Enter') { $('#dgo').click(); return; }
   if (e.key === 'Escape' && closeBig()) return;
+  if (e.key === 'Escape' && $('#mediabox').classList.contains('on')) { $('#mediabox').classList.remove('on'); return; }
   if (e.key === 'Escape') { $('#moremenu').classList.remove('on'); if ($('#tips').style.display !== 'none') closeTips(); }
   if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); op(e.shiftKey ? '/api/redo' : '/api/undo', {}); }
@@ -1545,7 +1631,7 @@ function dirCards(list) {
     <div class="why">${x.seconds} s · ${esc(x.why)}</div><button data-tag="${esc(x.tag)}" class="${x.tag === 'A' ? '' : 'primary'}">${x.tag === 'A' ? 'Keep this one' : 'Use ' + esc(x.tag)}</button></div>`).join('');
 }
 $('#dirclose').addEventListener('click', () => $('#dirbox').classList.remove('on'));
-$('#scrim').addEventListener('click', () => { $('#dirbox').classList.remove('on'); $('#storybox').classList.remove('on'); });
+$('#scrim').addEventListener('click', () => { $('#dirbox').classList.remove('on'); $('#storybox').classList.remove('on'); $('#mediabox').classList.remove('on'); });
 $('#dirbtns').addEventListener('click', async e => {
   const b = e.target.closest('button[data-tag]'); if (!b) return;
   const r = await op('/api/direction_pick', {tag: b.dataset.tag}, `Direction ${b.dataset.tag} is in. Undo brings back what you had.`);
