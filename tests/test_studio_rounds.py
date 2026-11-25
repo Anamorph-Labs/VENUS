@@ -74,6 +74,16 @@ class WordLook(unittest.TestCase):
         self.assertTrue(w["colour"]["swatches"])
 
 
+class NumberScene(unittest.TestCase):
+    def test_a_number_value_does_not_break_studio(self):
+        from alvenus import nodes as nd
+        from alvenus.studio import Studio
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "v.nodes.json"
+            f.write_text(json.dumps(nd.to_nodes({"scenes": [{"type": "stat", "value": 3200000, "label": "people", "seconds": 3}]})))
+            self.assertEqual(Studio(f).state()["scenes"][0]["label"], "3200000")
+
+
 class RenderChoices(unittest.TestCase):
     def test_jobs(self):
         from alvenus.studio import export_job

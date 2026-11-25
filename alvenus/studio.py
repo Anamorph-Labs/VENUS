@@ -313,8 +313,8 @@ class Studio:
                 scenes.append({"id": sn["id"], "n": k + 1, "styled": styled, "type": (sn.get("params") or {}).get("type"),
                                "seconds": float(sc.get("seconds", 3.0)), "use": sn.get("use") or [],
                                "graph": nd.graph(doc, sn["id"]),
-                               "key": self._key(sb, k), "label": (sc.get("caption") or sc.get("text") or sc.get("title")
-                                                                  or sc.get("value") or "")[:60],
+                               "key": self._key(sb, k), "label": str(sc.get("caption") or sc.get("text") or sc.get("title")
+                                                                      or sc.get("value") or "")[:60],
                                "beat": sc.get("beat"), "unwritten": bool(sc.get("_job")) and bool(empty(sc))})
             now = time.time()
             return {"version": self.version, "file": self.path.name, "doc": doc, "scenes": scenes, "idea": sb.get("_idea"),
