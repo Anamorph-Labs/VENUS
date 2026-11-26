@@ -114,6 +114,17 @@ def load(path: Path, data: dict | None = None) -> dict:
                 sc[side]["file"] = str((base / f).resolve()) if not Path(f).is_absolute() else f
                 if not Path(sc[side]["file"]).exists():
                     problems.append(f"scene {i + 1}: {sc[side]['file']} not found")
+        pg = sc.get("page") if isinstance(sc.get("page"), dict) else {}
+        if isinstance(pg.get("also"), (str, dict)):  # a second, smaller window on a page
+            al = pg["also"] if isinstance(pg["also"], dict) else {"file": pg["also"]}
+            if al.get("file"):
+                if pictures.is_picture(al["file"]):
+                    al["file"] = drawn(al["file"], i, "page.also.file")
+                f = al["file"]
+                al["file"] = str((base / f).resolve()) if not Path(f).is_absolute() else f
+                if not Path(al["file"]).exists():
+                    problems.append(f"scene {i + 1}: {al['file']} not found")
+            pg["also"] = al
         if kind in ("clip", "image", "archive") and not sc.get("file") and not sc.get("_job"):  # (a laid-out beat not written yet waits)
             problems.append(f"scene {i + 1}: a {kind} scene needs \"file\"")
         if kind == "map" and not (sc.get("image") and sc.get("pins")):

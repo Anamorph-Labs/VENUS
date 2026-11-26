@@ -4,6 +4,7 @@ Each release, newest first, in plain words. `alvenus update --check` reads this 
 so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 
 ## Coming in the next release
+- Pages look like a designed film: photos toned and tilted like prints, screens kept sharp, a second window with a hand-drawn arrow, a small label on the card, a doodle by the note, a huge italic "x2", and words on cards joined by a "+".
 - Pages move like a designed film: words land as the voice says them, pages meet with a clean move instead of a dissolve, and a gentle camera looks at what is circled or stamped.
 - Titles over footage take the page's serif in a video of pages, and shrink into the next page's card.
 - A clip that would open on a stray frame of the shot before now starts at the cut.

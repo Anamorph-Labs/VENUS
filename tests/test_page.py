@@ -148,3 +148,51 @@ class Options(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PageStyle(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.pic = self.dir / "p.png"
+        rng = np.random.default_rng(1)
+        Image.fromarray(rng.integers(0, 255, (90, 160, 3), dtype=np.uint8)).save(self.pic)
+
+    def _draw(self, sc, d=1.6):
+        out = self.dir / "s.mp4"
+        motion.picture(sc, d, W, H, FPS, out)
+        return _frames(out, d)
+
+    def test_screen_or_photo_is_measured(self):
+        flat = np.full((90, 160, 3), 240, np.uint8)
+        flat[10:20, 10:60] = 20
+        self.assertTrue(page.screenish(flat))
+        self.assertFalse(page.screenish(np.asarray(Image.open(self.pic))))
+        t = page.tone(np.asarray(Image.open(self.pic)))
+        self.assertGreater(t[..., 0].mean(), t[..., 2].mean())  # sepia is warm
+
+    def test_line_breaks_and_stress_carry_over(self):
+        from PIL import ImageDraw
+        d = ImageDraw.Draw(Image.new("RGB", (10, 10)))
+        up, it = page._faces({}, 20)
+        lines = page._lines(d, "Paste *one\nline.* Press", up, it, 2000)
+        self.assertEqual([[w for w, _, _ in ln] for ln in lines], [["Paste", "one"], ["line.", "Press"]])
+        self.assertTrue(lines[1][0][1])  # "line." is still stressed
+        self.assertFalse(lines[1][1][1])
+
+    def test_cards_join_and_need_no_text(self):
+        sc = {"type": "text", "page": {"cards": ["A computer", "Your AI"], "label": "What you need", "note": "the one you use"}}
+        self.assertEqual(page.problems(sc, 0), [])
+        f = self._draw(sc)
+        self.assertGreater(f[-1].mean(), 200)
+        self.assertGreater(np.abs(f[-1].astype(int) - f[0]).mean(), 0.5)  # the cards arrive
+        self.assertIn("1 to 3", " ".join(page.problems({"type": "text", "page": {"cards": []}}, 0)))
+
+    def test_pill_doodle_big_and_also_draw(self):
+        other = self.dir / "o.png"
+        Image.new("RGB", (160, 90), (30, 30, 40)).save(other)
+        sc = {"type": "image", "file": str(self.pic), "page": {
+            "text": "Run it *twice.*", "note": "Go make tea.", "doodle": "cup", "pill": "Free models",
+            "big": "x2", "also": {"file": str(other), "note": "or ask"}}}
+        plain = self._draw({"type": "image", "file": str(self.pic), "page": {"text": "Run it *twice.*"}})
+        f = self._draw(sc)
+        self.assertGreater(np.abs(f[-1].astype(int) - plain[-1]).mean(), 1)  # the extras are on the page

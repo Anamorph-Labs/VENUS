@@ -423,6 +423,19 @@ them (the accent where it does, else ivory or ink); set `"colour"` to choose.
   over footage is set in the page's serif on the footage (`"page": {"full":
   true}`; storyboard `"page_titles": false` keeps the bold title), and it
   shrinks into the next page's card. Give a page scene 2 s or more.
+  The page's details: a photo on the card is toned sepia and tilted a little
+  like a print (`"tone": "none"` keeps its colour, `"angle"` sets the tilt); a
+  screen (a website, a terminal) stays sharp and straight (Venus measures
+  which it is; set the scene's `"screen"` when it guesses wrong). `"\n"` in the
+  text starts a new line. `"pill": "Free models: downloaded once"` puts a small
+  label on the card's corner. `"also": {"file": "site.jpg", "note": "or just
+  ask your AI"}` lays a second, smaller window over the card with a hand-drawn
+  arrow from its note (another way to do the step). `"doodle": "cup"` draws a
+  small hand-drawn icon beside the note (any `alvenus icons search` name).
+  `"big": "x2"` lands one huge serif italic, like a stamp. `"cards": ["A
+  computer", "Your AI"]` (1 to 3, no picture needed) sets words on white cards
+  joined by a "+", the note under them. A full title over footage sits top
+  left, in ink on light footage and ivory on dark.
 - **No stray first frame**: a clip whose `"from"` sits just before a cut in
   its source starts at the cut, and the notes say so (`"from_exact": true`
   keeps the time you gave).

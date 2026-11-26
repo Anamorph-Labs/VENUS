@@ -31,16 +31,16 @@ MUTED = (118, 114, 106)
 
 
 def paper(w: int, h: int, seed: int = 3) -> np.ndarray:
-    """An ivory sheet: fine grain, a slow unevenness and a soft edge."""
+    """A flat warm ivory sheet with the faintest grain."""
     rng = np.random.default_rng(seed)
-    base = np.full((h, w, 3), IVORY, np.float32)
+    base = np.full((h, w, 3), (246, 242, 234), np.float32)
     small = rng.normal(0, 1, (max(2, h // 60), max(2, w // 60))).astype(np.float32)
     blot = np.asarray(Image.fromarray(((small - small.min()) / (np.ptp(small) + 1e-6) * 255).astype(np.uint8)).resize((w, h), Image.BICUBIC), np.float32)
-    base -= (blot[..., None] / 255 - 0.5) * 6
-    base += rng.normal(0, 2.2, (h, w, 1)).astype(np.float32)
+    base -= (blot[..., None] / 255 - 0.5) * 2
+    base += rng.normal(0, 1.0, (h, w, 1)).astype(np.float32)
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     edge = ((xx / w - 0.5) ** 2 + (yy / h - 0.5) ** 2) * 2
-    base *= (1 - 0.07 * edge)[..., None]
+    base *= (1 - 0.02 * edge)[..., None]
     return np.clip(base, 0, 255).astype(np.uint8)
 
 
@@ -156,50 +156,102 @@ def plan(scenes: list[dict], sb: dict) -> list[str]:
     return notes
 
 
-def _words_layer(sc: dict, spec: dict, box: tuple[int, int, int, int], size: int, w: int, h: int, centre: bool = False,
-                 light: bool = False):
-    """Every word as its own image (so each can land on its own), and where each sits."""
-    text = str(spec.get("text") or sc.get("text") or "")
-    up, it = _fonts(sc, size)
-    accent = _rgb(sc.get("_accent"), DEEP_BLUE)
-    if light:  # on footage: ivory words, the stressed ones in the accent only where it is light enough to read
-        ink, accent = IVORY, (accent if sum(accent) > 450 else IVORY)
-    else:
-        ink = INK
-        if sum(accent) > 600:  # an accent too pale for an ivory page: the deep blue instead
-            accent = DEEP_BLUE
-    probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
-    lines = _lay(probe, _runs(text), up, it, box[2])
-    lh = int(size * 1.22)
-    top = box[1] + max(0, (box[3] - lh * len(lines)) // 2)
+PAGE = (246, 242, 234)  # the page: a flat warm ivory
+CARD = (255, 254, 251)  # cards: a whiter ivory
+
+
+def _font(path: Path, size: float, axes: list | None = None):
+    try:
+        f = ImageFont.truetype(str(path), max(6, int(size)))
+        if axes:
+            try:
+                f.set_variation_by_axes(axes)
+            except (OSError, ValueError):
+                pass
+        return f
+    except OSError:
+        return None
+
+
+def _faces(sc: dict, size: float):
+    """(upright, italic) serif for the page: the brand heading font first, else Newsreader, else Libre Baskerville."""
+    from .style import FONTS as F
+
+    studio = Path(__file__).parent / "studio_fonts"
+    fonts = sc.get("_fonts") or {}
+    head = fonts.get("heading") if str(fonts.get("heading", "")).lower().endswith((".ttf", ".otf")) else None
+    up = (_font(Path(head), size) if head and Path(head).exists() else None) or \
+        _font(studio / "Newsreader-normal.woff2", size, [400, 72]) or _font(F / "LibreBaskerville-Regular.ttf", size)
+    it = _font(studio / "Newsreader-italic.woff2", size, [72]) or _font(F / "InstrumentSerif-Italic.ttf", size * 1.1)
+    return up or ImageFont.load_default(), it or up or ImageFont.load_default()
+
+
+def _sans(size: float):
+    studio = Path(__file__).parent / "studio_fonts"
+    return _font(studio / "HankenGrotesk-normal.woff2", size, [500]) or _font(FONTS / "Inter-SemiBold.otf", size) \
+        or ImageFont.load_default()
+
+
+def _lines(draw, text: str, up, it, width: float) -> list[list[tuple[str, bool, float]]]:
+    """Lines of (word, stressed, x): a line break where the text has one ("\n"), a new line after a
+    sentence once the line is a good length, else wrapped at `width`."""
     out = []
+    on = False
+    for para in text.split("\n"):
+        if on:  # a *stress* left open runs on into the next line
+            para = "*" + para
+        runs = _runs(para)
+        on = para.count("*") % 2 == 1
+        out += _para(draw, runs, up, it, width)
+    return out
+
+
+def _para(draw, runs, up, it, width: float) -> list[list[tuple[str, bool, float]]]:
+    sp = draw.textlength(" ", font=up)
+    lines, cur, x = [], [], 0.0
+    for k, (word, stress) in enumerate(runs):
+        f = it if stress else up
+        wl = draw.textlength(word, font=f)
+        if cur and x + sp + wl > width:
+            lines.append(cur)
+            cur, x = [], 0.0
+        if cur:
+            x += sp
+        cur.append((word, stress, x))
+        x += wl
+        if re.search(r"[.?!…:]$", word) and k + 1 < len(runs) and x > width * 0.4:  # a sentence ends: the next starts a line
+            lines.append(cur)
+            cur, x = [], 0.0
+    return [ln for ln in lines + [cur] if ln]
+
+
+def _words_layer(sc: dict, text: str, x0: float, y0: float, size: float, width: float, ink, accent, lead: float = 1.08):
+    """Every word as its own image (so each can land on its own), where each sits, and the block's bottom."""
+    up, it = _faces(sc, size)
+    probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+    out = []
+    lh = size * lead
+    lines = _lines(probe, text, up, it, width)
     for k, line in enumerate(lines):
-        if not line:
-            continue
-        last = line[-1]
-        lw = last[2] + probe.textlength(last[0], font=it if last[1] else up)
-        dx = (box[2] - lw) / 2 if centre else 0
         for word, stress, x in line:
             f = it if stress else up
-            img = Image.new("RGBA", (int(probe.textlength(word, font=f) + size), int(size * 1.6)), (0, 0, 0, 0))
-            # the italic is a little larger, so the stressed words sit level with the upright ones
-            ImageDraw.Draw(img).text((int(size * 0.1), int(size * 0.2) - (size * 0.12 if stress else 0)), word, font=f,
-                                     fill=(accent if stress else ink) + (255,))
-            out.append((img, (int(box[0] + dx + x - size * 0.1), top + k * lh)))
-    return out, top + len(lines) * lh, accent
+            img = Image.new("RGBA", (int(probe.textlength(word, font=f) + size * 0.4), int(size * 1.5)), (0, 0, 0, 0))
+            ImageDraw.Draw(img).text((int(size * 0.1), int(size * 0.15)), word, font=f, fill=(accent if stress else ink) + (255,))
+            out.append((img, (int(x0 + x - size * 0.1), int(y0 + k * lh - size * 0.15))))
+    return out, y0 + len(lines) * lh
 
 
-def _note(sc, text: str, x: int, y: int, size: int, accent) -> tuple[Image.Image, list]:
-    _, it = _fonts(sc, size)
+def _note(sc, text: str, x: float, y: float, size: float, accent) -> tuple[Image.Image, list, float]:
+    _, it = _faces(sc, size)
     probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
     tw = probe.textlength(text, font=it)
     img = Image.new("RGBA", (int(tw + size), int(size * 1.6)), (0, 0, 0, 0))
     ImageDraw.Draw(img).text((0, int(size * 0.15)), text, font=it, fill=accent + (255,))
     rng = np.random.default_rng(len(text))
-    base = y + size * 1.4
-    line = _wobble([(x - size * 0.1, base), (x + tw * 0.55, base + size * 0.08), (x + tw + size * 0.3, base - size * 0.05)],
-                   size * 0.05, rng, 10)
-    return img, line
+    base = y + size * 1.45
+    line = _wobble([(x - size * 0.05, base), (x + tw * 0.55, base - size * 0.1), (x + tw + size * 0.25, base + size * 0.02)],
+                   size * 0.04, rng, 10)
+    return img, line, tw
 
 
 def _fade(img: Image.Image, q: float) -> Image.Image:
@@ -248,7 +300,7 @@ def _overlays(sc: dict):
     return specs
 
 
-def _focus(sc: dict, card: tuple[float, float] | None, words: tuple[float, float]) -> list[tuple[float, float, float]]:
+def _focus(sc: dict) -> list[tuple[float, float, float]]:
     """Where the camera looks, and from when: what is circled, pointed at or stamped, as it appears."""
     out = []
     for n in sc.get("notes") or []:
@@ -265,56 +317,167 @@ def _focus(sc: dict, card: tuple[float, float] | None, words: tuple[float, float
     return out
 
 
+def screenish(img: np.ndarray) -> bool:
+    """A screen (a page, a window, a terminal) rather than a photo: large areas of exactly one colour.
+    A measurement, not a recognition: set "screen" on the scene when it guesses wrong."""
+    small = np.asarray(Image.fromarray(img).resize((96, 54), Image.NEAREST)) // 12
+    keys = small[..., 0].astype(np.int32) * 10000 + small[..., 1].astype(np.int32) * 100 + small[..., 2]
+    _, counts = np.unique(keys, return_counts=True)
+    return counts.max() / keys.size > 0.22
+
+
+def tone(img: np.ndarray) -> np.ndarray:
+    """A photo toned to the page: warm sepia, lifted a little, so it sits on ivory like a print."""
+    f = img.astype(np.float32) / 255
+    y = (0.299 * f[..., 0] + 0.587 * f[..., 1] + 0.114 * f[..., 2])[..., None]
+    y = 0.1 + 0.85 * y
+    lo, hi = np.array([46, 38, 30], np.float32) / 255, np.array([245, 238, 224], np.float32) / 255
+    sep = lo + (hi - lo) * y
+    out = sep * 0.88 + f * 0.12
+    return (np.clip(out, 0, 1) * 255).astype(np.uint8)
+
+
+def _card_image(pic: np.ndarray, cw: int, ch: int, r: int, toned: bool) -> Image.Image:
+    pic = cover(pic, cw, ch) if pic.shape[1] != cw or pic.shape[0] != ch else pic
+    if toned:
+        pic = tone(pic)
+    return _rounded(Image.fromarray(pic), r)
+
+
+def _chip(text: str, size: float) -> Image.Image:
+    f = _sans(size)
+    probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+    tw = probe.textlength(text, font=f)
+    pw, ph = int(tw + size * 2), int(size * 2.2)
+    img = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([0, 0, pw - 1, ph - 1], radius=ph // 2, fill=CARD + (255,))
+    d.text((size, size * 0.55), text, font=f, fill=INK + (255,))
+    sh, _ = _shadowed(img, max(2, int(size * 0.5)), int(size * 0.25), 0.16)
+    return sh
+
+
+def _doodle(name: str, size: float, colour) -> Image.Image:
+    from .pictures import draw_icon
+
+    img = Image.new("RGBA", (int(size * 1.3), int(size * 1.3)), (0, 0, 0, 0))
+    draw_icon(img, name, img.width / 2, img.height / 2, size, colour + (255,), width=1.7, rough=True, seed=len(name))
+    return img
+
+
+def _wipe(img: Image.Image, q: float) -> Image.Image:
+    """Drawn on from the left, like a pen."""
+    if q >= 1:
+        return img
+    a = np.asarray(img).copy()
+    a[:, int(a.shape[1] * max(0.0, q)):, 3] = 0
+    return Image.fromarray(a)
+
+
+def _arrow(x0: float, y0: float, x1: float, y1: float, s: float, rng) -> list:
+    """A loose hand-drawn arrow from (x0, y0) to (x1, y1), with its head, as one stroke."""
+    mx, my = (x0 + x1) / 2, max(y0, y1) + s * 0.4
+    pts = []
+    for k in range(25):
+        t = k / 24
+        pts.append(((1 - t) ** 2 * x0 + 2 * (1 - t) * t * mx + t * t * x1, (1 - t) ** 2 * y0 + 2 * (1 - t) * t * my + t * t * y1))
+    ang = math.atan2(y1 - pts[-3][1], x1 - pts[-3][0])
+    hl = s * 0.45
+    head = [(x1 + hl * math.cos(ang + 2.6), y1 + hl * math.sin(ang + 2.6)), (x1, y1),
+            (x1 + hl * math.cos(ang - 2.6), y1 + hl * math.sin(ang - 2.6))]
+    return _wobble(pts, s * 0.03, rng, 2) + head
+
+
 def page_scene(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> None:
+    from .motion import _partial
+
     spec = sc["page"] if isinstance(sc.get("page"), dict) else {}
     vertical = h > w
+    u = (w if vertical else h) / 1080  # one unit of the 1920 x 1080 page this was designed on
     m = min(w, h)
     full = is_full(sc)
     has_pic = bool(sc.get("file")) and sc.get("type") in ("clip", "image", "title", "text") and not full
+    cards = [str(c) for c in (spec.get("cards") or [])][:3]
+    if cards:
+        has_pic = False
     side = spec.get("side", "right")
-    back = paper(w, h, 3)  # one sheet for every page, so a cut from page to page keeps the paper still
+    left = side == "right" or vertical  # the words on the left, the picture on the right
     scale = float(spec.get("size", 1.0))
-    L = float(sc.get("_len") or d)  # the scene's own length (the picture runs on under a transition)
-    # where the words go, and how big
-    if full:
-        size = int(m * (0.075 if not vertical else 0.085) * scale)
-        box = (int(w * 0.12), int(h * 0.3), int(w * 0.76), int(h * 0.4))
-    elif not has_pic:
-        size = int(m * 0.085 * scale) if not vertical else int(w * 0.085 * scale)
-        box = (int(w * 0.08), int(h * 0.18), int(w * (0.72 if not vertical else 0.84)), int(h * 0.6))
-    elif vertical:
-        size = int(w * 0.07 * scale)
-        box = (int(w * 0.08), int(h * 0.58), int(w * 0.84), int(h * 0.3))
+    L = float(sc.get("_len") or d)
+    accent = _rgb(sc.get("_accent"), DEEP_BLUE)
+    if sum(accent) > 600:  # an accent too pale for an ivory page: the deep blue instead
+        accent = DEEP_BLUE
+    back = np.full((h, w, 3), PAGE, np.uint8)
+    back = (back.astype(np.float32) + np.random.default_rng(3).normal(0, 1.0, (h, w, 1))).clip(0, 255).astype(np.uint8)
+    text = str(spec.get("text") if (cards or "text" in spec) else sc.get("text") or "")
+    src = None
+    first = None
+    if has_pic or full:
+        src = frames_of(sc["file"], w, h, fps, float(sc.get("from", 0)), d)
+        first = next(src)
+    # a photo is toned to the page and tilted a touch; a screen stays as it is
+    if first is not None:
+        scr = sc.get("screen")
+        if scr is None:
+            scr = (sc.get("type") == "clip" and sc.get("_howto")) or screenish(first)
+        toned = spec.get("tone", "none" if scr else "page") == "page"
+        angle = float(spec["angle"]) if "angle" in spec else (0.0 if scr else (1.5 if (sc.get("_k", 0) or 0) % 2 == 0 else -1.5))
     else:
-        size = int(m * 0.075 * scale)
-        x0 = 0.07 if side == "right" else 0.59
-        box = (int(w * x0), int(h * 0.2), int(w * (0.36 if side == "right" else 0.34)), int(h * 0.6))
-    words, bottom, accent = _words_layer(sc, spec, box, size, w, h, centre=full, light=full)
+        scr, toned, angle = True, False, 0.0
+    # ---- where everything sits
+    ink = INK
+    if full:
+        size = 96 * u * scale
+        wx, wy, ww = 110 * u, 110 * u, (900 if not vertical else 860) * u
+        probe_frame = tone(first) if toned else first
+        lum = probe_frame[: int(h * 0.4), : int(w * 0.5)].mean() / 255
+        light_words = lum < 0.5
+        if light_words:
+            ink, accent = IVORY, (accent if sum(accent) > 450 else IVORY)
+        veil_col = (20, 18, 16) if light_words else (250, 246, 238)
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        veil = np.exp(-(((xx - w * 0.22) / (w * 0.42)) ** 2 + ((yy - h * 0.2) / (h * 0.42)) ** 2))[..., None] * 0.55
+    elif cards:
+        size = 64 * u * scale
+        wx, wy, ww = 120 * u, 300 * u, 600 * u
+    elif has_pic:
+        size = 86 * u * scale
+        wx = 120 * u if left else w - 120 * u - 600 * u
+        wy, ww = (300 * u, 640 * u) if not vertical else (200 * u, 900 * u)
+    else:
+        size = 104 * u * scale
+        wx, wy, ww = 120 * u, 300 * u, (1500 if not vertical else 860) * u
+    words, bottom = ([], wy) if (cards and not text) else _words_layer(sc, text, wx, wy, size, ww, ink, accent,
+                                                                       1.1 if full else 1.08)
     times = sc.get("_page_times")
     times = times if isinstance(times, list) and len(times) == len(words) else land_times(len(words), L)
+    last_word = (times[-1] + LAND) if times else 0.3
     label = str(spec.get("label") or "").upper() if not full else ""
     if label:
-        lf = ImageFont.truetype(str(FONTS / "Inter-SemiBold.otf"), max(8, int(m * 0.02)))
-        limg = Image.new("RGBA", (w, int(m * 0.05)), (0, 0, 0, 0))
-        ImageDraw.Draw(limg).text((0, 0), "  ".join(label), font=lf, fill=MUTED + (255,))  # spaced capitals
-        lpos = (int(w * (0.045 if side == "right" or not has_pic else 0.59)), int(h * 0.075))
+        lf = _sans(22 * u)
+        probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+        sp = 22 * u * 0.22
+        lw = sum(probe.textlength(c, font=lf) + sp for c in label)
+        limg = Image.new("RGBA", (int(lw + 10), int(40 * u)), (0, 0, 0, 0))
+        dl, x = ImageDraw.Draw(limg), 0.0
+        mute = tuple(int(PAGE[i] * 0.45 + INK[i] * 0.55) for i in range(3))
+        for c in label:  # spaced capitals
+            dl.text((x, 0), c, font=lf, fill=mute + (255,))
+            x += probe.textlength(c, font=lf) + sp
+        lpos = (int(120 * u if left or not has_pic else w - 120 * u - 600 * u), int(90 * u))
     note = str(spec.get("note") or "") if not full else ""
-    t_note = (times[-1] + LAND * 0.6) if times else 0.3
-    if note:
-        nimg, nline = _note(sc, note, box[0], bottom + int(size * 0.35), int(size * 0.62), accent)
-        npos = (box[0], bottom + int(size * 0.35))
-    # the picture as a card (or, on a full page, the whole frame)
-    card_at = None
+    # ---- the picture as a card
+    card = None
     if has_pic:
         if vertical:
-            cw, chh = int(w * 0.84), int(h * 0.4)
-            cx, cy = w / 2, h * 0.31
+            cw = int(900 * u)
+            cx0 = 90 * u
         else:
-            cw, chh = int(w * 0.5), int(h * 0.62)
-            cx, cy = w * (0.71 if side == "right" else 0.29), h * 0.5
+            cw = int(1040 * u)
+            cx0 = 760 * u if left else w - 760 * u - cw
+        ar = first.shape[1] / first.shape[0]
         from .media import video_size
 
-        ar = None
         try:
             if str(sc["file"]).lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif")):
                 with Image.open(sc["file"]) as im:
@@ -322,36 +485,118 @@ def page_scene(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> Non
             elif (vs := video_size(sc["file"])):
                 ar = vs[0] / vs[1]
         except OSError:
-            ar = None
-        ar = ar or w / h
-        if cw / chh > ar:
-            cw = int(chh * ar)
+            pass
+        ch = int(min(cw / ar, (720 if not vertical else 1000) * u))
+        cw = int(min(cw, ch * ar)) // 2 * 2
+        ch = ch // 2 * 2
+        cy = (492 * u) if not vertical else (bottom + 120 * u + ch / 2)
+        if vertical:
+            cx = w / 2
+        elif left:  # the card's near edge stays where the words end
+            cx = 760 * u + cw / 2
         else:
-            chh = int(cw / ar)
-        cw, chh = cw // 2 * 2, chh // 2 * 2
-        grow = sc.get("_from_full") or sc.get("_to_full")
-        # a card that grows to (or shrinks from) the whole frame is drawn from frames big enough for it
-        fw, fh = (w, h) if grow else (cw, chh)
-        src = frames_of(sc["file"], fw, fh, fps, float(sc.get("from", 0)), d)
-        angle = float(spec.get("angle", 0.0))
-        r = max(2, int(m * 0.008))
-        card_at = (cx / w, cy / h)
-        away = 1 if (vertical or side == "right") else -1  # the card comes in from (and leaves to) its own side
+            cx = w - 760 * u - cw / 2
+        card = (cx, cy, cw, ch)
+        r = max(2, int(14 * u))
+        away = 1 if left else -1
+        # the full frames, for a card that grows to (or shrinks from) the whole frame
+        src = _chain(first, src)
     elif full:
-        src = frames_of(sc["file"], w, h, fps, float(sc.get("from", 0)), d)
-        yy = np.linspace(-1, 1, h, dtype=np.float32)[:, None]
-        shade = (1 - 0.42 * np.exp(-(yy / 0.55) ** 2))[..., None]  # a soft band of shade behind the words
+        src = _chain(first, src)
+    # ---- the extras
+    if note:
+        nsize = 54 * u * (0.8 if cards else 1.0)
+        if cards:
+            nx = (1060 + 50) * u if len(cards) == 2 else w / 2 - 200 * u
+            ny = 760 * u
+        else:
+            nx, ny = wx + 6 * u, bottom + 0.35 * size
+        nimg, nline, ntw = _note(sc, note, nx, ny, nsize, accent)
+    t_note = last_word + 0.15 if not cards else 0.3 + 0.35 * len(cards) + 0.2
+    doodle = None
+    if spec.get("doodle"):
+        ds = 130 * u
+        try:
+            doodle = _doodle(str(spec["doodle"]), ds, accent)
+        except SystemExit:
+            doodle = None
+        if doodle is not None:
+            if note:
+                dpos = (int(nx + ntw + 40 * u), int(ny + nsize * 0.8 - doodle.height / 2))
+            else:
+                dpos = (int(wx + ww * 0.6), int(bottom + 10 * u))
+    big = None
+    bspec = spec.get("big")
+    if bspec:
+        bspec = bspec if isinstance(bspec, dict) else {"text": str(bspec)}
+        _, bit = _faces(sc, 200 * u)
+        probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+        bw = probe.textlength(str(bspec["text"]), font=bit)
+        big = Image.new("RGBA", (int(bw + 80 * u), int(260 * u)), (0, 0, 0, 0))
+        ImageDraw.Draw(big).text((20 * u, 10 * u), str(bspec["text"]), font=bit, fill=accent + (255,))
+        bpos = (int(wx + ww * 0.62), int(bottom + 20 * u))
+        t_big = float(bspec.get("at", last_word + 0.25))
+    pill = None
+    pspec = spec.get("pill")
+    if pspec and card:
+        pspec = pspec if isinstance(pspec, dict) else {"text": str(pspec)}
+        pill = _chip(str(pspec["text"]), 28 * u)
+        t_pill = float(pspec.get("at", 0.9))
+    also = None
+    aspec = spec.get("also")
+    if aspec and card:
+        aspec = aspec if isinstance(aspec, dict) else {"file": str(aspec)}
+        aw = int(card[2] * 0.44) // 2 * 2
+        try:
+            aimg = frames_of(str(aspec["file"]), aw, int(aw * 9 / 16) // 2 * 2, fps, float(aspec.get("from", 0)), d)
+            also = aimg
+        except (OSError, KeyError):
+            also = None
+        t_also = float(aspec.get("at", t_note + 0.4))
+        acx = card[0] + card[2] / 2 - aw / 2 + 30 * u * (1 if left else -1)
+        acy = card[1] + card[3] / 2 - (aw * 9 / 16) / 2 + 60 * u
+        atext = str(aspec.get("note") or "")
+        if atext:
+            aimg_note, _, atw = _note(sc, atext, 0, 0, 44 * u, accent)
+            anx = acx - aw / 2 - atw - 220 * u
+            any_ = acy + (aw * 9 / 16) / 2 - 40 * u
+            arrow = _arrow(anx + atw + 20 * u, any_ + 40 * u, acx - aw / 2 - 20 * u, any_ + 10 * u, 60 * u,
+                           np.random.default_rng(5))
+    card_imgs = []
+    if cards:
+        n = len(cards)
+        cw2, ch2 = int(620 * u if n == 2 else 520 * u), int(420 * u if n == 2 else 360 * u)
+        gap = 200 * u if n == 2 else 110 * u
+        total = n * cw2 + (n - 1) * gap
+        x = (w - total) / 2
+        up, _ = _faces(sc, 64 * u)
+        plus_f, _ = _faces(sc, 90 * u)
+        for k, c in enumerate(cards):
+            img = Image.new("RGBA", (cw2, ch2), (0, 0, 0, 0))
+            dc = ImageDraw.Draw(img)
+            dc.rounded_rectangle([0, 0, cw2 - 1, ch2 - 1], radius=int(14 * u), fill=CARD + (255,))
+            tw = dc.textlength(c, font=up)
+            dc.text(((cw2 - tw) / 2, ch2 / 2 - 64 * u * 0.62), c, font=up, fill=INK + (255,))
+            img, pad = _shadowed(img, max(2, int(36 * u)), int(24 * u), 0.2)
+            card_imgs.append((img, (int(x - pad), int(300 * u - pad))))
+            x += cw2 + gap
+        join = str(spec.get("join", "+"))
+        pimg = Image.new("RGBA", (int(160 * u), int(160 * u)), (0, 0, 0, 0))
+        pw = ImageDraw.Draw(pimg).textlength(join, font=plus_f)
+        ImageDraw.Draw(pimg).text(((pimg.width - pw) / 2, 10 * u), join, font=plus_f, fill=INK + (255,))
+        joins = [(pimg, (int(card_imgs[k][1][0] + card_imgs[k][0].width - (card_imgs[k][0].width - cw2) / 2 + gap / 2 - pimg.width / 2),
+                         int(300 * u + ch2 / 2 - 70 * u))) for k in range(n - 1)]
     # what the camera must never lose: the words, their label and their note
-    kx0, ky0 = box[0] - m * 0.03, box[1] - m * 0.03
-    kx1, ky1 = box[0] + box[2] + m * 0.03, max(box[1] + box[3], bottom + (int(size * 1.4) if note else 0)) + m * 0.03
+    kx0, ky0, kx1, ky1 = wx - 30 * u, wy - 30 * u, wx + ww + 30 * u, bottom + (110 * u if note else 30 * u)
     if label:
-        kx0, ky0 = min(kx0, lpos[0] - m * 0.03), min(ky0, lpos[1] - m * 0.02)
+        kx0, ky0 = min(kx0, lpos[0] - 30 * u), min(ky0, lpos[1] - 20 * u)
+    if cards:
+        kx0, kx1, ky1 = min(kx0, card_imgs[0][1][0]), max(kx1, card_imgs[-1][1][0] + card_imgs[-1][0].width), 880 * u
     keep = (kx0, ky0, kx1, ky1)
     specs = _overlays(sc)
     caches = [dict() for _ in specs]
     held: list = [None] * len(specs)
-    focus = _focus(sc, card_at, (box[0] / w, box[1] / h))
-    screen = bool(sc.get("screen")) or (sc.get("type") == "clip" and has_pic and sc.get("_howto"))
+    focus = _focus(sc)
     exit_at = L - EXIT if sc.get("_exit") else None
     moving = sc.get("camera", True) is not False
     wr = Writer(out, w, h, fps)
@@ -359,69 +604,107 @@ def page_scene(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> Non
         for i in range(max(1, round(d * fps))):
             t = i / fps
             ex = _ease((t - exit_at) / EXIT) if exit_at is not None else 0.0  # 0 until the words leave, then 1
+            slide = -60 * u * ex
             if full:
-                k = min(1.0, t / 0.4) * (1 - ex)  # the shade comes in, and goes as the words leave
-                frame = (next(src).astype(np.float32) * (1 - (1 - shade) * k)).astype(np.uint8)
-                z0 = 1.0 + 0.04 * min(1.0, t / max(1.0, L)) * (1 - ex)  # a slow push into the footage
-                frame = _camera(frame, z0, 0.5, 0.5)
+                f0 = next(src)
+                if toned:
+                    f0 = tone(f0)
+                k = min(1.0, t / 0.4) * (1 - ex)
+                frame = (f0.astype(np.float32) * (1 - veil * k) + np.array(veil_col, np.float32) * veil * k).astype(np.uint8)
+                frame = _camera(frame, 1.0 + 0.04 * min(1.0, t / max(1.0, L)) * (1 - ex), 0.5, 0.5)
             else:
                 frame = back
-            if has_pic:
-                pic = Image.fromarray(next(src))
+            if card:
+                cx, cy, cw, ch = card
+                raw = next(src)
                 g = 0.0  # how much of the whole frame the card fills (1 = all of it)
                 if sc.get("_from_full"):
                     g = 1 - _ease(t / 0.75)
                 elif sc.get("_to_full") and exit_at is not None:
                     g = _ease((t - (L - 0.6)) / 0.6)
-                if g > 0:
-                    tw_, th_ = round(cw + (w - cw) * g), round(chh + (h - chh) * g)
-                    pic = Image.fromarray(cover(np.asarray(pic), tw_, th_)) if (fw, fh) != (tw_, th_) else pic
-                elif (fw, fh) != (cw, chh):
-                    pic = Image.fromarray(cover(np.asarray(pic), cw, chh))
-                pic = _rounded(pic, round(r * (1 - g)))
+                tw_, th_ = round(cw + (w - cw) * g), round(ch + (h - ch) * g)
+                pic = _card_image(raw, tw_, th_, round(r * (1 - g)), toned)
                 rot = angle * (1 - g)
                 if sc.get("_card_stays") or g > 0:
                     q, dx = 1.0, 0.0
                 else:  # the card slides in from its side, turning and growing a touch as it settles
                     q = _ease_out(t / 0.7)
-                    dx = m * 0.13 * away * (1 - q)
+                    dx = 140 * u * away * (1 - q)
                     rot = angle * q
                     if q < 1:
                         pic = pic.resize((max(2, round(pic.width * (0.94 + 0.06 * q))), max(2, round(pic.height * (0.94 + 0.06 * q)))),
                                          Image.BICUBIC)
-                if ex and not sc.get("_keep_card") and not sc.get("_to_full"):
-                    dx += m * 0.13 * away * ex  # and leaves the same way
+                leaving = ex and not sc.get("_keep_card") and not sc.get("_to_full")
+                if leaving:
+                    dx += 140 * u * away * ex
                 if rot:
                     pic = pic.rotate(rot, resample=Image.BICUBIC, expand=True)
-                pic, pad = _shadowed(pic, max(2, int(m * 0.018 * (1 - g))) or 1, int(m * 0.012 * (1 - g)), 0.32 * (1 - g))
+                pic, pad = _shadowed(pic, max(2, int(40 * u * (1 - g))) or 1, int(30 * u * (1 - g)), 0.22 * (1 - g))
                 op = min(1.0, t / 0.25) if not (sc.get("_card_stays") or g > 0) else 1.0
-                if ex and not sc.get("_keep_card") and not sc.get("_to_full"):
+                if leaving:
                     op *= 1 - ex
-                ccx = cx + (w / 2 - cx) * g
-                ccy = cy + (h / 2 - cy) * g
+                ccx, ccy = cx + (w / 2 - cx) * g, cy + (h / 2 - cy) * g
                 frame = _paste(frame, _fade(pic, op), (round(ccx + dx - pic.width / 2), round(ccy - pic.height / 2)))
+                if also is not None:
+                    araw = next(also)
+                    qa = _ease_out((t - t_also) / 0.5)
+                    if qa > 0:
+                        ap = _card_image(araw, araw.shape[1], araw.shape[0], r, False)
+                        ap, apad = _shadowed(ap, max(2, int(30 * u)), int(22 * u), 0.24)
+                        frame = _paste(frame, _fade(ap, min(1.0, qa * 1.5) * (1 - (ex if leaving else 0))),
+                                       (round(acx - ap.width / 2 + dx), round(acy - ap.height / 2 + 50 * u * (1 - qa))))
+                        if atext:
+                            frame = _paste(frame, _fade(aimg_note, min(1.0, qa * 1.5) * (1 - ex)), (round(anx + slide), round(any_)))
+                            ua = _ease((t - t_also - 0.3) / 0.5)
+                            if ua > 0:
+                                lay = Layer(w, h)
+                                _stroke(lay.draw, [(px * 2, py * 2) for px, py in _partial(arrow, ua)], max(2, int(5 * u)) * 2,
+                                        accent + (255,))
+                                frame = _paste(frame, _fade(lay.done(), 1 - ex), (0, 0))
+                if pill is not None:
+                    qp = _back((t - t_pill) / 0.35)
+                    if t >= t_pill:
+                        pim = pill if qp >= 0.999 else pill.resize((max(2, int(pill.width * (0.9 + 0.1 * qp))), max(2, int(pill.height * (0.9 + 0.1 * qp)))), Image.BICUBIC)
+                        px_ = cx + cw / 2 - 40 * u - pim.width + dx
+                        py_ = cy + ch / 2 - pim.height * 0.55
+                        frame = _paste(frame, _fade(pim, min(1.0, (t - t_pill) / 0.2) * (1 - (ex if leaving else 0))), (round(px_), round(py_)))
+            for k, (img, (x, y)) in enumerate(card_imgs):  # words on white cards, one after another, joined by "+"
+                q = _ease_out((t - 0.15 - 0.35 * k) / 0.5)
+                if q > 0:
+                    frame = _paste(frame, _fade(img, min(1.0, q * 1.6) * (1 - ex)), (round(x + slide), round(y + 40 * u * (1 - q))))
+                if k < len(card_imgs) - 1:
+                    qj = _back((t - 0.35 - 0.35 * k) / 0.3)
+                    if qj > 0:
+                        pimg_, (jx, jy) = joins[k]
+                        frame = _paste(frame, _fade(pimg_, min(1.0, qj) * (1 - ex)), (round(jx + slide), round(jy + 20 * u * (1 - qj))))
             if label:
-                frame = _paste(frame, _fade(limg, 1 - ex), (lpos[0] - round(m * 0.06 * ex), lpos[1]))
-            lift = -m * 0.06 * ex  # leaving: the words slide away and fade
+                frame = _paste(frame, _fade(limg, min(1.0, t / 0.3) * (1 - ex)), (lpos[0] + round(slide), lpos[1]))
             for (img, (x, y)), tw in zip(words, times):  # each word lands when it is said
-                u = (t - tw) / LAND
-                if u <= 0:
+                q = (t - tw) / LAND
+                if q <= 0:
                     continue
-                q = _back(u)
-                frame = _paste(frame, _fade(img, min(1.0, u * 1.8) * (1 - ex)),
-                               (round(x + (lift if not full else 0)), round(y + size * 0.3 * (1 - q) + (lift * 0.5 if full else 0))))
+                frame = _paste(frame, _fade(img, min(1.0, q * 1.8) * (1 - ex)),
+                               (round(x + (slide if not full else 0)), round(y + size * 0.3 * (1 - _back(q)) + (slide * 0.5 if full else 0))))
             if note:
                 q = _ease((t - t_note) / 0.3)
                 if q > 0:
-                    frame = _paste(frame, _fade(nimg, min(1.0, q) * (1 - ex)), (npos[0] + round(lift), npos[1]))
-                    u = _ease((t - t_note - 0.2) / 0.45)
-                    if u > 0 and ex < 1:
-                        from .motion import _partial
-
+                    frame = _paste(frame, _fade(nimg, min(1.0, q) * (1 - ex)), (round(nx + slide), round(ny)))
+                    un = _ease((t - t_note - 0.2) / 0.45)
+                    if un > 0 and ex < 1:
                         lay = Layer(w, h)
-                        _stroke(lay.draw, [(px * 2 + lift * 2, py * 2) for px, py in _partial(nline, u)],
-                                max(2, int(size * 0.05)) * 2, accent + (255,))
+                        _stroke(lay.draw, [(px * 2 + slide * 2, py * 2) for px, py in _partial(nline, un)],
+                                max(2, int(5 * u)) * 2, accent + (255,))
                         frame = _paste(frame, _fade(lay.done(), 1 - ex), (0, 0))
+            if doodle is not None:
+                qd = (t - t_note - 0.35) / 0.6
+                if qd > 0:
+                    frame = _paste(frame, _fade(_wipe(doodle, qd), 1 - ex), (round(dpos[0] + slide), dpos[1]))
+            if big is not None and t >= t_big:  # the big italic lands like a stamp
+                qb = _ease_out((t - t_big) / 0.3)
+                sz = 1.6 - 0.6 * qb
+                bi = big.resize((max(2, int(big.width * sz)), max(2, int(big.height * sz))), Image.BICUBIC)
+                frame = _paste(frame, _fade(bi, min(1.0, (t - t_big) / 0.12) * (1 - ex)),
+                               (round(bpos[0] + big.width / 2 - bi.width / 2 + slide), round(bpos[1] + big.height / 2 - bi.height / 2)))
             for j, (fn, sp) in enumerate(specs):  # stamps, strikes and notes, before the camera so they move with the page
                 got = held[j] if held[j] is not None else fn(sc, sp, t, w, h, frame, caches[j])
                 if got is not None and got[2]:
@@ -429,14 +712,14 @@ def page_scene(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> Non
                 if got is not None:
                     frame = _paste(frame, _fade(got[0], 1 - ex) if ex else got[0], got[1])
             if moving and not full:
-                # a gentle camera: a slow drift toward the card (closer on a screen recording), then over to
-                # whatever is circled, pointed at or stamped as it appears; back out as the page leaves
-                fx, fy = card_at if card_at else (0.5, 0.5)
-                z = 1.0 + (0.07 if screen else 0.025) * _ease(t / max(1.0, L))
-                for at, nx, ny in focus:
+                # a gentle camera: a slow drift toward the card (closer on a screen), then over to whatever is
+                # circled, pointed at or stamped as it appears; back out as the page leaves
+                fx, fy = (card[0] / w, card[1] / h) if card else (0.5, 0.5)
+                z = 1.0 + (0.06 if (card and scr) else 0.025) * _ease(t / max(1.0, L))
+                for at, nx_, ny_ in focus:
                     p = _ease((t - at + 0.25) / 0.6)
                     if p > 0:
-                        fx, fy = fx + (nx - fx) * p, fy + (ny - fy) * p
+                        fx, fy = fx + (nx_ - fx) * p, fy + (ny_ - fy) * p
                         z = max(z, 1.0 + 0.08 * p)
                 z = 1 + (z - 1) * (1 - ex)
                 fx, fy = 0.5 + (fx - 0.5) * (1 - ex), 0.5 + (fy - 0.5) * (1 - ex)
@@ -444,6 +727,11 @@ def page_scene(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> Non
             wr.put(frame)
     finally:
         wr.close()
+
+
+def _chain(first, rest):
+    yield first
+    yield from rest
 
 
 # ---------------------------------------------------------------- prints that drop and pile up
@@ -546,7 +834,9 @@ def problems(sc: dict, i: int) -> list[str]:
             out.append(f"scene {i + 1}: page is {{\"text\", \"label\", \"note\", \"side\"}}")
         elif sc.get("type") not in ("clip", "image", "title", "text"):
             out.append(f"scene {i + 1}: page works on a clip, image, title or text scene")
-        elif not (pg.get("text") or sc.get("text")):
+        elif pg.get("cards") is not None and not (isinstance(pg["cards"], list) and 1 <= len(pg["cards"]) <= 3):
+            out.append(f"scene {i + 1}: page cards is a list of 1 to 3 short texts")
+        elif not (pg.get("text") or sc.get("text") or pg.get("cards")):
             out.append(f"scene {i + 1}: page needs \"text\" (the words on the page; *word* for the stressed one)")
         elif pg.get("side") not in (None, "left", "right"):
             out.append(f"scene {i + 1}: page side is left or right (where the picture sits)")
