@@ -79,12 +79,17 @@ _GLOW = "230*pow(sin(PI*T/{D}),2)*exp(-pow(X/W-(0.15+0.7*T/{D}),2)/0.09)"
 _WARM = "0xFFC98A"
 
 
+def _steady(fps: float) -> str:
+    """Back to the frame clock after a concat, so a later xfade accepts the stream."""
+    return f"fps={fps:g},settb=expr=1/{fps:g}"
+
+
 def join_pair(a: str, b: str, out: str, name: str, d: float, offset: float, size: str, fps: float, k, colour: str | None = None) -> str:
     """Filter-graph text that lays stream b over the end of stream a with the
     named transition (b starts at `offset`), like xfade."""
     t = TRANSITIONS[name]
     if name == "cut":  # a plain cut where b begins, in a video whose other scenes blend
-        return f"[{a}]trim=end={offset:.4f},setpts=PTS-STARTPTS[h{k}];[h{k}][{b}]concat=n=2:v=1:a=0[{out}]"
+        return f"[{a}]trim=end={offset:.4f},setpts=PTS-STARTPTS[h{k}];[h{k}][{b}]concat=n=2:v=1:a=0,{_steady(fps)}[{out}]"
     if t != "custom":
         return f"[{a}][{b}]xfade={xfade(name)}:duration={d:.3f}:offset={offset:.3f}[{out}]"
     w, h = size.split("x")
@@ -124,7 +129,7 @@ def join_pair(a: str, b: str, out: str, name: str, d: float, offset: float, size
     elif name == "glitch":
         p += [f"[{mid}]chromashift=cbh={max(4, int(w) // 120)}:crh=-{max(4, int(w) // 120)}[gl{k}]"]
         mid = f"gl{k}"
-    p.append(f"[h{k}]setsar=1[hh{k}];[{mid}]setsar=1[mm{k}];[t{k}]setsar=1[tt{k}];[hh{k}][mm{k}][tt{k}]concat=n=3:v=1:a=0[{out}]")
+    p.append(f"[h{k}]setsar=1[hh{k}];[{mid}]setsar=1[mm{k}];[t{k}]setsar=1[tt{k}];[hh{k}][mm{k}][tt{k}]concat=n=3:v=1:a=0,{_steady(fps)}[{out}]")
     return ";".join(p)
 
 

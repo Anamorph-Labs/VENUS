@@ -83,6 +83,15 @@ class Options(unittest.TestCase):
         self.assertLess(f[9].mean(), 30)
         self.assertGreater(f[10].mean(), 220)  # no blend: black, then white
 
+    def test_cut_then_blend_joins(self):
+        d = Path(tempfile.mkdtemp())
+        for first in ("cut", "ink"):
+            g = join_pair("0:v", "1:v", "v1", first, 0.4, 1.0, f"{W}x{H}", FPS, 1) + ";" + \
+                join_pair("v1", "2:v", "v", "crossfade", 0.4, 1.6, f"{W}x{H}", FPS, 2)
+            ins = sum([["-f", "lavfi", "-i", f"color={c}:s={W}x{H}:r={FPS}:d=2"] for c in ("black", "white", "red")], [])
+            subprocess.run(["ffmpeg", "-v", "error", "-y", *ins, "-filter_complex", g, "-map", "[v]", "-pix_fmt", "yuv420p",
+                            str(d / f"{first}.mp4")], check=True)  # a later crossfade accepts what the cut made
+
     def test_music_stops_dead(self):
         d = Path(tempfile.mkdtemp())
         wav = d / "m.wav"
