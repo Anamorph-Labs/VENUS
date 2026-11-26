@@ -634,6 +634,22 @@ def cmd_fx(a: argparse.Namespace) -> None:
     print(f"wrote {out} ({n} frames, {', '.join(effects)}) in {time.time() - t0:.0f}s")
 
 
+def cmd_terminal(a: argparse.Namespace) -> None:
+    from .terminal import render
+
+    need_ffmpeg()
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    cols = rows = None
+    if a.cols:
+        cols, rows = (int(x) for x in a.cols.lower().split("x"))
+    size = ASPECTS[a.aspect] if a.aspect else a.size
+    r = render(a.input, out, size=size, fps=a.fps, cols=cols, rows=rows, theme=a.theme, speed=a.speed,
+               max_wait=a.max_wait, hold=a.hold, title=a.title, bare=a.bare, timing=a.timing, start=a.start, end=a.end)
+    print(f"wrote {r['out']}: {r['seconds']} s from {r['recorded_seconds']} s recorded "
+          f"({r['read_as']}, {r['cols']}x{r['rows']} terminal)")
+
+
 def cmd_cutout(a: argparse.Namespace) -> None:
     from .cutout import cutout_file
 
@@ -1661,6 +1677,28 @@ def main(argv: list[str] | None = None) -> None:
     fxp.add_argument("--seed", type=int, default=0)
     fxp.add_argument("--list", action="store_true", help="list the effects and what they do")
     fxp.set_defaults(func=cmd_fx)
+
+    tm = sub.add_parser("terminal", help="a terminal recording (macOS script -r, asciinema, script --timing) drawn as a sharp "
+                        "video clip at its real timing")
+    tm.add_argument("input", help="the recording: a typescript from script -r, a .cast file, or a typescript with --timing")
+    tm.add_argument("--out", required=True, help="output MP4")
+    tm.add_argument("--timing", help="the timing file from Linux script --timing=FILE")
+    tm.add_argument("--cols", metavar="COLSxROWS", help="terminal size, e.g. 117x33 (default: from the recording, "
+                    "a NAME.termsize file beside it, else 80x24)")
+    tm.add_argument("--theme", default="venus", choices=["venus", "paper", "colour"],
+                    help="venus: ivory on ink; paper: ink on ivory; colour: the terminal's own colours")
+    tm.add_argument("--speed", type=float, default=1.0, help="play this many times faster (default 1)")
+    tm.add_argument("--max-wait", type=float, default=1.5, help="cut any wait longer than this to this many seconds "
+                    "(default 1.5; 0 keeps every wait)")
+    tm.add_argument("--start", type=float, default=0.0, help="begin this many seconds into the recording")
+    tm.add_argument("--end", type=float, help="stop this many seconds into the recording")
+    tm.add_argument("--hold", type=float, default=2.0, help="hold the last screen this long (default 2)")
+    tm.add_argument("--title", help="text on the window's title bar (default: the title the terminal set)")
+    tm.add_argument("--bare", action="store_true", help="just the terminal, filling the frame (no window or page)")
+    tm.add_argument("--size", default="1920x1080", help="frame size in pixels (default 1920x1080)")
+    tm.add_argument("--aspect", choices=sorted(ASPECTS), help="frame shape instead of --size")
+    tm.add_argument("--fps", type=float, default=30)
+    tm.set_defaults(func=cmd_terminal)
 
     co = sub.add_parser("cutout", help="lift the person or object off the background: a PNG or a MOV with see-through background")
     co.add_argument("input", help="a video clip or a picture")

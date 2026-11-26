@@ -4,6 +4,8 @@ Each release, newest first, in plain words. `alvenus update --check` reads this 
 so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 
 ## Coming in the next release
+- Terminal recordings become sharp video clips: `alvenus terminal` reads a Mac `script -r` recording, an asciinema file or a Linux `script --timing` pair and draws the terminal at its real timing, long waits cut short.
+- Installing Venus no longer prints licence warnings.
 - Stamps, words crossed out and rewritten, and hand-drawn notes (underlines, circles, arrows) over any scene.
 - A still print scanned by a line of light that lifts into a full-screen moving shot; a clip as a tilted card beside its words, shrinking in from full screen.
 - Stills come alive: rain, snow, mist, drifting clouds, moving water and a slow 3D camera move.

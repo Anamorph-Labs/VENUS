@@ -852,6 +852,17 @@ then each step, and end on it working.
   being typed, eases back out when the whole page changes, and holds still when
   nothing happens. Steps slide on instead of dissolving. It follows changes on
   the screen; it does not read what the screen says.
+- **Terminal steps: record the terminal, not the screen.** When a step is typed
+  in a terminal, ask the creator to record it as a timed terminal recording:
+  on a Mac `script -r install.typescript` (type `exit` to stop), or asciinema
+  (`.cast`); on Linux `script --timing=times.txt install.typescript`. Saving
+  `stty size > install.termsize` beside it gives the size. Then
+  `alvenus terminal install.typescript --out install.mp4` draws the terminal
+  itself, sharp at any size, at the real timing: long waits are cut to
+  `--max-wait` (1.5 s), `--speed 1.5` plays faster, `--start`/`--end` trim it,
+  `--theme venus|paper|colour`, `--aspect 9:16`, `--title`. Use the MP4 as a
+  `clip` scene; the screen camera follows the typing. Characters it cannot
+  draw are left out, never guessed.
 
 ### Three directions, before anything is made (`alvenus directions`)
 

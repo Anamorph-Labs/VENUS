@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "alvenus"
 dynamic = ["version"]
 description = "Free, local script-to-cut video editing: best take per script line."
 readme = "README.md"
-license = { text = "BUSL-1.1" }
+license = "BUSL-1.1"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = ["numpy", "onnxruntime", "pillow"]
 
