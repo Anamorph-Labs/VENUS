@@ -4,6 +4,11 @@ Each release, newest first, in plain words. `alvenus update --check` reads this 
 so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 
 ## Coming in the next release
+- `alvenus stills`: a finished still of every scene and one sheet, before anything is made.
+- A light editorial page: serif words with one stressed word in the accent colour, a small label, and the picture as a card with a soft shadow.
+- Prints that drop onto the page on the beat and pile up.
+- A plain cut on any one scene, cropping a picture or clip, a font per scene, and music that cuts dead at a chosen moment.
+- Terminal clips hide private text: the home folder, the account and computer names, and anything you name.
 - Terminal recordings become sharp video clips: `alvenus terminal` reads a Mac `script -r` recording, an asciinema file or a Linux `script --timing` pair and draws the terminal at its real timing, long waits cut short.
 - Installing Venus no longer prints licence warnings.
 - Stamps, words crossed out and rewritten, and hand-drawn notes (underlines, circles, arrows) over any scene.

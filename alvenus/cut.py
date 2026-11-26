@@ -83,6 +83,8 @@ def join_pair(a: str, b: str, out: str, name: str, d: float, offset: float, size
     """Filter-graph text that lays stream b over the end of stream a with the
     named transition (b starts at `offset`), like xfade."""
     t = TRANSITIONS[name]
+    if name == "cut":  # a plain cut where b begins, in a video whose other scenes blend
+        return f"[{a}]trim=end={offset:.4f},setpts=PTS-STARTPTS[h{k}];[h{k}][{b}]concat=n=2:v=1:a=0[{out}]"
     if t != "custom":
         return f"[{a}][{b}]xfade={xfade(name)}:duration={d:.3f}:offset={offset:.3f}[{out}]"
     w, h = size.split("x")

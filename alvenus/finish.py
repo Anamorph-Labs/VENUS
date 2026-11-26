@@ -58,7 +58,7 @@ def finish(
     lower_thirds=(), card_lines=(), all_words=None, stats=(), charts=(), sfx: list | None = None,
     line_charts=(), quotes=(), progress: bool = False, scene_marks=(),
     maps=(), timelines=(), kinetic_lines=(), titles=(), split_labels=(), title_style: str = "track",
-    more_events=(), camera=(), talk: dict | None = None, music_duck: float = 12.0, sfx_gain: float = 0.0, music_open=None,
+    more_events=(), camera=(), talk: dict | None = None, music_duck: float = 12.0, sfx_gain: float = 0.0, music_open=None, music_stop: float | None = None,
     caption_places: dict | bool | None = None, voice_gap: float = 10.0,
 ) -> list[str]:
     """srt: classic one-line captions; words: timed words for animated captions;
@@ -313,6 +313,8 @@ def finish(
              f"apad=whole_dur={total + 0.5:.3f}", "-ar", "48000", "-ac", "2", str(raw)])
         if music_open:  # muffled, as if through a wall, then opening out fully at a chosen moment
             muffle(raw, *music_open)
+        if music_stop is not None and 0 <= music_stop < total:  # the music cuts dead and stays silent
+            stop(raw, music_stop)
         phrases = listen.phrases_of(listen.loudness(voice))
         keys = listen.duck_keys(phrases, total, music_duck)
         keys = listen.make_room(keys, fx_times, total)
@@ -430,6 +432,14 @@ def open_spec(v) -> tuple[float, float, float] | None:
     if isinstance(v, dict):
         return float(v.get("from", 0.0)), float(v.get("at", 0.0)), max(0.05, float(v.get("over", 0.8)))
     return 0.0, float(v), 0.8
+
+
+def stop(wav: Path, at: float) -> None:
+    """Cut the music dead at `at` (a 15 ms edge, so it doesn't click) and keep it silent after."""
+    tmp = wav.with_suffix(".stop.wav")
+    run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(wav), "-af", f"afade=t=out:st={max(0.0, at - 0.015):.3f}:d=0.015",
+         "-ar", "48000", "-ac", "2", str(tmp)])
+    tmp.replace(wav)
 
 
 def muffle(wav: Path, start: float, at: float, over: float) -> None:

@@ -138,6 +138,8 @@ def restyle(rows: list[str], look: dict, w: int, h: int, accent: str | None = No
                 fam = _family(look, cur.group(1) if cur else style_font)
                 if fam:
                     pre += "\\fn" + fam
+                    # a reset (\r) between words goes back to the row's style: keep the chosen type after it
+                    text = re.sub(r"\\r(?=[\\}])", lambda m: "\\r\\fn" + fam, text)
                 if look.get("weight") and look.get("font") not in (None, "sans") or (look.get("weight") and fam not in _INTER):
                     b = "\\b0" if look["weight"] == "regular" else "\\b1"
                     text = re.sub(r"\\b\d", lambda m: b, text)

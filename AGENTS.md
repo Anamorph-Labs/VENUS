@@ -404,6 +404,30 @@ the story needs them, one or two a minute, not as decoration.
 Stamps, strikes and notes pick a colour that reads against the picture under
 them (the accent where it does, else ivory or ink); set `"colour"` to choose.
 
+- **The light editorial page** (clip, image, title or text scene): `"page":
+  {"text": "Paste one line. Press *Enter.*", "label": "Mac", "note": "Go make
+  tea.", "side": "right"}`. An ivory sheet, the words in a serif with the
+  *marked* words in italic and the accent colour, a small spaced label at the
+  top, a note under the words with a hand-drawn underline, and the picture (or
+  clip) as a card with a soft shadow on the `side` given. Without a picture the
+  words are set larger. On a title or text scene the scene's own `"text"` is
+  used. The brand heading font is used when the kit has one. Stamps, strikes
+  and notes still draw on top. Charts, lists and numbers keep their own look.
+- **Prints that drop and pile up** (image or clip scene): `"drop": true` (or
+  `{"x", "y", "angle", "size", "at"}`) lays the picture as a white-bordered
+  print that falls onto the page at the scene's start (on the beat when scene
+  changes follow the music) with a soft snap; the prints of the drop scenes
+  just before stay where they landed. Drops in a row join with plain cuts.
+- **A plain cut on one scene**: `"transition": "cut"` on a scene cuts straight
+  into it while the rest of the video uses its own transition.
+- **Crop** (any scene with a `file`): `"crop": {"x": 0, "y": 0.35, "w": 1, "h":
+  0.3}` (0 to 1 of the picture, x and y its top-left corner) uses only that part:
+  frame out a corner logo, or take a wide band from a tall clip.
+- **Font for one scene's words**: `"font": "hand"` (or sans, serif,
+  serif-italic, tall, typewriter).
+- **Music that cuts dead**: `"music_stop": 27.1` stops the music at that second
+  and keeps it silent (effects and voice go on).
+
 ### Trailers, video essays, interviews, data and the wide band
 
 - **Trailer** (preset `trailer`, or `make --template trailer`): storyboard
@@ -662,6 +686,7 @@ say yes.** The path is always brief, storyboard, check, the creator's yes, make:
     alvenus storyboard brief.json sb.json                   # beats laid out by the recipe
     (you write the words and pick the pictures, scene by scene)
     alvenus check sb.json                                   # the story check + sb.board.md
+    alvenus stills sb.json                                  # a finished still of every scene, no video
     (show the creator sb.board.md; change what they ask; check again)
     alvenus approve sb.json --by "their name"               # only on their yes
     alvenus make sb.json --draft --out draft.mp4            # then the full build
@@ -699,6 +724,13 @@ advice and never block. Fix the weak points scene by scene and check again; when
 the creator wants it as it is anyway, `approve --anyway "their reason"`.
 It writes `sb.board.md`: the brief, then one row per scene (beat, time, what is on
 screen). Show that board to the creator, not the JSON.
+
+**Stills of every scene before the yes.** `alvenus stills sb.json` draws the
+storyboard as `make` would and keeps one finished frame per scene (taken once
+its words, notes, stamps, cards and drops have all arrived) in `sb.stills/`,
+with one sheet, `sb.stills/stills.jpg`. The working video is deleted and the
+storyboard need not be approved yet. Show the sheet with the board; the creator
+says yes to what they saw.
 
 It also reads the cut by the craft guide ([CRAFT.md](CRAFT.md)): an opening
 question the ending never answers, "3 reasons" with only 2 delivered, a cut that
@@ -863,6 +895,11 @@ then each step, and end on it working.
   `--theme venus|paper|colour`, `--aspect 9:16`, `--title`. Use the MP4 as a
   `clip` scene; the screen camera follows the typing. Characters it cannot
   draw are left out, never guessed.
+  Private text is hidden before anything is drawn: the home folder shows as
+  `~`, the account name as "you" and the computer's name as "computer";
+  `--hide "TEXT=SHOWN"` (or `--hide TEXT`, shown as ***) swaps anything else,
+  such as an email or a key. Check the clip for anything else private before
+  using it; `--keep-home` shows the recording as it was.
 
 ### Three directions, before anything is made (`alvenus directions`)
 

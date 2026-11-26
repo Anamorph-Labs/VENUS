@@ -676,6 +676,73 @@ class Painter:
 # ---------------------------------------------------------------- timing and the clip
 
 
+_HOME = re.compile(rb"(?:/Users/|/home/|[A-Za-z]:\\\\Users\\\\)([A-Za-z0-9._-]+)")
+
+
+def private_pairs(events: list[tuple[float, bytes]], hide: list[str] | None = None, keep_home: bool = False) -> list[tuple[bytes, bytes]]:
+    """What to swap before drawing. By default the home folder becomes ~ and the account name found
+    in it becomes "you" (in a prompt, name@computer becomes you@computer). `hide` adds "TEXT=SHOWN"
+    pairs (or "TEXT", shown as ***): names, emails, keys."""
+    pairs: list[tuple[bytes, bytes]] = []
+    for h in hide or []:
+        a, _, b = str(h).partition("=")
+        if a:
+            pairs.append((a.encode("utf-8"), (b if _ else "***").encode("utf-8")))
+    if not keep_home:
+        stream = b"".join(b for _, b in events)
+        names = {m.group(1) for m in _HOME.finditer(stream)}
+        for n in sorted(names, key=len, reverse=True):
+            for pre in (b"/Users/", b"/home/"):
+                pairs.append((pre + n, b"~"))
+            pairs.append((b"C:\\Users\\" + n, b"~"))
+            for host in set(re.findall(rb"\b" + re.escape(n) + rb"@([A-Za-z0-9._-]+)", stream)):
+                pairs.append((n + b"@" + host, b"you@computer"))
+                pairs.append((host, b"computer"))  # the computer's name often carries the owner's too
+            pairs.append((n, b"you"))
+    return pairs
+
+
+def scrub(events: list[tuple[float, bytes]], pairs: list[tuple[bytes, bytes]]) -> list[tuple[float, bytes]]:
+    """Swap private text across the whole recording, even where it was printed in two pieces.
+    Each event keeps its time; a swapped word appears with the piece it finished in."""
+    if not pairs or not events:
+        return events
+    stream = b"".join(b for _, b in events)
+    rx = re.compile(b"|".join(re.escape(a) for a, _ in sorted(pairs, key=lambda x: -len(x[0]))))
+    swap = dict(pairs)
+    ends, n = [], 0
+    for _, b in events:
+        n += len(b)
+        ends.append(n)
+    cuts, last = [], 0
+    matches = list(rx.finditer(stream))
+    built = bytearray()
+    for m in matches:
+        built += stream[last:m.start()]
+        built += swap[m.group(0)]
+        cuts.append((m.start(), m.end(), len(built) - len(swap[m.group(0)]), len(built)))
+        last = m.end()
+    built += stream[last:]
+
+    def moved(i: int) -> int:  # an old position in the new stream (inside a swap: after it)
+        sh = 0
+        for a, b, na, nb in cuts:
+            if i <= a:
+                break
+            if i < b:
+                return nb
+            sh = nb - b
+        return i + sh
+
+    out, prev = [], 0
+    for (t, _), e in zip(events, ends):
+        k = moved(e)
+        if k > prev:
+            out.append((t, bytes(built[prev:k])))
+        prev = max(prev, k)
+    return out
+
+
 def retime(events: list[tuple[float, bytes]], speed: float = 1.0, max_wait: float = 1.5,
            start: float = 0.0, end: float | None = None) -> list[tuple[float, bytes]]:
     """Waits longer than max_wait are cut to max_wait; then everything plays `speed` times faster.
@@ -697,11 +764,13 @@ def retime(events: list[tuple[float, bytes]], speed: float = 1.0, max_wait: floa
 def render(path: str | Path, out: str | Path, *, size: str = "1920x1080", fps: float = 30, cols: int | None = None,
            rows: int | None = None, theme: str = "venus", speed: float = 1.0, max_wait: float = 1.5,
            hold: float = 2.0, title: str | None = None, bare: bool = False, timing: str | None = None,
-           start: float = 0.0, end: float | None = None, lead: float = 0.6) -> dict:
+           start: float = 0.0, end: float | None = None, lead: float = 0.6,
+           hide: list[str] | None = None, keep_home: bool = False) -> dict:
     """Draw the recording as an MP4 clip. Returns what was read and made."""
     from .motion import Writer
 
     events, meta = read(path, timing)
+    events = scrub(events, private_pairs(events, hide, keep_home))
     cols = int(cols or meta.get("cols") or 80)
     rows = int(rows or meta.get("rows") or 24)
     w, h = (int(x) for x in size.lower().split("x"))

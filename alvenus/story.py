@@ -125,6 +125,9 @@ def load(path: Path, data: dict | None = None) -> dict:
         from . import motion
 
         problems += motion.problems(sc, i, base)
+        from . import page as page_
+
+        problems += page_.problems(sc, i)
         if kind == "split" and not (sc.get("left", {}).get("file") and sc.get("right", {}).get("file")):
             problems.append(f"scene {i + 1}: a split scene needs left.file and right.file")
         if kind in ("slam", "date", "scramble") and not str(sc.get("text") or "").strip() and not sc.get("_job"):
@@ -192,8 +195,26 @@ def load(path: Path, data: dict | None = None) -> dict:
         if sc.get("background") and sc["background"] not in BGS:
             problems.append(f"{'storyboard' if i == 0 else f'scene {i}'}: background {sc['background']!r}: choose one of {', '.join(BGS)}")
     for i, sc in enumerate(sb.get("scenes") or []):
-        if sc.get("transition") and (sc["transition"] not in TRANSITIONS or sc["transition"] == "cut"):
-            problems.append(f"scene {i + 1}: transition {sc['transition']!r}: choose one of {', '.join(t for t in TRANSITIONS if t != 'cut')}")
+        if sc.get("transition") and sc["transition"] not in TRANSITIONS:
+            problems.append(f"scene {i + 1}: transition {sc['transition']!r}: choose one of {', '.join(TRANSITIONS)}")
+    for i, sc in enumerate(sb.get("scenes") or []):
+        if sc.get("crop") is not None and crop_box(sc["crop"]) is None:
+            problems.append(f"scene {i + 1}: crop is {{\"x\", \"y\", \"w\", \"h\"}}, 0 to 1 of the picture (x, y its top-left corner)")
+        if sc.get("crop") is not None and not sc.get("file"):
+            problems.append(f"scene {i + 1}: crop works on a scene's \"file\" (a picture or clip)")
+    from .style import WORD_FONTS
+
+    for i, sc in enumerate(sb.get("scenes") or []):  # "font": the type for one scene's words (same as Studio's words_font)
+        if sc.get("font") is not None:
+            if sc["font"] in WORD_FONTS:
+                sc.setdefault("words_font", sc["font"])
+            else:
+                problems.append(f"scene {i + 1}: font {sc['font']!r}: choose one of {', '.join(WORD_FONTS)}")
+    if sb.get("music_stop") not in (None, False):
+        try:
+            float(sb["music_stop"])
+        except (TypeError, ValueError):
+            problems.append("music_stop: the second the music cuts dead, e.g. 27.1")
     if problems:
         raise SystemExit("storyboard problems:\n  " + "\n  ".join(problems))
     return sb
@@ -378,8 +399,52 @@ def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
 
     if motion.has_overlay(sc) or motion.has_picture(sc):
         keep["_motion_v"] = motion.VERSION
+    if isinstance(sc.get("page"), dict):  # a page draws the scene's words into its picture
+        keep["_page_text"] = sc.get("text")
+    for f, *_ in sc.get("_pile") or []:  # the prints already on the page
+        if Path(f).exists():
+            stamps.append((f, Path(f).stat().st_size, Path(f).stat().st_mtime_ns))
     blob = json.dumps([keep, round(d, 3), w, h, fps, media.DRAFT, stamps, 2], sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def crop_box(v) -> tuple[float, float, float, float] | None:
+    """A scene's "crop": {"x", "y", "w", "h"}, 0 to 1 of the picture (x, y the top-left corner)."""
+    if not isinstance(v, dict):
+        return None
+    try:
+        x, y = float(v.get("x", 0.0)), float(v.get("y", 0.0))
+        bw, bh = float(v.get("w", 1.0 - x)), float(v.get("h", 1.0 - y))
+    except (TypeError, ValueError):
+        return None
+    if not (0 <= x < 1 and 0 <= y < 1 and 0.02 <= bw <= 1 - x + 1e-6 and 0.02 <= bh <= 1 - y + 1e-6):
+        return None
+    return x, y, min(bw, 1 - x), min(bh, 1 - y)
+
+
+def apply_crops(scenes: list[dict], cache: Path) -> None:
+    """Crop each scene's picture or clip once (kept, keyed by the file and the box), and use the crop
+    in its place, so every kind of scene and effect sees only the part asked for."""
+    import hashlib
+
+    for sc in scenes:
+        box = crop_box(sc.get("crop"))
+        f = sc.get("file")
+        if not box or not f or not Path(f).exists() or sc.get("_uncropped"):
+            continue
+        st = Path(f).stat()
+        key = hashlib.sha256(json.dumps([f, st.st_size, st.st_mtime_ns, box]).encode()).hexdigest()[:16]
+        still = _still(f)
+        dst = cache / f"crop-{key}{'.png' if still else '.mp4'}"
+        if not dst.exists():
+            cache.mkdir(parents=True, exist_ok=True)
+            x, y, bw, bh = box
+            vf = f"crop=trunc(iw*{bw:.5f}/2)*2:trunc(ih*{bh:.5f}/2)*2:trunc(iw*{x:.5f}):trunc(ih*{y:.5f})"
+            part = dst.with_name("part-" + dst.name)
+            enc = ["-frames:v", "1"] if still else ["-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "12", "-pix_fmt", "yuv420p"]
+            run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", f, "-vf", vf] + enc + [str(part)])
+            part.replace(dst)
+        sc["_uncropped"], sc["file"] = f, str(dst)
 
 
 def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
@@ -390,6 +455,10 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
 
     w, h = (int(x) for x in size.split("x"))
     scenes = sb["scenes"]
+    apply_crops(scenes, out.parent / ".venus-cache" / "crops")
+    from .page import piles
+
+    piles(scenes)  # prints that drop stay on the page for the next ones
     moving = sb.get("camera", True)
     for k, sc in enumerate(scenes):  # what a footage-free scene is drawn on, and which way its camera drifts
         sc["_bg"], sc["_accent"] = sb.get("background", "dark"), sb.get("accent", "#FFD23F")
@@ -538,6 +607,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         kind = sc["type"]
         if design and kind in ("title", "text", "clip", "image"):
             continue
+        if isinstance(sc.get("page"), dict) and kind in ("title", "text"):  # the page draws its own words
+            sc = {k: v for k, v in sc.items() if k != "text"}
         if not design:  # *word* / ==word== / _word_ belong to the designed looks; elsewhere the marked words become big words
             from .paper import parse, plain
 
@@ -554,9 +625,9 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             for x in cw:  # the word the creator chose to be big (Studio's caption card)
                 x.mark = x.mark or x.text.lower().strip(",.?!;:'\"") in big
             words += cw
-        if kind == "title":
+        if kind == "title" and sc.get("text"):
             titles.append((sc.get("text", ""), t0, t1))
-        elif kind == "text":
+        elif kind == "text" and sc.get("text"):
             ws = spread(sc.get("text", ""), i, t0, t1, 0.6)
             all_words += ws
             kinetic.append((i, {re.sub(r"[^\w']", "", x.lower()) for p in sc.get("big_words") or [] for x in str(p).split()} - {""}))
@@ -608,10 +679,14 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             for side in ("left", "right"):
                 if sc[side].get("label"):
                     lower.append((i, side, sc[side]["label"]))
-    sfx = [(starts[i] + td / 2, "whoosh") for i in range(1, len(scenes))] if trans in ("whip", "slide", "zoom", "flash", "circle", "glitch", "trail") else []
+    sfx = [(starts[i] + td / 2, "whoosh") for i in range(1, len(scenes))
+           if td and scenes[i].get("transition", trans) in ("whip", "slide", "zoom", "flash", "circle", "glitch", "trail")]
     sfx += [(t, "pop") for t in pops]
     from .motion import stamp_times
 
+    for i, sc in enumerate(scenes):  # a print lands on the page with a soft snap
+        if sc.get("_drop"):
+            sfx.append((spans[i][0] + sc["_drop"]["at"] + 0.26, "snap"))
     for i, sc in enumerate(scenes):  # a stamp lands with a thud
         sfx += [(t, "hit") for t in stamp_times(sc, spans[i][0])]
     from .typecards import KINDS as CARDS, moments
@@ -678,6 +753,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
                         music_lufs=float(sb.get("music_lufs", -16.0 if not sb.get("voiceover") else -22.0)),
                         music_duck=min(24.0, max(0.0, float(sb.get("music_duck", 12.0)))),
                         music_open=open_spec(sb.get("music_open")),
+                        music_stop=float(sb["music_stop"]) if sb.get("music_stop") not in (None, False) else None,
                         sfx_gain=min(12.0, max(-12.0, float(sb.get("sfx_volume", 0.0)))),
                         voice_gap=min(20.0, max(0.0, float(sb.get("voice_gap", 10.0)))),
                         caption_places=False if sb.get("caption_placement") == "fixed" else

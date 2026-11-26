@@ -60,6 +60,9 @@ def words_of(sc: dict) -> list[str]:
     bits += [str(p.get("label") or "") for p in sc.get("pins") or [] if isinstance(p, dict)]
     if isinstance(sc.get("callout"), dict):
         bits.append(str(sc["callout"].get("label") or ""))
+    for k in ("page", "card"):  # words drawn on an editorial page or beside a tilted card
+        if isinstance(sc.get(k), dict) and not (k == "page" and sc.get("text")):
+            bits += [str(sc[k].get(x) or "") for x in ("text", "label", "note")]
     text = " ".join(bits)
     text = re.sub(r"[*_=]{1,2}", "", text)  # mark-up for the designed looks
     return text.split()

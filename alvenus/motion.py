@@ -27,7 +27,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from .style import FONTS
 
-VERSION = 3  # raise when a drawing here changes, so cached scenes are drawn again
+VERSION = 4  # raise when a drawing here changes, so cached scenes are drawn again
 IVORY, INK, DEEP_BLUE = (244, 241, 234), (27, 27, 31), (43, 74, 120)
 
 
@@ -456,10 +456,25 @@ def stamp_times(sc: dict, t0: float) -> list[float]:
 # ---------------------------------------------------------------- pictures
 
 def has_picture(sc: dict) -> bool:
-    return sc.get("type") in ("clip", "image") and bool(sc.get("file")) and bool(sc.get("scan_lift") or sc.get("card") or sc.get("alive"))
+    if isinstance(sc.get("page"), dict) and sc.get("type") in ("clip", "image", "title", "text"):
+        return True
+    return sc.get("type") in ("clip", "image") and bool(sc.get("file")) and bool(sc.get("scan_lift") or sc.get("card") or sc.get("alive")
+                                                                                  or sc.get("drop"))
 
 
 def picture(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> None:
+    if isinstance(sc.get("page"), dict):
+        from .page import page_scene
+
+        return page_scene(sc, d, w, h, fps, out)
+    if sc.get("drop"):
+        from .page import drop_scene
+
+        if "_drop" not in sc:  # built alone: it lands on an empty page
+            from .page import drop_spec
+
+            sc["_drop"] = drop_spec(sc, 0)
+        return drop_scene(sc, d, w, h, fps, out)
     if sc.get("scan_lift"):
         return _scan_lift(sc, d, w, h, fps, out)
     if sc.get("card"):

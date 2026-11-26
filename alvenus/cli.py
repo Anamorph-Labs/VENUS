@@ -634,6 +634,27 @@ def cmd_fx(a: argparse.Namespace) -> None:
     print(f"wrote {out} ({n} frames, {', '.join(effects)}) in {time.time() - t0:.0f}s")
 
 
+def cmd_stills(a: argparse.Namespace) -> None:
+    from . import nodes as nd
+    from . import story
+    from .stills import make
+
+    need_ffmpeg()
+    draft_mode(a)
+    src = Path(a.storyboard)
+    doc = nd.read(src) if nd.is_nodes(src) else None
+    sb = story.load(src, nd.to_storyboard(doc)) if doc is not None else story.load(src)
+    sb = {**pack(a.style or sb.get("style"), "aspect", "look", "accent", "transition", "transition_seconds", "title_style",
+                 "background", "design", "letterbox", "lower_third_style", "quote_style", "caption_style"), **sb}
+    aspect = sb.get("aspect", "16:9")
+    if aspect not in ASPECTS:
+        raise SystemExit(f"aspect {aspect!r}: choose from {', '.join(sorted(ASPECTS))}")
+    out = Path(a.out) if a.out else src.with_name(src.stem.replace(".nodes", "") + ".stills")
+    print(f"drawing a still of each of the {len(sb['scenes'])} scenes (no video is kept)")
+    files = make(sb, ASPECTS[aspect], out, story.build)
+    print(f"wrote {len(files) - 1} stills in {out} and the sheet {files[-1]}: show the sheet to the creator before they say yes")
+
+
 def cmd_terminal(a: argparse.Namespace) -> None:
     from .terminal import render
 
@@ -645,7 +666,8 @@ def cmd_terminal(a: argparse.Namespace) -> None:
         cols, rows = (int(x) for x in a.cols.lower().split("x"))
     size = ASPECTS[a.aspect] if a.aspect else a.size
     r = render(a.input, out, size=size, fps=a.fps, cols=cols, rows=rows, theme=a.theme, speed=a.speed,
-               max_wait=a.max_wait, hold=a.hold, title=a.title, bare=a.bare, timing=a.timing, start=a.start, end=a.end)
+               max_wait=a.max_wait, hold=a.hold, title=a.title, bare=a.bare, timing=a.timing, start=a.start, end=a.end,
+               hide=a.hide, keep_home=a.keep_home)
     print(f"wrote {r['out']}: {r['seconds']} s from {r['recorded_seconds']} s recorded "
           f"({r['read_as']}, {r['cols']}x{r['rows']} terminal)")
 
@@ -1678,6 +1700,13 @@ def main(argv: list[str] | None = None) -> None:
     fxp.add_argument("--list", action="store_true", help="list the effects and what they do")
     fxp.set_defaults(func=cmd_fx)
 
+    st = sub.add_parser("stills", help="a finished still of every scene and one sheet of them, before the yes: no video is made")
+    st.add_argument("storyboard", help="the storyboard or node file (it does not need to be approved yet)")
+    st.add_argument("--out", help="folder for the stills (default: NAME.stills beside the storyboard)")
+    st.add_argument("--style", help="a style pack, as for make")
+    st.add_argument("--draft", action="store_true", help="smaller and quicker stills")
+    st.set_defaults(func=cmd_stills)
+
     tm = sub.add_parser("terminal", help="a terminal recording (macOS script -r, asciinema, script --timing) drawn as a sharp "
                         "video clip at its real timing")
     tm.add_argument("input", help="the recording: a typescript from script -r, a .cast file, or a typescript with --timing")
@@ -1698,6 +1727,10 @@ def main(argv: list[str] | None = None) -> None:
     tm.add_argument("--size", default="1920x1080", help="frame size in pixels (default 1920x1080)")
     tm.add_argument("--aspect", choices=sorted(ASPECTS), help="frame shape instead of --size")
     tm.add_argument("--fps", type=float, default=30)
+    tm.add_argument("--hide", action="append", metavar="TEXT=SHOWN", help="private text to swap before drawing, e.g. "
+                    "--hide \"me@mail.com=you@mail.com\" or --hide SECRET (shown as ***); repeatable")
+    tm.add_argument("--keep-home", action="store_true", help="show the home folder and account name as recorded "
+                    "(by default the home folder shows as ~ and the account name as \"you\")")
     tm.set_defaults(func=cmd_terminal)
 
     co = sub.add_parser("cutout", help="lift the person or object off the background: a PNG or a MOV with see-through background")

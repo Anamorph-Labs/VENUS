@@ -97,6 +97,18 @@ class TheTerminal(unittest.TestCase):
         self.assertAlmostEqual(retime(EVENTS, max_wait=0)[-1][0], 9.0)
 
 
+class Private(unittest.TestCase):
+    def test_home_name_computer_and_given_text_are_hidden(self):
+        ev = [(0.0, b"asha@Ashas-Laptop ~ % ls /Users/as"), (1.0, b"ha/.cache\r\nAshas-Laptop token tk-99\r\n")]
+        out = terminal.scrub(ev, terminal.private_pairs(ev, ["tk-99"]))
+        text = b"".join(b for _, b in out)
+        self.assertEqual(text, b"you@computer ~ % ls ~/.cache\r\ncomputer token ***\r\n")
+        self.assertEqual([t for t, _ in out], [0.0, 1.0])
+        self.assertNotIn(b"asha", text.lower())
+        kept = terminal.scrub(ev, terminal.private_pairs(ev, keep_home=True))
+        self.assertEqual(kept, ev)
+
+
 class TheClip(unittest.TestCase):
     def test_renders_every_frame_and_shows_the_text(self):
         d = Path(tempfile.mkdtemp())
