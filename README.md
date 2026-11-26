@@ -10,11 +10,11 @@
 <p align="center"><a href="https://anamorphlabs.com/venus/">Read the announcement</a></p>
 
 <p align="center">
-Tell your own AI the video you want, or hand it your footage. Venus lays out the story, your AI writes it,<br>
+Tell your own language model the video you want, or hand it your footage. Venus lays out the story, your language model writes it,<br>
 you read the storyboard, and nothing is made until you say yes.
 </p>
 
-- **From an idea.** Tell your AI one sentence. Venus lays it out by a story recipe (a hook, the steps, a turn, the payoff), your AI writes each scene, and Venus draws the pictures itself: no footage, no stock sites, no AI image credits.
+- **From an idea.** Tell your language model one sentence. Venus lays it out by a story recipe (a hook, the steps, a turn, the payoff), your language model writes each scene, and Venus draws the pictures itself: no footage, no stock sites, no image generator credits.
 - **From your footage.** Give it your script and your takes: it hears every take, picks the best one per line and cuts the video, with captions and a timeline for Premiere or Resolve.
 - **From your clips and a song.** Every cut on the beat, the strongest moment on the drop, or the fast "creative edit" look with cut-outs and light.
 - **It checks the story, not only the pixels.** Does the hook make you stay, one idea per scene, a turn in the middle, an ending that lands, every number with its source. Then three directions to pick from at a glance.
@@ -25,13 +25,13 @@ Free and private: everything runs on your computer. No account, no API keys, no 
 
 1. Get the code: `git clone https://github.com/Anamorph-Labs/Venus && cd Venus` (or **Code > Download ZIP** above).
 2. Run the installer: `bash install.sh` on macOS or Linux, `powershell -ExecutionPolicy Bypass -File install.ps1` on Windows. It checks Python 3.10+, adds FFmpeg if it is missing, keeps Venus in its own folder and downloads the free models once.
-3. Open your AI (Claude Code, Codex or any coding AI) in the Venus folder and tell it the video you want: *"Make a 30-second explainer about why we dream"*, or *"Cut my takes in ~/Desktop/shoot with this script"*. It takes it from there ([AGENTS.md](AGENTS.md) is its guide, and [CRAFT.md](CRAFT.md) teaches it to read a cut like an editor). It shows you the storyboard first and makes nothing until you say yes.
+3. Open your language model (Claude Code, Codex or any coding assistant) in the Venus folder and tell it the video you want: *"Make a 30-second explainer about why we dream"*, or *"Cut my takes in ~/Desktop/shoot with this script"*. It takes it from there ([AGENTS.md](AGENTS.md) is its guide, and [CRAFT.md](CRAFT.md) teaches it to read a cut like an editor). It shows you the storyboard first and makes nothing until you say yes.
 
-Your AI checks for new versions at the start of each session, and `alvenus update` installs one with a backup that comes back on its own if anything goes wrong. What changed: [CHANGES.md](CHANGES.md).
+Your language model checks for new versions at the start of each session, and `alvenus update` installs one with a backup that comes back on its own if anything goes wrong. What changed: [CHANGES.md](CHANGES.md).
 
 Venus is started by Anamorph Labs and grows with the people who use it: see
 [How ideas become Venus features](CONTRIBUTING.md). Ideas are welcome from anyone
-(ask your AI to run `alvenus suggest`); code is never added directly, every
+(ask your language model to run `alvenus suggest`); code is never added directly, every
 proposal is scanned, and Anamorph Labs builds the good ones and credits you.
 
 ## Cut your own footage
@@ -130,7 +130,7 @@ card sits on the last frame, blurred). Text uses the bundled Inter fonts (SIL Op
 Font License, see `alvenus/fonts/OFL.txt`), so cuts look the same on every computer.
 
 `alvenus scan broll/` looks through a folder of cutaway clips and makes a contact
-sheet with times, so you (or your AI) can choose shots. Every cut also writes a
+sheet with times, so you (or your language model) can choose shots. Every cut also writes a
 `.plan.json` holding every choice; edit it and run `alvenus cut --plan cut.plan.json`.
 What was heard is remembered, so re-cuts skip listening (`--fresh-listen` to redo it).
 Style packs: `alvenus presets` lists them; `--preset reels-punchy`,
@@ -209,14 +209,14 @@ Creative edits: `alvenus montage --clips shots/ --music song.mp3 --out reel.mp4
 --style creative-edit` makes the surreal fast reel: a cut every half beat,
 silhouettes and glowing figures, light strobes, bursts and lightning, photos
 flickering with their sketch or blueprint, cut-outs on flipping colours, and an
-ending that turns to dots. Pictures (AI images, photos) work as clips. One clip
+ending that turns to dots. Pictures (generated images, photos) work as clips. One clip
 at a time: `alvenus fx clip.mp4 --fx silhouette --out x.mp4` (`alvenus fx --list`
 shows all 26 effects). `alvenus cutout clip.mp4 --out subject.mov` lifts a person
 or object off the background for any editor. The cut-out models are free
 (U-2-Net and MODNet, Apache-2.0), fetched once, and run on your computer.
 
 `alvenus make storyboard.json --out video.mp4` builds a video scene by scene from
-a storyboard your AI writes from your idea: clips, images, titles, kinetic text,
+a storyboard your language model writes from your idea: clips, images, titles, kinetic text,
 counting numbers, bar and line charts, timelines, quotes, maps with pins and
 routes, and side-by-side comparisons, cut on the music's beat.
 `alvenus make --example sb.json` writes one with every kind of scene, and
@@ -233,7 +233,7 @@ Change one scene and build again: only what changed is redrawn (kept in
 
 `alvenus nodes init storyboard.json` turns a storyboard into a node file: the same
 video as named nodes (`scene3.words`, `scene3.picture`, `scene5.in`...), so you and
-your AI can say exactly what to change (`alvenus nodes set FILE scene3.words.size=1.3`),
+your language model can say exactly what to change (`alvenus nodes set FILE scene3.words.size=1.3`),
 lock the parts you like so nothing touches them, share settings between scenes
 with style nodes, and rebuild only what changed. `alvenus nodes view FILE` draws
 the node map as a page, with a frame of every scene.
