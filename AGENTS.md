@@ -423,8 +423,9 @@ them (the accent where it does, else ivory or ink); set `"colour"` to choose.
   over footage is set in the page's serif on the footage (`"page": {"full":
   true}`; storyboard `"page_titles": false` keeps the bold title), and it
   shrinks into the next page's card. Give a page scene 2 s or more.
-  The page's details: a photo on the card is toned sepia and tilted a little
-  like a print (`"tone": "none"` keeps its colour, `"angle"` sets the tilt); a
+  The page's details: a photo on the card is tilted a little like a print
+  (`"angle"` sets the tilt; `"tone": "print"` tones it sepia to sit on the page,
+  for an old-photo feel, only when the creator wants that); a
   screen (a website, a terminal) stays sharp and straight (Venus measures
   which it is; set the scene's `"screen"` when it guesses wrong). `"\n"` in the
   text starts a new line. `"pill": "Free models: downloaded once"` puts a small

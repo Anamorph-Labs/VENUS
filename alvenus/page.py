@@ -415,12 +415,12 @@ def page_scene(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> Non
     if has_pic or full:
         src = frames_of(sc["file"], w, h, fps, float(sc.get("from", 0)), d)
         first = next(src)
-    # a photo is toned to the page and tilted a touch; a screen stays as it is
+    # a photo is tilted a touch (and toned sepia when asked); a screen stays as it is
     if first is not None:
         scr = sc.get("screen")
         if scr is None:
             scr = (sc.get("type") == "clip" and sc.get("_howto")) or screenish(first)
-        toned = spec.get("tone", "none" if scr else "page") == "page"
+        toned = spec.get("tone") in ("print", "page")  # sepia only when asked: a photo keeps its own colour
         angle = float(spec["angle"]) if "angle" in spec else (0.0 if scr else (1.5 if (sc.get("_k", 0) or 0) % 2 == 0 else -1.5))
     else:
         scr, toned, angle = True, False, 0.0
