@@ -32,11 +32,11 @@ GRAPHIC_TYPES = {"stat", "chart", "line_chart", "timeline", "list", "compare", "
 PART_KEYS = {
     "in": ("transition",),
     "words": ("text", "caption", "caption_big", "caption_order", "caption_place", "caption_small", "caption_small_x", "caption_small_y", "caption_big_x", "caption_big_y", "caption_above_x", "caption_above_y", "caption_below_x", "caption_below_y", "caption_times", "big_words", "subtitle", "who", "year", "tag", "detail", "credit"),
-    "picture": ("file", "from", "label", "push", "darken", "frame"),
-    "mark": ("callout", "note"),
+    "picture": ("file", "from", "label", "push", "darken", "frame", "alive", "scan_lift", "card", "camera_move", "sky_to", "water_from"),
+    "mark": ("callout", "note", "stamp", "strike", "notes"),
     "graphic": ("value", "label", "bars", "points", "items", "title", "pins", "route", "image", "left", "right"),
 }
-SOUND_KEYS = ("music", "music_lufs", "music_duck", "voice_gap", "voiceover", "voice_words", "voice_words_at", "caption_sync", "sound_effects", "sfx_volume")
+SOUND_KEYS = ("music", "music_lufs", "music_duck", "voice_gap", "voiceover", "voice_words", "voice_words_at", "caption_sync", "music_open", "sound_effects", "sfx_volume")
 # The stages of a scene as a node editor shows them (stage, part it lives in,
 # its params), in the order the picture is made. Each stage can be switched
 # off ("off": ["shape"] on the part) to compare with and without it.
@@ -611,6 +611,8 @@ def absolute_files(doc: dict, base: Path) -> None:
         for side in ("left", "right"):
             if isinstance(p.get(side), dict) and p[side].get("file"):
                 p[side]["file"] = fix(p[side]["file"])
+        if isinstance(p.get("scan_lift"), dict) and p["scan_lift"].get("to"):
+            p["scan_lift"]["to"] = fix(p["scan_lift"]["to"])
 
 
 # ---------------------------------------------------------------------- show

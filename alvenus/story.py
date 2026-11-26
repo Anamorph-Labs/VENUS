@@ -122,6 +122,9 @@ def load(path: Path, data: dict | None = None) -> dict:
             n_pts = len(sc.get("points") or [])
             if not (isinstance(sc["lines"], list) and all(isinstance(x, dict) and len(x.get("values") or []) == n_pts for x in sc["lines"])):
                 problems.append(f"scene {i + 1}: lines is a list of {{\"name\": ..., \"values\": [...]}}, one value per point ({n_pts})")
+        from . import motion
+
+        problems += motion.problems(sc, i, base)
         if kind == "split" and not (sc.get("left", {}).get("file") and sc.get("right", {}).get("file")):
             problems.append(f"scene {i + 1}: a split scene needs left.file and right.file")
         if kind in ("slam", "date", "scramble") and not str(sc.get("text") or "").strip() and not sc.get("_job"):
@@ -259,10 +262,15 @@ def progress(stage: str, done: int = 0, of: int = 0) -> None:
 
 
 def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: int) -> None:
+    from . import motion
+
     if sc.get("_design"):
         from .paper import scene_video
 
-        return scene_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_total", 1))
+        scene_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_total", 1))
+        if motion.has_overlay(sc):  # stamps, strikes and hand-drawn notes over the page
+            motion.overlay(out, sc, d, w, h, fps)
+        return
     if sc["type"] in ("slam", "date", "scramble"):
         from .typecards import scene_video as card_video
 
@@ -271,6 +279,8 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
         from .archive import scene_video as archive_video
 
         archive_video(sc, d, w, h, fps, out, sc.get("_k", k), sc.get("_accent", "#C0392B"))
+    elif motion.has_picture(sc):  # a print scanned and lifted, a tilted card, or a still brought to life
+        motion.picture(sc, d, w, h, fps, out)
     else:
         _plain_scene(sc, d, w, h, fps, out)
         if sc.get("screen") and sc["type"] == "clip":  # a screen recording: the camera follows the cursor and typing
@@ -281,6 +291,8 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
         from .archive import add_frame
 
         add_frame(out, sc["frame"], d, w, h, fps, sc.get("_k", k))
+    if motion.has_overlay(sc):  # stamps, strikes and hand-drawn notes, drawn over the scene's picture
+        motion.overlay(out, sc, d, w, h, fps)
     from .paper import ff_tools, tools_on
 
     # node-graph tools on a plain scene work on its whole picture (it is one layer)
@@ -351,7 +363,7 @@ def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
     if sc["type"] in ("map",):  # a map's pins are drawn later too, but its picture is the image
         keep["image"] = sc.get("image")
     stamps = []
-    for f in [sc.get("file"), sc.get("image"), (sc.get("left") or {}).get("file") if isinstance(sc.get("left"), dict) else None,
+    for f in [sc.get("file"), sc.get("image"), (sc.get("scan_lift") or {}).get("to") if isinstance(sc.get("scan_lift"), dict) else None, (sc.get("left") or {}).get("file") if isinstance(sc.get("left"), dict) else None,
               (sc.get("right") or {}).get("file") if isinstance(sc.get("right"), dict) else None]:
         if f and Path(f).exists():
             st = Path(f).stat()
@@ -362,13 +374,17 @@ def _scene_key(sc: dict, d: float, w: int, h: int, fps: float) -> str:
         keep["_design_v"] = VERSION
         keep["_has_words"] = has_words(sc)
         keep["_k"] = sc.get("_k")  # the scene's place picks its shape and paper
+    from . import motion
+
+    if motion.has_overlay(sc) or motion.has_picture(sc):
+        keep["_motion_v"] = motion.VERSION
     blob = json.dumps([keep, round(d, 3), w, h, fps, media.DRAFT, stamps, 2], sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
 def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     from .cut import TRANSITIONS, join_pair
-    from .finish import finish
+    from .finish import finish, open_spec
     from .graphics import Chart, MapCard, Pin, Quote, Stat, Timeline
     from .wordtime import Word
 
@@ -377,6 +393,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     moving = sb.get("camera", True)
     for k, sc in enumerate(scenes):  # what a footage-free scene is drawn on, and which way its camera drifts
         sc["_bg"], sc["_accent"] = sb.get("background", "dark"), sb.get("accent", "#FFD23F")
+        if sb.get("fonts"):
+            sc["_fonts"] = sb["fonts"]
         footage = sc.get("file") or sc["type"] in ("clip", "image", "map", "split", "archive", "slam", "date", "scramble")
         sc["_dir"] = 0 if footage or not moving else (1 if k % 2 == 0 else -1)
         sc["_verse"] = sc["type"] == "quote" and (sc.get("style") or sb.get("quote_style")) == "verse"
@@ -456,7 +474,8 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         for i in range(1, len(files)):
             o = "vj" if i == len(files) - 1 else f"x{i}"
             if td:
-                parts.append(join_pair(prev, f"n{i}", o, scenes[i].get("transition", trans), td, starts[i], f"{w}x{h}", fps, i))
+                parts.append(join_pair(prev, f"n{i}", o, scenes[i].get("transition", trans), td, starts[i], f"{w}x{h}", fps, i,
+                                       colour=sb.get("trail_colour") or sb.get("accent")))
             else:
                 parts.append(f"[{prev}][n{i}]concat=n=2:v=1[{o}]")
             prev = o
@@ -589,8 +608,12 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             for side in ("left", "right"):
                 if sc[side].get("label"):
                     lower.append((i, side, sc[side]["label"]))
-    sfx = [(starts[i] + td / 2, "whoosh") for i in range(1, len(scenes))] if trans in ("whip", "slide", "zoom", "flash", "circle", "glitch") else []
+    sfx = [(starts[i] + td / 2, "whoosh") for i in range(1, len(scenes))] if trans in ("whip", "slide", "zoom", "flash", "circle", "glitch", "trail") else []
     sfx += [(t, "pop") for t in pops]
+    from .motion import stamp_times
+
+    for i, sc in enumerate(scenes):  # a stamp lands with a thud
+        sfx += [(t, "hit") for t in stamp_times(sc, spans[i][0])]
     from .typecards import KINDS as CARDS, moments
 
     for i, sc in enumerate(scenes):  # the type cards bring their own sounds (boom, braam, glitch...)
@@ -654,6 +677,7 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
         notes += finish(base, out, size, fps, spans, music=Path(sb["music"]) if sb.get("music") else None,
                         music_lufs=float(sb.get("music_lufs", -16.0 if not sb.get("voiceover") else -22.0)),
                         music_duck=min(24.0, max(0.0, float(sb.get("music_duck", 12.0)))),
+                        music_open=open_spec(sb.get("music_open")),
                         sfx_gain=min(12.0, max(-12.0, float(sb.get("sfx_volume", 0.0)))),
                         voice_gap=min(20.0, max(0.0, float(sb.get("voice_gap", 10.0)))),
                         caption_places=False if sb.get("caption_placement") == "fixed" else

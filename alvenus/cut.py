@@ -31,7 +31,7 @@ TRANSITIONS = {
     "cut": "", "crossfade": "fade", "dip": "fadeblack", "flash": "fadewhite",
     "zoom": "zoomin", "whip": "smoothleft", "slide": "slideleft", "blur": "hblur",
     "circle": "circleopen", "ink": "custom", "leak": "custom", "glitch": "custom",
-    "bloom": "custom", "cloud": "custom", "tear": "custom", "tiles": "custom",
+    "bloom": "custom", "cloud": "custom", "tear": "custom", "tiles": "custom", "trail": "custom",
 }
 
 # Hand-made transitions. FFmpeg's per-pixel expressions are far too slow at
@@ -58,6 +58,17 @@ _MASK = {
     # The frame breaks into squares that flip to the new shot in a scattered order.
     "tiles": ("16x9", "255*gt(T/{D}*1.25-0.12,mod(abs(sin(X*12.99+Y*78.23))*43758.5,1))"),
 }
+_MASK["trail"] = (  # the new shot follows a streak of light flying across the frame
+    "384x216", "255*clip((pow(T/{D},0.8)*1.35-0.2-(X/W+0.35*(Y/H-0.5)))*10,0,1)")
+# A streak of light: a long tail behind a bright head, along a slightly tilted line,
+# riding the edge of the wipe. The halo takes the video's colour; the core is white.
+_TRAIL_AT = "(pow(T/{D},0.8)*1.35-0.2-0.35*(Y/H-0.5))"
+_TRAIL_HALO = ("250*sin(PI*T/{D})*(exp(-pow((X/W-" + _TRAIL_AT + ")/0.05,2))*0.8+exp(-pow((Y/H-0.46+0.1*X/W)/0.035,2))"
+               "*exp(-max(0," + _TRAIL_AT + "-X/W)/0.3)*gt(" + _TRAIL_AT + "+0.02,X/W))")
+_TRAIL_CORE = ("255*sin(PI*T/{D})*(exp(-pow((X/W-" + _TRAIL_AT + ")/0.008,2))*0.9+exp(-pow((Y/H-0.46+0.1*X/W)/0.006,2))"
+               "*exp(-max(0," + _TRAIL_AT + "-X/W)/0.18)*gt(" + _TRAIL_AT + "+0.005,X/W))")
+TRAIL_COLOUR = "0x2B4A78"
+
 # Light laid over the blend for the transitions that need it: (mask, colour).
 _OVER = {
     "cloud": ("160x90", "235*pow(sin(PI*T/{D}),1.5)*clip(0.55+0.3*sin(X/W*6+Y/H*4+T/{D}*2)+0.25*sin(Y/H*9-X/W*3),0,1)", "0xF4F2EE"),
@@ -68,7 +79,7 @@ _GLOW = "230*pow(sin(PI*T/{D}),2)*exp(-pow(X/W-(0.15+0.7*T/{D}),2)/0.09)"
 _WARM = "0xFFC98A"
 
 
-def join_pair(a: str, b: str, out: str, name: str, d: float, offset: float, size: str, fps: float, k) -> str:
+def join_pair(a: str, b: str, out: str, name: str, d: float, offset: float, size: str, fps: float, k, colour: str | None = None) -> str:
     """Filter-graph text that lays stream b over the end of stream a with the
     named transition (b starts at `offset`), like xfade."""
     t = TRANSITIONS[name]
@@ -93,6 +104,14 @@ def join_pair(a: str, b: str, out: str, name: str, d: float, offset: float, size
               f"color=c={_WARM}:s={size}:r={fps:g}:d={d:.4f},format=yuv420p[warm{k}]",
               f"[{mid}][warm{k}][gm{k}]maskedmerge[lit{k}]"]
         mid = f"lit{k}"
+    elif name == "trail":
+        c = "0x" + (colour or TRAIL_COLOUR).lstrip("#").replace("0x", "")
+        for tag, expr, col in (("th", _TRAIL_HALO, c), ("tc", _TRAIL_CORE, "0xFFFFFF")):
+            g = expr.format(D=f"{d:.4f}")
+            p += [f"nullsrc=s=384x216:r={fps:g}:d={d:.4f},geq=lum='{g}':cb='{g}':cr='{g}',scale={w}:{h}:flags=bicubic,format=yuv420p[{tag}m{k}]",
+                  f"color=c={col}:s={size}:r={fps:g}:d={d:.4f},format=yuv420p[{tag}c{k}]",
+                  f"[{mid}][{tag}c{k}][{tag}m{k}]maskedmerge[{tag}{k}]"]
+            mid = f"{tag}{k}"
     elif name in _OVER:
         ores, oexpr, colour = _OVER[name]
         g = oexpr.format(D=f"{d:.4f}")

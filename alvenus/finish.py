@@ -58,7 +58,7 @@ def finish(
     lower_thirds=(), card_lines=(), all_words=None, stats=(), charts=(), sfx: list | None = None,
     line_charts=(), quotes=(), progress: bool = False, scene_marks=(),
     maps=(), timelines=(), kinetic_lines=(), titles=(), split_labels=(), title_style: str = "track",
-    more_events=(), camera=(), talk: dict | None = None, music_duck: float = 12.0, sfx_gain: float = 0.0,
+    more_events=(), camera=(), talk: dict | None = None, music_duck: float = 12.0, sfx_gain: float = 0.0, music_open=None,
     caption_places: dict | bool | None = None, voice_gap: float = 10.0,
 ) -> list[str]:
     """srt: classic one-line captions; words: timed words for animated captions;
@@ -311,6 +311,8 @@ def finish(
              f"aformat=sample_rates=48000:channel_layouts=stereo,loudnorm=I={music_lufs:g}:TP=-3,"
              f"atrim=0:{total:.3f},asetpts=PTS-STARTPTS,afade=t=in:d=1,afade=t=out:st={total - fade_out:.3f}:d={fade_out:.3f},"
              f"apad=whole_dur={total + 0.5:.3f}", "-ar", "48000", "-ac", "2", str(raw)])
+        if music_open:  # muffled, as if through a wall, then opening out fully at a chosen moment
+            muffle(raw, *music_open)
         phrases = listen.phrases_of(listen.loudness(voice))
         keys = listen.duck_keys(phrases, total, music_duck)
         keys = listen.make_room(keys, fx_times, total)
@@ -418,3 +420,23 @@ def auto_broll(script: list[str], folder: Path, taken: set[int], used: set[Path]
         lines.add(n)
         notes.append(f"B-roll {f.name} over line {n + 1} (matched: {', '.join(sorted(_tokens(script[n]) & words[f]))})")
     return sorted(out, key=lambda c: c.line), notes
+
+
+def open_spec(v) -> tuple[float, float, float] | None:
+    """`music_open`: seconds, or {"at", "over", "from"}: the music is muffled from
+    `from` and opens out fully over `over` seconds at `at`."""
+    if v in (None, False):
+        return None
+    if isinstance(v, dict):
+        return float(v.get("from", 0.0)), float(v.get("at", 0.0)), max(0.05, float(v.get("over", 0.8)))
+    return 0.0, float(v), 0.8
+
+
+def muffle(wav: Path, start: float, at: float, over: float) -> None:
+    """Make the music sound far away (low-passed and softer) from `start`, then open it out."""
+    tmp = wav.with_suffix(".open.wav")
+    far = f"if(lt(t,{start:.3f}),0,if(lt(t,{at:.3f}),1,max(0,1-(t-{at:.3f})/{over:.3f})))"
+    run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(wav), "-filter_complex",
+         f"[0:a]asplit[a][b];[a]lowpass=f=420,lowpass=f=420,volume='0.7*{far}':eval=frame[m];"
+         f"[b]volume='1-{far}':eval=frame[f];[m][f]amix=inputs=2:normalize=0[o]", "-map", "[o]", "-ar", "48000", "-ac", "2", str(tmp)])
+    tmp.replace(wav)

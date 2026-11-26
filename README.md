@@ -177,7 +177,7 @@ recordings, steps that slide on, a clear label for another way to do a step, and
 mock-ups and for skipping the viewer's real path to a page.
 
 Drafts: add `--draft` to `cut`, `montage` or `make` for a quick look at a third of
-the size with the fastest settings (a 30 s storyboard video in about 30 s). Every
+the size with the fastest settings. Every
 render also writes `.sheet.jpg`, one page with a labelled frame from each scene.
 
 Backgrounds: storyboard scenes without footage (titles, text, numbers, charts,
@@ -227,7 +227,7 @@ and callouts (a ring, a line and a label pointing at something in a clip).
 Scenes without footage move like a filmed shot: the type drifts slowly over a
 background that moves less, for depth (`"camera": false` to keep them still).
 Change one scene and build again: only what changed is redrawn (kept in
-`.venus-cache` beside the video). `--scene 3` builds one scene alone in seconds;
+`.venus-cache` beside the video). `--scene 3` builds one scene alone;
 `--versions` builds three quick drafts side by side with the reason for each; and
 `video.why.md` says why every scene is as long as it is.
 

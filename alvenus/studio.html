@@ -945,7 +945,7 @@ const XPRESET = {made: {size: '1080', quality: 'standard'}, instagram: {size: '1
 function drawExport() {
   document.querySelectorAll('#exportbox [data-xk]').forEach(g => g.querySelectorAll('[data-xv]').forEach(b => b.classList.toggle('on', EXP[g.dataset.xk] === b.dataset.xv)));
   const why = {made: 'Plays well anywhere.', instagram: 'Sized and encoded the way Instagram likes it, so it loses less when it is posted.', youtube: 'YouTube streams 4K uploads at a higher quality, so the video looks sharper there.'}[EXP.for];
-  $('#xwhy').textContent = why + (EXP.size === '4k' ? ' Venus draws the video at 1080p; the 4K file is that video enlarged with care, and takes a few minutes more.' : '')
+  $('#xwhy').textContent = why + (EXP.size === '4k' ? ' Venus draws the video at 1080p; the 4K file is that video enlarged with care.' : '')
     + (EXP.quality === 'small' ? ' Smaller file: quicker to send, a little softer.' : EXP.quality === 'best' ? ' Best: the sharpest picture, a bigger file.' : '');
 }
 function openExport() { drawExport(); $('#exportbox').classList.add('on'); }
@@ -1050,7 +1050,7 @@ async function playAll(from) {
   const v = $('#vid'), fresh = S.render?.state === 'done' && S.render.video && !(S.changed || []).length;
   let src = fresh ? '/api/video?t=' + Date.now() : null;
   if (!src) {
-    if (drafting) return; busy(true, 'Making a quick draft of the whole video (about a minute the first time)'); drafting = true;
+    if (drafting) return; busy(true, 'Making a quick draft of the whole video'); drafting = true;
     try { const r = await fetch('/api/draft'); if (!r.ok) throw new Error((await r.json()).error); src = URL.createObjectURL(await r.blob()); }
     catch (e) { drafting = false; busy(false); toast('Play: ' + e.message, 'bad'); return; }
     drafting = false; busy(false);
@@ -1874,7 +1874,7 @@ $('#upd').addEventListener('click', () => {
 });
 $('#updlater').addEventListener('click', () => { $('#updbox').classList.remove('on'); try { localStorage.setItem('venus-upd-later-' + UPD.latest, Date.now()); } catch (e) {} showUpd(UPD); });
 $('#updgo').addEventListener('click', async () => {
-  $('#updgo').disabled = true; $('#updgo').textContent = 'Updating… (about a minute)';
+  $('#updgo').disabled = true; $('#updgo').textContent = 'Updating…';
   try { await api('/api/update', {}); updWait = {from: UPD.installed}; setInterval(checkUpd, 1500); }
   catch (e) { $('#updgo').disabled = false; $('#updgo').textContent = 'Update now'; toast('Could not update: ' + e.message, 'bad'); }
 });

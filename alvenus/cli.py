@@ -1676,7 +1676,7 @@ def main(argv: list[str] | None = None) -> None:
     mk.add_argument("--out", help="output MP4")
     mk.add_argument("--aspect", choices=sorted(ASPECTS), help="overrides the storyboard's aspect")
     mk.add_argument("--style", choices=list(PRESETS), help="a style pack: look, colour, transitions and titles (the storyboard's own settings still win)")
-    mk.add_argument("--scene", metavar="N", help="build only scene N (or a node file's scene id, like scene3), in seconds, "
+    mk.add_argument("--scene", metavar="N", help="build only scene N (or a node file's scene id, like scene3), "
                     "to check a change before building it all")
     mk.add_argument("--versions", action="store_true", help="three quick versions side by side (your style, the opposite energy, "
                     "tighter pace), each with the reason it exists")

@@ -365,6 +365,45 @@ hook and the payoff full frame unless the payoff *is* a number.
   `alvenus cutout clip.mp4 --out subject.mov` (person, object or plain
   background; free models fetched once, run on the computer).
 
+### Stamps, strikes, hand-drawn notes, cards and living stills (`make`)
+
+Each is a setting on a storyboard scene, drawn by Venus itself. Use them where
+the story needs them, one or two a minute, not as decoration.
+
+- **Stamp** (any scene): `"stamp": {"text": "KEPT", "at": 0.6, "x": 0.5, "y": 0.4,
+  "angle": -8}` slams a word onto the picture like a rubber stamp, with uneven
+  ink and a thud. For a verdict, a seal, a word that settles something.
+- **Cross out and replace** (any scene): `"strike": {"old": "Almost", "new":
+  "Always", "at": 1.0, "y": 0.7}`: the old word is struck through by hand, and
+  the new one is written in above it. For a correction that is the point.
+- **Hand-drawn notes** (any scene): `"notes": [{"kind": "circle", "x": 0.4, "y":
+  0.5, "w": 0.3, "h": 0.14}, {"kind": "arrow", "x": 0.7, "y": 0.78, "to": [0.38,
+  0.62], "text": "still there", "at": 1.2}]`. Kinds: underline, circle, box,
+  arrow, note, cross, tick. x and y run 0 to 1 across and down; look at the
+  frame to place them. Strokes draw on like a hand, one after another.
+- **Scan and lift** (image scene): `"scan_lift": {"to": "clip.mp4", "from": 12}`:
+  the still sits as a print, a line of light scans down it, then it lifts up
+  into the full-screen moving shot. For a memory or a photo coming alive.
+- **Tilted card** (clip or image scene): `"card": {"text": "A promise is a kind
+  of clock.", "side": "left", "from_full": true}`: the shot as a tilted card
+  beside its words; `from_full` starts full screen and shrinks into the card,
+  so it follows on from the same shot in the scene before. `"paper": true` for a
+  light page.
+- **Stills come alive** (image scene): `"alive": ["clouds", "depth"]`, any of
+  rain, snow, mist, clouds (the sky drifts), ripples (water moves) and depth (a
+  slow 3D camera move). Venus measures where the horizon is; if it guesses wrong,
+  set `"sky_to"` or `"water_from"` (0 to 1 down the picture). Only ask for
+  ripples where there is water.
+- **Light-trail cuts**: `"transition": "trail"` (whole video or one scene): a
+  streak of light flies across and the new shot follows it, in the video's
+  accent colour (`"trail_colour"` to choose another).
+- **Music muffled, then opening up**: `"music_open": 6.2` (or `{"at": 6.2,
+  "over": 0.8, "from": 0}`): the music sounds far away, as if through a wall,
+  and opens out fully at that moment. Put the moment on the turn or the reveal.
+
+Stamps, strikes and notes pick a colour that reads against the picture under
+them (the accent where it does, else ivory or ink); set `"colour"` to choose.
+
 ### Trailers, video essays, interviews, data and the wide band
 
 - **Trailer** (preset `trailer`, or `make --template trailer`): storyboard
@@ -562,7 +601,7 @@ alvenus cut --plan cut.plan.json
 ```
 
 Flags still work and win over the plan (`--plan cut.plan.json --pick 2=5`).
-What Whisper heard is remembered, so a re-cut skips listening and takes seconds;
+What Whisper heard is remembered, so a re-cut skips listening;
 `--fresh-listen` forces a new listen.
 
 ## 7. Deliver
@@ -775,14 +814,14 @@ check and approval. `alvenus make --example sb.json` writes every scene type.
    scenes sit on a dark page in these looks. A new graphic lands about every
    0.8 s, near the pace of the references these were learned from; `alvenus study`
    reports `seconds_per_graphic_beat` for any video, to compare pace.
-5. After the creator's yes, `alvenus make sb.json --draft --out draft.mp4` first: it takes seconds. Look at
+5. After the creator's yes, `alvenus make sb.json --draft --out draft.mp4` first: it is quick. Look at
    `draft.sheet.jpg` (one frame per scene), fix what is weak, repeat; then build
    without `--draft`. Venus reviews the result itself and fixes reading time,
    faint text and flashing on its own; read what it changed (printed, and the
    saved `.storyboard.json`) and what it could not fix (in the output).
 6. Changing one thing keeps the rest: edit that scene in the storyboard and build
    again; only scenes whose picture changed are redrawn (words, titles and sound
-   are always fresh). `--scene 3` builds scene 3 alone in seconds, to check a
+   are always fresh). `--scene 3` builds scene 3 alone, to check a
    change. `video.why.md` explains every scene's length and change of scene, so the
    creator can disagree with something specific.
 7. When the creator is unsure of the feel, `--versions` builds three quick drafts
@@ -992,6 +1031,7 @@ ships, its author is thanked and credited by name (CONTRIBUTING.md has the detai
 - No video before the creator has seen the storyboard and said yes (`alvenus approve`).
 - Ask one question that unlocks the edit, not ten notes; point to the exact moment;
   suggest a fix and let the creator decide (CRAFT.md).
+- Never tell the creator how long a render, download or build will take (no "about a minute", no countdowns). Say what is happening, and report when it is done.
 - Say what you are unsure about. A confident wrong cut costs the creator more than
   a question.
 - Brand kit first; watch every reference before the first draft; on feedback change
