@@ -4,6 +4,11 @@ Each release, newest first, in plain words. `alvenus update --check` reads this 
 so keep the heading shape: `## VERSION (DATE)` and one `-` line per change.
 
 ## Coming in the next release
+- Pages move like a designed film: words land as the voice says them, pages meet with a clean move instead of a dissolve, and a gentle camera looks at what is circled or stamped.
+- Titles over footage take the page's serif in a video of pages, and shrink into the next page's card.
+- A clip that would open on a stray frame of the shot before now starts at the cut.
+- `alvenus stills` also makes a short moving preview of each scene.
+- A plain cut followed by a blend no longer stops a build.
 - `alvenus stills`: a finished still of every scene and one sheet, before anything is made.
 - A light editorial page: serif words with one stressed word in the accent colour, a small label, and the picture as a card with a soft shadow.
 - Prints that drop onto the page on the beat and pile up.

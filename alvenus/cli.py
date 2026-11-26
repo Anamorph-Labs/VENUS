@@ -651,8 +651,10 @@ def cmd_stills(a: argparse.Namespace) -> None:
         raise SystemExit(f"aspect {aspect!r}: choose from {', '.join(sorted(ASPECTS))}")
     out = Path(a.out) if a.out else src.with_name(src.stem.replace(".nodes", "") + ".stills")
     print(f"drawing a still of each of the {len(sb['scenes'])} scenes (no video is kept)")
-    files = make(sb, ASPECTS[aspect], out, story.build)
-    print(f"wrote {len(files) - 1} stills in {out} and the sheet {files[-1]}: show the sheet to the creator before they say yes")
+    files = make(sb, ASPECTS[aspect], out, story.build, moving=not a.no_motion)
+    n = len(sb["scenes"])
+    print(f"wrote {n} stills and the sheet {out / 'stills.jpg'}" + ("" if a.no_motion else f", and a short moving preview of each "
+          f"scene (scene-01.gif ...)") + ": show them to the creator before they say yes")
 
 
 def cmd_terminal(a: argparse.Namespace) -> None:
@@ -1705,6 +1707,7 @@ def main(argv: list[str] | None = None) -> None:
     st.add_argument("--out", help="folder for the stills (default: NAME.stills beside the storyboard)")
     st.add_argument("--style", help="a style pack, as for make")
     st.add_argument("--draft", action="store_true", help="smaller and quicker stills")
+    st.add_argument("--no-motion", action="store_true", help="stills only, without the short moving preview of each scene")
     st.set_defaults(func=cmd_stills)
 
     tm = sub.add_parser("terminal", help="a terminal recording (macOS script -r, asciinema, script --timing) drawn as a sharp "

@@ -27,7 +27,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from .style import FONTS
 
-VERSION = 4  # raise when a drawing here changes, so cached scenes are drawn again
+VERSION = 5  # raise when a drawing here changes, so cached scenes are drawn again
 IVORY, INK, DEEP_BLUE = (244, 241, 234), (27, 27, 31), (43, 74, 120)
 
 

@@ -413,6 +413,19 @@ them (the accent where it does, else ivory or ink); set `"colour"` to choose.
   words are set larger. On a title or text scene the scene's own `"text"` is
   used. The brand heading font is used when the kit has one. Stamps, strikes
   and notes still draw on top. Charts, lists and numbers keep their own look.
+  How pages move: each word lands when the voiceover says it (quickly one
+  after another without a voice), and every word stays at least 0.9 s before
+  the scene ends. Two pages in a row never dissolve into each other: the
+  words leave, then the next ones land; the same picture on the same side
+  stays put; a card slides in from its side. A gentle camera drifts toward
+  the card (closer on a screen recording) and over to whatever a note circles,
+  points at or stamps, never losing the words. In a video with pages, a title
+  over footage is set in the page's serif on the footage (`"page": {"full":
+  true}`; storyboard `"page_titles": false` keeps the bold title), and it
+  shrinks into the next page's card. Give a page scene 2 s or more.
+- **No stray first frame**: a clip whose `"from"` sits just before a cut in
+  its source starts at the cut, and the notes say so (`"from_exact": true`
+  keeps the time you gave).
 - **Prints that drop and pile up** (image or clip scene): `"drop": true` (or
   `{"x", "y", "angle", "size", "at"}`) lays the picture as a white-bordered
   print that falls onto the page at the scene's start (on the beat when scene
@@ -728,9 +741,11 @@ screen). Show that board to the creator, not the JSON.
 **Stills of every scene before the yes.** `alvenus stills sb.json` draws the
 storyboard as `make` would and keeps one finished frame per scene (taken once
 its words, notes, stamps, cards and drops have all arrived) in `sb.stills/`,
-with one sheet, `sb.stills/stills.jpg`. The working video is deleted and the
-storyboard need not be approved yet. Show the sheet with the board; the creator
-says yes to what they saw.
+with one sheet, `sb.stills/stills.jpg`, and a short, small moving preview of
+each scene (`scene-01.gif` ...), because a still can look right while the
+motion is wrong (`--no-motion` for stills only). The working video is deleted
+and the storyboard need not be approved yet. Show the sheet and the previews
+with the board; the creator says yes to what they saw.
 
 It also reads the cut by the craft guide ([CRAFT.md](CRAFT.md)): an opening
 question the ending never answers, "3 reasons" with only 2 delivered, a cut that

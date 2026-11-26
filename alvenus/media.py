@@ -109,3 +109,27 @@ def speech_regions(
         regions.append((cursor, total))
     off = start or 0.0
     return [(a + off, b + off) for a, b in regions]
+
+
+def first_cut(path: str | Path, start: float, within: float = 0.35) -> float | None:
+    """Seconds after `start` where the picture cuts to a new shot, if it does so
+    within `within` seconds (a stray frame of the shot before); else None."""
+    import numpy as np
+
+    from .motion import _still, frames_of
+
+    if _still(str(path)):
+        return None
+    try:
+        fr = [f.astype(np.float32).mean(axis=2) for f in frames_of(str(path), 64, 36, 30, max(0.0, start), within + 0.2)]
+    except (OSError, ValueError, RuntimeError):
+        return None
+    if len(fr) < 3:
+        return None
+    jumps = [float(np.abs(b - a).mean()) for a, b in zip(fr, fr[1:])]
+    k = int(np.argmax(jumps[: max(1, int(round(within * 30)))]))
+    rest = sorted(jumps[:k] + jumps[k + 1:])
+    calm = rest[len(rest) // 2] if rest else 0.0
+    if jumps[k] > 18 and jumps[k] > 4 * calm + 4:  # one big change among small ones: a cut
+        return (k + 1) / 30
+    return None

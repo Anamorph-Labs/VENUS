@@ -3,9 +3,11 @@
 The creator should see every card before saying yes. `alvenus stills FILE`
 draws the storyboard exactly as `make` would (pictures, words, captions,
 stamps, notes, cards, drops), takes one finished frame from each scene once
-everything in it has arrived, and lays them on one sheet. The working video it
-draws them from is deleted: no video is delivered, and the storyboard does
-not need to be approved yet."""
+everything in it has arrived, and lays them on one sheet. Beside each still
+it keeps a short, small moving preview (a GIF) of the scene, because a still
+can look right while the motion is wrong. The working video it draws them from
+is deleted: no video is delivered, and the storyboard does not need to be
+approved yet."""
 
 from __future__ import annotations
 
@@ -36,16 +38,28 @@ def settled(sc: dict, t0: float, t1: float) -> float:
     if sc.get("_drop"):
         last = max(last, sc["_drop"]["at"] + 0.6)
     if isinstance(sc.get("page"), dict):
-        last = max(last, 1.6)
+        pt = sc.get("_page_times") or []
+        last = max(last, (float(pt[-1]) + 0.3 + 0.75) if pt else 1.6)  # the last word down, and its note under it
     if isinstance(sc.get("card"), dict) and sc["card"].get("from_full"):
         last = max(last, 1.6)
     at = max(L * 0.8, last)
-    return t0 + max(0.0, min(at, L - 0.12))
+    end = L - 0.12
+    if sc.get("_exit"):  # a page whose words leave before the next page: catch it before they go
+        end = L - 0.45
+    return t0 + max(0.0, min(at, end))
 
 
 def grab(video: Path, at: float, dst: Path) -> None:
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-ss", f"{max(0.0, at):.3f}", "-i", str(video), "-frames:v", "1",
                     "-q:v", "2", str(dst)], check=True)
+
+
+def motion(video: Path, t0: float, t1: float, dst: Path, width: int = 480) -> None:
+    """A short moving preview of one scene, small enough to send: how it moves, not how it looks in full."""
+    vf = (f"fps=12,scale={width}:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];"
+          f"[b][p]paletteuse=dither=bayer:bayer_scale=4")
+    subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-ss", f"{max(0.0, t0):.3f}", "-t", f"{max(0.2, t1 - t0):.3f}",
+                    "-i", str(video), "-filter_complex", vf, "-loop", "0", str(dst)], check=True)
 
 
 def sheet(frames: list[tuple[Path, str]], dst: Path, cols: int = 3) -> None:
@@ -72,8 +86,9 @@ def sheet(frames: list[tuple[Path, str]], dst: Path, cols: int = 3) -> None:
     page.save(dst, quality=90)
 
 
-def make(sb: dict, size: str, out_dir: Path, build) -> list[Path]:
-    """Draw the storyboard, keep one still per scene in out_dir, delete the working video."""
+def make(sb: dict, size: str, out_dir: Path, build, moving: bool = True) -> list[Path]:
+    """Draw the storyboard, keep one still per scene in out_dir (and a short moving
+    preview of each, unless moving is False), delete the working video."""
     out_dir.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="venus-stills-", dir=out_dir))
     try:
@@ -87,6 +102,13 @@ def make(sb: dict, size: str, out_dir: Path, build) -> list[Path]:
             grab(video, at, dst)
             files.append((dst, f"{i + 1}  {sc['type']}  {t1 - t0:.1f} s  (frame at {at - t0:.1f} s)"))
         sheet(files, out_dir / "stills.jpg")
-        return [f for f, _ in files] + [out_dir / "stills.jpg"]
+        gifs = []
+        if moving:  # the stills show how each scene looks once settled; these show how it moves
+            for i in range(len(sb["scenes"])):
+                t0, t1 = sb["_spans"][i]
+                g = out_dir / f"scene-{i + 1:02d}.gif"
+                motion(video, t0, t1, g)
+                gifs.append(g)
+        return [f for f, _ in files] + [out_dir / "stills.jpg"] + gifs
     finally:
         shutil.rmtree(work, ignore_errors=True)  # no video is kept: these are stills to approve

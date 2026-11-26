@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from alvenus import motion, page, story
+from alvenus import media, motion, page, story
 from alvenus.cut import join_pair
 from alvenus.finish import stop
 from alvenus.media import load_audio
@@ -55,6 +55,40 @@ class Page(unittest.TestCase):
         motion.picture(scenes[2], 1.0, W, H, FPS, out)
         f = _frames(out, 1.0)
         self.assertLess(f[0].mean(), f[0][:4, :4].mean() + 1)  # the earlier prints are already there at the start
+
+
+    def test_words_land_on_the_voice_and_hold(self):
+        self.assertEqual(page.land_times(3, 3.0, [0.4, 0.8, 1.2]), [0.4, 0.8, 1.2])
+        fast = page.land_times(4, 3.0)
+        self.assertLess(fast[-1], 0.5)  # no voice: every word down within half a second
+        late = page.land_times(3, 2.0, [0.5, 1.2, 1.9])
+        self.assertLessEqual(late[-1] + page.LAND + page.HOLD, 2.0 + 1e-6)  # squeezed so the last word can be read
+
+    def test_pages_meet_without_a_dissolve(self):
+        sc = [{"type": "title", "file": str(self.pic), "text": "Made from *one line.*"},
+              {"type": "image", "file": str(self.pic), "page": {"text": "One"}},
+              {"type": "image", "file": str(self.pic), "page": {"text": "Two"}},
+              {"type": "text", "text": "x", "page": {}, "transition": "whip"}]
+        notes = page.plan(sc, {"transition": "crossfade"})
+        self.assertTrue(sc[0]["page"]["full"] and notes)  # the title takes the page's serif
+        self.assertEqual([s.get("transition") for s in sc], [None, "cut", "cut", "whip"])
+        self.assertTrue(sc[0]["_exit"] and sc[1]["_from_full"] and sc[1]["_keep_card"] and sc[2]["_card_stays"])
+        for s in sc[:3]:
+            s["_len"] = 1.0
+            motion.picture(s, 1.0, W, H, FPS, self.dir / "p.mp4")
+        f = _frames(self.dir / "p.mp4", 1.0)
+        self.assertEqual(len(f), 10)
+
+    def test_a_stray_frame_before_a_cut_is_skipped(self):
+        clip = self.dir / "two.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"color=black:s={W}x{H}:r=30:d=1",
+                        "-f", "lavfi", "-i", f"color=white:s={W}x{H}:r=30:d=1", "-filter_complex", "[0:v][1:v]concat=n=2:v=1[v]",
+                        "-map", "[v]", "-pix_fmt", "yuv420p", str(clip)], check=True)
+        self.assertAlmostEqual(media.first_cut(clip, 0.9), 0.1, delta=0.04)
+        self.assertIsNone(media.first_cut(clip, 0.3))
+
+    def test_stills_catch_a_page_before_its_words_leave(self):
+        self.assertAlmostEqual(settled({"page": {}, "_exit": True, "notes": [{"at": 3.0}]}, 0.0, 4.0), 3.55)
 
 
 class Options(unittest.TestCase):

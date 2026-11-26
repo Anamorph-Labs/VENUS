@@ -312,8 +312,10 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
         from .archive import add_frame
 
         add_frame(out, sc["frame"], d, w, h, fps, sc.get("_k", k))
-    if motion.has_overlay(sc):  # stamps, strikes and hand-drawn notes, drawn over the scene's picture
-        motion.overlay(out, sc, d, w, h, fps)
+    from .page import is_page
+
+    if motion.has_overlay(sc) and not is_page(sc):  # stamps, strikes and hand-drawn notes, drawn over the scene's picture
+        motion.overlay(out, sc, d, w, h, fps)  # (a page draws its own, so they move with its camera)
     from .paper import ff_tools, tools_on
 
     # node-graph tools on a plain scene work on its whole picture (it is one layer)
@@ -325,6 +327,53 @@ def _scene_video(sc: dict, d: float, w: int, h: int, fps: float, out: Path, k: i
         run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(raw), "-filter_complex", ";".join(g), "-map", "[v]",
              "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-pix_fmt", "yuv420p", str(out)])
         raw.unlink()
+
+
+def _skip_stray(scenes: list[dict], fps: float) -> list[str]:
+    """A clip asked to start a moment before a cut in its source would open on a
+    stray frame of the shot before: start it at the cut instead."""
+    from .media import first_cut
+
+    notes = []
+    for i, sc in enumerate(scenes):
+        f, at = sc.get("file"), sc.get("from")
+        if not f or not at or sc.get("from_exact") or not isinstance(at, (int, float)) or float(at) <= 0:
+            continue
+        if str(f).startswith(("icon:", "scene:")) or not Path(str(f)).exists():
+            continue
+        cut = first_cut(str(f), float(at), 0.35)
+        if cut is not None:
+            sc["from"] = round(float(at) + cut, 3)
+            notes.append(f"scene {i + 1}: starts {cut:.2f} s later, at the cut in its clip, so no frame of the shot "
+                         f"before shows (\"from_exact\": true keeps {float(at):g})")
+    return notes
+
+
+def _page_words(sb: dict, scenes: list[dict], starts: list[float], lengths: list[float]) -> list[str]:
+    """When each word of each page lands: on the voice where it says them, else quickly."""
+    from .page import is_page, land_times, words_of
+
+    pages = [i for i, sc in enumerate(scenes) if is_page(sc)]
+    if not pages:
+        return []
+    heard: dict = {}
+    if sb.get("caption_sync") is not False and (sb.get("voiceover") or sb.get("voice_words")):
+        from .voicecaps import timed
+
+        caps = [(i, " ".join(words_of(scenes[i])), starts[i], starts[i] + lengths[i]) for i in pages if words_of(scenes[i])]
+        try:
+            got, _ = timed(caps, {k: v for k, v in sb.items()}, [{} for _ in scenes])
+            heard = {i: [x.start - starts[i] for x in ws] for i, ws in got.items()}
+        except (OSError, ValueError, SystemExit):
+            heard = {}
+    notes = []
+    for i in pages:
+        n = len(words_of(scenes[i]))
+        scenes[i]["_page_times"] = land_times(n, lengths[i], heard.get(i))
+        if lengths[i] < 1.8 and n:
+            notes.append(f"scene {i + 1}: {lengths[i]:.1f} s is short for a page; its words land at once and hold "
+                         f"{0.9:.1f} s, but 2 s or more reads better")
+    return notes
 
 
 def _plain_scene(sc: dict, d: float, w: int, h: int, fps: float, out: Path) -> None:
@@ -473,6 +522,12 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
             sc["screen"] = True
         if k and sc.get("screen") and scenes[k - 1].get("screen") and "transition" not in sc:
             sc["transition"] = "slide"
+    from .page import plan as page_plan
+
+    for sc in scenes:
+        sc["_howto"] = bool(howto)
+    page_notes = page_plan(scenes, sb)  # pages meet with designed moves, never a dissolve
+    page_notes += _skip_stray(scenes, fps)
     design = sb.get("design")
     for k, sc in enumerate(scenes):
         # its place in the whole video (a scene built alone with --scene keeps its own)
@@ -498,8 +553,9 @@ def build(sb: dict, out: Path, size: str, fps: float = 30.0) -> list[str]:
     for sc, L in zip(scenes, lengths):
         sc["_len"] = L  # the scene's own length (its video runs on under the next transition)
     total = sum(lengths)
+    page_notes += _page_words(sb, scenes, starts, lengths)
     tmp = Path(tempfile.mkdtemp(prefix="alvenus-s-", dir=out.parent))
-    notes: list[str] = []
+    notes: list[str] = list(page_notes)
     try:
         seg = [L + (td if i < len(scenes) - 1 else 0.0) for i, L in enumerate(lengths)]
         # Each scene's picture is kept, keyed by everything that shapes it, so
